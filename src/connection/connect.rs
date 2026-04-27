@@ -1,13 +1,15 @@
 use serde::{Deserialize, Serialize};
 use sqlx::mysql::MySqlPoolOptions;
 use sqlx::postgres::PgPoolOptions;
-use sqlx::{MySqlPool, PgPool};
+use sqlx::sqlite::SqlitePoolOptions;
+use sqlx::{MySqlPool, PgPool, SqlitePool};
 
 static MAX_CONNECTIONS: u32 = 5;
 
 pub enum DbPool {
     Postgres(PgPool),
     Mysql(MySqlPool),
+    Sqlite(SqlitePool),
 }
 
 pub enum ConnectionSource {
@@ -19,12 +21,14 @@ pub enum ConnectionSource {
 pub enum DatabaseString {
     Postgres(String),
     Mysql(String),
+    Sqlite(String),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum DatabaseConnection {
     Postgres(PostgresConnection),
     Mysql(MysqlConnection),
+    Sqlite(SqliteConnection),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -51,6 +55,15 @@ pub struct MysqlConnection {
     pub port: i16,
     pub pool_size: i8,
     pub ssl: Option<SslOptions>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SqliteConnection {
+    pub name: String,
+    pub path: String,
+    pub stack_trace: bool,
+    pub pool_size: i8,
+    pub create_if_missing: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -85,6 +98,15 @@ pub async fn connect_db(connection: ConnectionSource) -> Result<DbPool, sqlx::Er
             DbPool::Mysql(pool)
         }
 
+        ConnectionSource::Url(DatabaseString::Sqlite(url)) => {
+            let pool = SqlitePoolOptions::new()
+                .max_connections(MAX_CONNECTIONS)
+                .connect(&url)
+                .await?;
+
+            DbPool::Sqlite(pool)
+        }
+
         ConnectionSource::Config(DatabaseConnection::Postgres(pg)) => {
             let url = generate_pg_connection_string(&pg);
 
@@ -105,6 +127,17 @@ pub async fn connect_db(connection: ConnectionSource) -> Result<DbPool, sqlx::Er
                 .await?;
 
             DbPool::Postgres(pool)
+        }
+
+        ConnectionSource::Config(DatabaseConnection::Sqlite(sq)) => {
+            let url = generate_sqlite_connection_string(&sq);
+
+            let pool = SqlitePoolOptions::new()
+                .max_connections(sq.pool_size as u32)
+                .connect(&url)
+                .await?;
+
+            DbPool::Sqlite(pool)
         }
     };
 
@@ -168,6 +201,24 @@ fn generate_mysql_connection_string(my: &MysqlConnection) -> String {
         base_url
     } else {
         format!("{}?{}", base_url, params.join("&"))
+    }
+}
+
+fn generate_sqlite_connection_string(sq: &SqliteConnection) -> String {
+    let mut params: Vec<String> = Vec::new();
+
+    if sq.create_if_missing {
+        params.push("mode=rwc".to_string());
+    }
+
+    if sq.stack_trace {
+        params.push("immutable=0".to_string());
+    }
+
+    if params.is_empty() {
+        format!("sqlite://{}", sq.path)
+    } else {
+        format!("sqlite://{}?{}", sq.path, params.join("&"))
     }
 }
 

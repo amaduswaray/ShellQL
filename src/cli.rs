@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 pub enum Engine {
     Postgres,
     MySQL,
+    SQLite,
 }
 
 #[derive(Parser, Debug)]

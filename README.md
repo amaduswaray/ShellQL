@@ -24,3 +24,4 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 - [ ] Write TESTTS!!
 - [ ] Session manager - tmux like sessionizer to change between connctions. Makes connections out of scope and harder to accidentaly change wrong dbs
+- [ ] If user says connect with no other options, bring up connection UI

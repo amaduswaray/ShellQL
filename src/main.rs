@@ -30,16 +30,18 @@ async fn main() -> anyhow::Result<()> {
                     Engine::MySQL => {
                         let source = ConnectionSource::Url(DatabaseString::Mysql(url));
                         let pool = connect_db(source).await.unwrap();
-                        if let DbPool::Mysql(my_pool) = pool {
-                            let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM account")
-                                .fetch_one(&my_pool)
-                                .await
-                                .unwrap();
-                            println!("Count: {}", row.0);
+                        if let DbPool::Mysql(_) = pool {
+                            println!("MySQL connected");
                         }
                     }
 
-                    _ => {} // TODO: Implement the other engines
+                    Engine::SQLite => {
+                        let source = ConnectionSource::Url(DatabaseString::Sqlite(url));
+                        let pool = connect_db(source).await.unwrap();
+                        if let DbPool::Sqlite(_) = pool {
+                            println!("SQLite connected");
+                        }
+                    }
                 }
             }
         }

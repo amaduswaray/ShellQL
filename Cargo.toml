@@ -11,5 +11,5 @@ dirs = "6.0.0"
 ratatui = "0.30.0"
 serde = "1.0.228"
 serde_json = "1.0.149"
-sqlx = { version = "0.8.6", features = ["postgres", "mysql", "runtime-tokio", "tls-native-tls"] }
+sqlx = { version = "0.8.6", features = ["postgres", "mysql", "sqlite", "runtime-tokio", "tls-native-tls"] }
 tokio = { version = "1.52.1", features = ["macros", "rt-multi-thread", "signal"] }
