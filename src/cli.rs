@@ -23,5 +23,9 @@ pub enum Commands {
 
         #[arg(long, short)]
         url: Option<String>,
+
+        #[arg(long, short)]
+        name: Option<String>,
     },
+    List,
 }

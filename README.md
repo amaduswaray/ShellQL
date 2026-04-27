@@ -25,3 +25,14 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] Write TESTTS!!
 - [ ] Session manager - tmux like sessionizer to change between connctions. Makes connections out of scope and harder to accidentaly change wrong dbs
 - [ ] If user says connect with no other options, bring up connection UI
+
+
+
+
+### TODOS
+- [x] Create new cli command for list
+- [x] Update connections to also contain name
+- [x] Add name option to connect cli command
+- [ ] Create cli steps -> Allow user to fill inn missing optionsConnect
+  - [ ] if connect with no other flags, cli asks for all
+  - [ ] Otherwise, ask for the missing fields(like connection string or name)
