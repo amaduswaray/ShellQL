@@ -12,6 +12,8 @@ use sqlx::{MySqlPool, PgPool, SqlitePool};
 use url::Url;
 use uuid::Uuid;
 
+use crate::cli::Engine;
+
 static MAX_CONNECTIONS: u32 = 5;
 
 #[derive(Deserialize, Serialize, Default)]
@@ -23,6 +25,7 @@ pub struct DatabaseStore {
 pub struct Database {
     pub id: Uuid,
     pub name: String,
+    pub engine: Engine,
     pub connection: ConnectionSource,
 }
 
@@ -134,7 +137,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(url)
                 .await?;
 
-            let _ = add_connection(name, connection.clone());
+            let _ = add_connection(name, connection.clone(), Engine::Postgres);
 
             DbPool::Postgres(pool)
         }
@@ -145,7 +148,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(url)
                 .await?;
 
-            let _ = add_connection(name, connection.clone());
+            let _ = add_connection(name, connection.clone(), Engine::Mysql);
 
             DbPool::Mysql(pool)
         }
@@ -156,7 +159,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(url)
                 .await?;
 
-            let _ = add_connection(name, connection.clone());
+            let _ = add_connection(name, connection.clone(), Engine::Sqlite);
 
             DbPool::Sqlite(pool)
         }
@@ -169,7 +172,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(&url)
                 .await?;
 
-            let _ = add_connection("postgres".to_string(), connection.clone());
+            let _ = add_connection("postgres".to_string(), connection.clone(), Engine::Postgres);
 
             DbPool::Postgres(pool)
         }
@@ -182,7 +185,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(&url)
                 .await?;
 
-            let _ = add_connection("mysql".to_string(), connection.clone());
+            let _ = add_connection("mysql".to_string(), connection.clone(), Engine::Mysql);
 
             DbPool::Mysql(pool)
         }
@@ -195,7 +198,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(&url)
                 .await?;
 
-            let _ = add_connection("sqlite".to_string(), connection.clone());
+            let _ = add_connection("sqlite".to_string(), connection.clone(), Engine::Sqlite);
 
             DbPool::Sqlite(pool)
         }
@@ -310,7 +313,11 @@ pub fn save_connections(store: &DatabaseStore) -> io::Result<()> {
     file.write_all(json.as_bytes())
 }
 
-pub fn add_connection(name: String, connection: ConnectionSource) -> io::Result<Database> {
+pub fn add_connection(
+    name: String,
+    connection: ConnectionSource,
+    engine: Engine,
+) -> io::Result<Database> {
     let mut store = load_connections();
 
     if store.databases.values().any(|db| db.name == name) {
@@ -323,6 +330,7 @@ pub fn add_connection(name: String, connection: ConnectionSource) -> io::Result<
     let db = Database {
         id: Uuid::new_v4(),
         name,
+        engine,
         connection,
     };
 

@@ -1,5 +1,6 @@
 mod cli;
 mod connection;
+use dialoguer::{Input, Select};
 
 use crate::{
     cli::{Cli, Commands, Engine},
@@ -13,58 +14,64 @@ async fn main() -> anyhow::Result<()> {
 
     match args.command {
         Some(Commands::Connect { engine, url, name }) => {
-            if let Some(url) = url {
-                match engine {
-                    Engine::Postgres => {
-                        let db_name = name.unwrap_or_else(|| "postgres".to_string());
-                        let source = ConnectionSource::Url(DatabaseString::Postgres(url));
-                        let pool = connect_db(source, db_name).await.unwrap();
+            let is_interactive = url.is_none() && name.is_none();
 
-                        if let DbPool::Postgres(pg_pool) = pool {
-                            let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM account")
-                                .fetch_one(&pg_pool)
-                                .await
-                                .unwrap();
-                            println!("Count: {}", row.0);
-                        }
-                    }
-
-                    Engine::MySQL => {
-                        let db_name = name.unwrap_or_else(|| "mysql".to_string());
-                        let source = ConnectionSource::Url(DatabaseString::Mysql(url));
-                        let pool = connect_db(source, db_name).await.unwrap();
-
-                        if let DbPool::Mysql(_) = pool {
-                            println!("MySQL connected");
-                        }
-                    }
-
-                    Engine::SQLite => {
-                        let db_name = name.unwrap_or_else(|| "sqlite".to_string());
-                        let source = ConnectionSource::Url(DatabaseString::Sqlite(url));
-                        let pool = connect_db(source, db_name).await.unwrap();
-
-                        if let DbPool::Sqlite(_) = pool {
-                            println!("SQLite connected");
-                        }
-                    }
+            let engine = engine.unwrap_or_else(|| {
+                if is_interactive {
+                    prompt_engine()
+                } else {
+                    panic!("Engine is required unless using interactive mode");
                 }
+            });
+
+            let db_name = name.unwrap_or_else(|| {
+                if is_interactive {
+                    read_line("Database name", "Example Database")
+                } else {
+                    engine.to_string().to_lowercase()
+                }
+            });
+
+            let url = url.unwrap_or_else(|| {
+                if is_interactive {
+                    read_line("Connection URL", "postgresql://....")
+                } else {
+                    panic!("URL is required unless using interactive mode");
+                }
+            });
+
+            let source = match engine {
+                Engine::Postgres => ConnectionSource::Url(DatabaseString::Postgres(url)),
+                Engine::Mysql => ConnectionSource::Url(DatabaseString::Mysql(url)),
+                Engine::Sqlite => ConnectionSource::Url(DatabaseString::Sqlite(url)),
+            };
+
+            let pool = connect_db(source, db_name).await.unwrap();
+
+            match pool {
+                DbPool::Postgres(pg_pool) => {
+                    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM account")
+                        .fetch_one(&pg_pool)
+                        .await
+                        .unwrap();
+                    println!("Postgres connected: {}", row.0);
+                }
+                DbPool::Mysql(_) => println!("MySQL connected"),
+                DbPool::Sqlite(_) => println!("SQLite connected"),
             }
         }
-        Some(Commands::List) => {
+        Some(Commands::DB { command }) => {
             let dbs = list_connections();
 
             if dbs.is_empty() {
                 println!("No databases configured.");
             } else {
-                // 1. Print the Header
-                println!("{:<20}", "DATABASE NAME");
-                println!("{}", "-".repeat(20));
+                println!("{:<20} {:<10}", "DATABASE NAME", "ENGINE");
+                println!("{}", "-".repeat(32));
 
-                // 2. Print the Rows
+                // Rows
                 for db in dbs {
-                    // {:<20} left-aligns the name in a 20-character wide "cell"
-                    println!("{:<20}", db.name);
+                    println!("{:<20} {:<10}", db.name, db.engine);
                 }
             }
         }
@@ -76,4 +83,48 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn prompt_engine() -> Engine {
+    let items = ["Postgres", "MySQL", "SQLite"];
+
+    let selection = Select::new()
+        .with_prompt("Select database engine")
+        .items(&items)
+        .default(0)
+        .interact()
+        .unwrap();
+
+    match selection {
+        0 => Engine::Postgres,
+        1 => Engine::Mysql,
+        2 => Engine::Sqlite,
+        _ => unreachable!(),
+    }
+}
+
+// fn prompt_string(prompt: &str) -> String {
+//     Input::<String>::new()
+//         .with_prompt(prompt)
+//         .interact_text()
+//         .unwrap()
+// }
+
+// fn read_line(prompt: &str) -> String {
+//     print!("{prompt}: ");
+//     stdout().flush().unwrap();
+//
+//     let mut input = String::new();
+//     stdin().read_line(&mut input).unwrap();
+//
+//     input.trim().to_string()
+// }
+
+// TODO: Use console package to have different colors of the option
+fn read_line(prompt: &str, initial: &str) -> String {
+    Input::<String>::new()
+        .with_prompt(prompt)
+        .default(initial.to_string())
+        .interact_text()
+        .unwrap()
 }
