@@ -71,6 +71,9 @@ pub enum DbCommands {
         #[arg(long, short)]
         name: String,
 
+        #[arg(long, short, value_enum)]
+        engine: Engine,
+
         #[arg(long, short)]
         url: String,
     },

@@ -10,7 +10,6 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::{MySqlPool, PgPool, SqlitePool};
 use url::Url;
-use uuid::Uuid;
 
 use crate::cli::Engine;
 
@@ -18,12 +17,11 @@ static MAX_CONNECTIONS: u32 = 5;
 
 #[derive(Deserialize, Serialize, Default)]
 pub struct DatabaseStore {
-    pub databases: HashMap<Uuid, Database>,
+    pub databases: HashMap<String, Database>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Database {
-    pub id: Uuid,
     pub name: String,
     pub engine: Engine,
     pub connection: ConnectionSource,
@@ -328,49 +326,60 @@ pub fn add_connection(
     }
 
     let db = Database {
-        id: Uuid::new_v4(),
         name,
         engine,
         connection,
     };
 
-    store.databases.insert(db.id, db.clone());
+    store.databases.insert(db.name.clone(), db.clone());
     save_connections(&store)?;
 
     Ok(db)
 }
 
-pub fn delete_connection(id: Uuid) -> io::Result<()> {
+pub fn delete_connection(name: String) -> io::Result<()> {
     let mut store = load_connections();
-    store.databases.remove(&id);
+    store.databases.remove(&name);
     save_connections(&store)
 }
 
 pub fn update_connection(updated: Database) -> io::Result<()> {
     let mut store = load_connections();
 
-    if !store.databases.contains_key(&updated.id) {
+    if !store.databases.contains_key(&updated.name) {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
             "Database not found",
         ));
     }
 
-    if store
-        .databases
-        .values()
-        .any(|db| db.name == updated.name && db.id != updated.id)
-    {
+    if store.databases.values().any(|db| db.name == updated.name) {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
             "Database name already exists",
         ));
     }
 
-    store.databases.insert(updated.id, updated);
+    store.databases.insert(updated.name.clone(), updated);
     save_connections(&store)
 }
 
 pub fn list_connections() -> Vec<Database> {
     load_connections().databases.values().cloned().collect()
+}
+
+pub fn print_connections() {
+    let dbs = list_connections();
+
+    if dbs.is_empty() {
+        println!("No databases configured.");
+    } else {
+        println!("{:<20} {:<10}", "DATABASE NAME", "ENGINE");
+        println!("{}", "-".repeat(32));
+
+        // Rows
+        for db in dbs {
+            println!("{:<20} {:<10}", db.name, db.engine);
+        }
+    }
 }

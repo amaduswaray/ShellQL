@@ -3,8 +3,11 @@ mod connection;
 use dialoguer::{Input, Select};
 
 use crate::{
-    cli::{Cli, Commands, Engine},
-    connection::connect::{ConnectionSource, DatabaseString, DbPool, connect_db, list_connections},
+    cli::{Cli, Commands, DbCommands, Engine},
+    connection::connect::{
+        ConnectionSource, DatabaseString, DbPool, add_connection, connect_db, delete_connection,
+        print_connections,
+    },
 };
 use clap::Parser;
 
@@ -60,21 +63,28 @@ async fn main() -> anyhow::Result<()> {
                 DbPool::Sqlite(_) => println!("SQLite connected"),
             }
         }
-        Some(Commands::DB { command }) => {
-            let dbs = list_connections();
+        Some(Commands::DB { command }) => match command {
+            DbCommands::List => print_connections(),
+            DbCommands::Add { name, engine, url } => {
+                let connection = match engine {
+                    Engine::Postgres => ConnectionSource::Url(DatabaseString::Postgres(url)),
+                    Engine::Mysql => ConnectionSource::Url(DatabaseString::Mysql(url)),
+                    Engine::Sqlite => ConnectionSource::Url(DatabaseString::Sqlite(url)),
+                };
 
-            if dbs.is_empty() {
-                println!("No databases configured.");
-            } else {
-                println!("{:<20} {:<10}", "DATABASE NAME", "ENGINE");
-                println!("{}", "-".repeat(32));
-
-                // Rows
-                for db in dbs {
-                    println!("{:<20} {:<10}", db.name, db.engine);
-                }
+                let _ = add_connection(name, connection, engine);
+                print_connections();
             }
-        }
+            DbCommands::Delete { name } => match delete_connection(name.clone()) {
+                Ok(_) => {
+                    println!("Connection {} deleted.", name);
+                    print_connections();
+                }
+                Err(e) => {
+                    eprintln!("Failed to delete connection: {e}");
+                }
+            },
+        },
 
         None => {
             // TODO: open up tui and interactive mode
@@ -102,13 +112,6 @@ fn prompt_engine() -> Engine {
         _ => unreachable!(),
     }
 }
-
-// fn prompt_string(prompt: &str) -> String {
-//     Input::<String>::new()
-//         .with_prompt(prompt)
-//         .interact_text()
-//         .unwrap()
-// }
 
 // fn read_line(prompt: &str) -> String {
 //     print!("{prompt}: ");
