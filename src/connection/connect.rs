@@ -12,6 +12,7 @@ use sqlx::{MySqlPool, PgPool, SqlitePool};
 use url::Url;
 
 use crate::cli::Engine;
+use std::fmt;
 
 static MAX_CONNECTIONS: u32 = 5;
 
@@ -104,29 +105,61 @@ pub struct SslOptions {
     pub certfile: Option<String>,
 }
 
-fn is_valid_connection_string(conn: &str) -> bool {
+#[derive(Debug)]
+pub enum ConnectionError {
+    InvalidUrl(url::ParseError),
+    UnsupportedScheme(String),
+    MissingHost,
+    MissingPath,
+}
+
+impl fmt::Display for ConnectionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConnectionError::InvalidUrl(e) => write!(f, "Invalid URL: {e}"),
+            ConnectionError::UnsupportedScheme(s) => write!(f, "Unsupported scheme: {s}"),
+            ConnectionError::MissingHost => write!(f, "Missing host in connection string"),
+            ConnectionError::MissingPath => write!(f, "Missing database name/path"),
+        }
+    }
+}
+
+impl std::error::Error for ConnectionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ConnectionError::InvalidUrl(e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+pub fn validate_connection_string(conn: &str) -> Result<Url, ConnectionError> {
     let url = match Url::parse(conn) {
         Ok(u) => u,
-        Err(_) => return false,
+        Err(e) => return Err(ConnectionError::InvalidUrl(e)),
     };
 
     match url.scheme() {
         "postgres" | "postgresql" | "mysql" | "sqlite" => {}
-        _ => return false,
+        other => return Err(ConnectionError::UnsupportedScheme(other.to_string())),
     }
 
-    if url.host_str().is_none() && url.scheme() != "sqlite" {
-        return false;
+    match url.scheme() {
+        "sqlite" => {}
+        _ => {
+            if url.host_str().is_none() {
+                return Err(ConnectionError::MissingHost);
+            }
+        }
     }
 
     let path = url.path();
     if path.is_empty() || path == "/" {
-        return false;
+        return Err(ConnectionError::MissingPath);
     }
 
-    true
+    Ok(url)
 }
-
 pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<DbPool, sqlx::Error> {
     let pool = match &connection {
         ConnectionSource::Url(DatabaseString::Postgres(url)) => {

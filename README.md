@@ -22,6 +22,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 ## Future todos:
 
+- [ ] Raw sql files for premade queries
 - [ ] Write TESTTS!!
 - [ ] Proper error handling and error boundaries
 - [ ] Session manager - tmux lik sessionizer to change between connctions. Makes connections out of scope and harder to accidentaly change wrong dbs
@@ -36,7 +37,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] Change the `list` cli arg to be a subset of `connections`. The prefix should be db
   - [x] Same with delete, add
 
-- [ ] remove ID and use name as identifier
+- [x] remove ID and use name as identifier
 - [ ] Create cli steps -> Allow user to fill inn missing optionsConnect
   - [ ] if connect with no other flags, cli asks for all
   - [ ] Otherwise, ask for the missing fields(like connection string or name)

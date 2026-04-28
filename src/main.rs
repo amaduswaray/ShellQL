@@ -1,12 +1,13 @@
 mod cli;
 mod connection;
+use anyhow::Context;
 use dialoguer::{Input, Select};
 
 use crate::{
     cli::{Cli, Commands, DbCommands, Engine},
     connection::connect::{
         ConnectionSource, DatabaseString, DbPool, add_connection, connect_db, delete_connection,
-        print_connections,
+        print_connections, validate_connection_string,
     },
 };
 use clap::Parser;
@@ -43,24 +44,52 @@ async fn main() -> anyhow::Result<()> {
                 }
             });
 
+            let url = validate_connection_string(&url)
+                .context("Invalid connection string")?
+                .to_string();
+
             let source = match engine {
                 Engine::Postgres => ConnectionSource::Url(DatabaseString::Postgres(url)),
                 Engine::Mysql => ConnectionSource::Url(DatabaseString::Mysql(url)),
                 Engine::Sqlite => ConnectionSource::Url(DatabaseString::Sqlite(url)),
             };
 
-            let pool = connect_db(source, db_name).await.unwrap();
+            let pool = connect_db(source, db_name)
+                .await
+                .context("Failed to connect to database")?;
 
             match pool {
                 DbPool::Postgres(pg_pool) => {
-                    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM account")
-                        .fetch_one(&pg_pool)
+                    let rows: Vec<_> = sqlx::query_as::<_, (String,)>("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
+                        .fetch_all(&pg_pool)
                         .await
-                        .unwrap();
-                    println!("Postgres connected: {}", row.0);
+                        .expect("Failed to execute test query");
+
+                    for (table_name,) in rows {
+                        println!("{table_name}");
+                    }
                 }
-                DbPool::Mysql(_) => println!("MySQL connected"),
-                DbPool::Sqlite(_) => println!("SQLite connected"),
+
+                DbPool::Mysql(my_pool) => {
+                    let rows: Vec<_> = sqlx::query_as::<_, (String,)>("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
+                        .fetch_all(&my_pool)
+                        .await
+                        .expect("Failed to execute test query");
+
+                    for (table_name,) in rows {
+                        println!("{table_name}");
+                    }
+                }
+                DbPool::Sqlite(sq_pool) => {
+                    let rows: Vec<_> = sqlx::query_as::<_, (String,)>("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
+                        .fetch_all(&sq_pool)
+                        .await
+                        .expect("Failed to execute test query");
+
+                    for (table_name,) in rows {
+                        println!("{table_name}");
+                    }
+                }
             }
         }
         Some(Commands::DB { command }) => match command {
