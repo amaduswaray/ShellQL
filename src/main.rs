@@ -17,17 +17,16 @@ async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
     match args.command {
-        Some(Commands::Connect { engine, url, name }) => {
-            let is_interactive = engine.is_none() || url.is_none() || name.is_none();
+        Some(Commands::Connect {
+            interactive,
+            engine,
+            url,
+            name,
+        }) => {
+            let is_interactive =
+                interactive && (engine.is_none() || url.is_none() || name.is_none());
 
-            let engine = engine.unwrap_or_else(|| {
-                if is_interactive {
-                    prompt_engine()
-                } else {
-                    // TODO: DO not panic
-                    panic!("Engine is required unless using interactive mode");
-                }
-            });
+            let engine = engine.unwrap_or_else(|| prompt_engine());
 
             let db_name = name.unwrap_or_else(|| {
                 if is_interactive {
@@ -37,13 +36,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             });
 
-            let url = url.unwrap_or_else(|| {
-                if is_interactive {
-                    read_line("Connection URL", "postgresql://....")
-                } else {
-                    panic!("URL is required unless using interactive mode");
-                }
-            });
+            let url = url.unwrap_or_else(|| read_line("Connection URL", "postgresql://...."));
 
             let url = validate_connection_string(&url)
                 .context("Invalid connection string")?

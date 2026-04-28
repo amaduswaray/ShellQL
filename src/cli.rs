@@ -36,22 +36,32 @@ pub enum Commands {
         long_about = "Establish a connection to a database using a specified engine and optional connection details."
     )]
     Connect {
+        #[arg(long, short, value_enum, help = "Connect to DB in interactive mode")]
+        interactive: bool,
+
         #[arg(
             long,
             short,
             value_enum,
-            help = "Database engine to use (postgres, mysql, sqlite)"
+            help = "Database engine to use (postgres, mysql, sqlite)",
+            required_unless_present = "interactive"
         )]
         engine: Option<Engine>,
 
         #[arg(
             long,
             short,
-            help = "Connection URL (overrides individual connection params)"
+            help = "Connection URL (overrides individual connection params)",
+            required_unless_present = "interactive"
         )]
         url: Option<String>,
 
-        #[arg(long, short, help = "Friendly name for this connection")]
+        #[arg(
+            long,
+            short,
+            help = "Friendly name for this connection",
+            required_unless_present = "interactive"
+        )]
         name: Option<String>,
     },
     #[command(about = "Manage your database connections from the CLI")]
