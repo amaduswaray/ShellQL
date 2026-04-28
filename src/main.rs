@@ -18,12 +18,13 @@ async fn main() -> anyhow::Result<()> {
 
     match args.command {
         Some(Commands::Connect { engine, url, name }) => {
-            let is_interactive = url.is_none() && name.is_none();
+            let is_interactive = engine.is_none() || url.is_none() || name.is_none();
 
             let engine = engine.unwrap_or_else(|| {
                 if is_interactive {
                     prompt_engine()
                 } else {
+                    // TODO: DO not panic
                     panic!("Engine is required unless using interactive mode");
                 }
             });

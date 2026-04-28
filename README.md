@@ -30,7 +30,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 
 
-### TODOS
+### TODOS CLI
 - [x] Create new cli command for list
 - [x] Update connections to also contain name
 - [x] Add name option to connect cli command
@@ -38,15 +38,16 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [x] Same with delete, add
 
 - [x] remove ID and use name as identifier
-- [ ] Create cli steps -> Allow user to fill inn missing optionsConnect
-  - [ ] if connect with no other flags, cli asks for all
-  - [ ] Otherwise, ask for the missing fields(like connection string or name)
+- [x] Create cli steps -> Allow user to fill inn missing optionsConnect
+  - [x] if connect with no other flags, cli asks for all
+  - [x] Otherwise, ask for the missing fields(like connection string or name)
 
 
+- [ ] Fix the dupe situation. Connections strings should be comparable
 - [ ] Fix the interactive clipvoard paste issue
 - [x] Add preview text to the cli interactive mode
 - [x] Add description to all the commands and params
-- [ ] Fix the dupe situation. Connections strings should be comparable
+
 - [ ] Write tests for all the current functions
   - [ ] Connecting with a string
   - [ ] Not connecting on valid string
