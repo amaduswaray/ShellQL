@@ -160,7 +160,7 @@ pub fn validate_connection_string(conn: &str) -> Result<Url, ConnectionError> {
 
     Ok(url)
 }
-pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<DbPool, sqlx::Error> {
+pub async fn connect_db(connection: ConnectionSource, name: String) -> anyhow::Result<DbPool> {
     let pool = match &connection {
         ConnectionSource::Url(DatabaseString::Postgres(url)) => {
             let pool = PgPoolOptions::new()
@@ -168,8 +168,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(url)
                 .await?;
 
-            let _ = add_connection(name, connection.clone(), Engine::Postgres);
-
+            add_connection(name, connection.clone(), Engine::Postgres)?;
             DbPool::Postgres(pool)
         }
 
@@ -179,8 +178,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(url)
                 .await?;
 
-            let _ = add_connection(name, connection.clone(), Engine::Mysql);
-
+            add_connection(name, connection.clone(), Engine::Mysql)?;
             DbPool::Mysql(pool)
         }
 
@@ -190,8 +188,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(url)
                 .await?;
 
-            let _ = add_connection(name, connection.clone(), Engine::Sqlite);
-
+            add_connection(name, connection.clone(), Engine::Sqlite)?;
             DbPool::Sqlite(pool)
         }
 
@@ -203,8 +200,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(&url)
                 .await?;
 
-            let _ = add_connection("postgres".to_string(), connection.clone(), Engine::Postgres);
-
+            add_connection("postgres".to_string(), connection.clone(), Engine::Postgres)?;
             DbPool::Postgres(pool)
         }
 
@@ -216,8 +212,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(&url)
                 .await?;
 
-            let _ = add_connection("mysql".to_string(), connection.clone(), Engine::Mysql);
-
+            add_connection("mysql".to_string(), connection.clone(), Engine::Mysql)?;
             DbPool::Mysql(pool)
         }
 
@@ -229,8 +224,7 @@ pub async fn connect_db(connection: ConnectionSource, name: String) -> Result<Db
                 .connect(&url)
                 .await?;
 
-            let _ = add_connection("sqlite".to_string(), connection.clone(), Engine::Sqlite);
-
+            add_connection("sqlite".to_string(), connection.clone(), Engine::Sqlite)?;
             DbPool::Sqlite(pool)
         }
     };
@@ -354,7 +348,18 @@ pub fn add_connection(
     if store.databases.values().any(|db| db.name == name) {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
-            "Database name already exists",
+            "Database name already exists. Try using a different name",
+        ));
+    }
+
+    if store
+        .databases
+        .values()
+        .any(|db| db.connection == connection)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "Database connection already exists. Try using a different connection string",
         ));
     }
 

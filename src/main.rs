@@ -36,7 +36,8 @@ async fn main() -> anyhow::Result<()> {
                 }
             });
 
-            let url = url.unwrap_or_else(|| read_line("Connection URL", "postgresql://...."));
+            let connection_example = format!("{}://", engine);
+            let url = url.unwrap_or_else(|| read_line("Connection URL", &connection_example));
 
             let url = validate_connection_string(&url)
                 .context("Invalid connection string")?
@@ -95,8 +96,14 @@ async fn main() -> anyhow::Result<()> {
                     Engine::Sqlite => ConnectionSource::Url(DatabaseString::Sqlite(url)),
                 };
 
-                let _ = add_connection(name, connection, engine);
-                print_connections();
+                match add_connection(name, connection, engine) {
+                    Ok(_) => {
+                        print_connections();
+                    }
+                    Err(e) => {
+                        eprintln!("{e}");
+                    }
+                }
             }
             DbCommands::Delete { name } => match delete_connection(name.clone()) {
                 Ok(_) => {
