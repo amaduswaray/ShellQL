@@ -1,7 +1,20 @@
 use std::fmt::{Display, Formatter, Result};
 
+use clap::builder::Styles;
+use clap::builder::styling::{AnsiColor, Effects};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
+
+fn cli_styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default() | Effects::BOLD)
+        .usage(AnsiColor::Yellow.on_default() | Effects::BOLD)
+        .literal(AnsiColor::Cyan.on_default() | Effects::BOLD)
+        .placeholder(AnsiColor::Cyan.on_default())
+        .error(AnsiColor::Red.on_default() | Effects::BOLD)
+        .valid(AnsiColor::Green.on_default() | Effects::BOLD)
+        .invalid(AnsiColor::Red.on_default() | Effects::BOLD)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ValueEnum)]
 pub enum Engine {
@@ -24,6 +37,7 @@ impl Display for Engine {
 #[derive(Parser, Debug)]
 #[command(name = "ShellQL")]
 #[command(about = "Terminal DB management tool")]
+#[command(styles = cli_styles())]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Option<Commands>,
