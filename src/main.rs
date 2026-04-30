@@ -12,7 +12,7 @@ use crate::{
     },
 };
 use clap::Parser;
-use dialoguer::{Input, Select, theme::ColorfulTheme};
+use dialoguer::{Select, theme::ColorfulTheme};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -28,18 +28,29 @@ async fn main() -> anyhow::Result<()> {
             let is_interactive =
                 interactive && (engine.is_none() || url.is_none() || name.is_none());
 
-            let engine = engine.unwrap_or_else(|| prompt_engine());
+            let engine = match engine {
+                Some(e) => e,
+                None => prompt_engine().context("Failed to read engine selection")?,
+            };
 
-            let db_name = name.unwrap_or_else(|| {
-                if is_interactive {
-                    read_line("Database name", "Example Database")
-                } else {
-                    engine.to_string().to_lowercase()
+            let db_name = match name {
+                Some(n) => n,
+                None => {
+                    if is_interactive {
+                        read_line("Database name", "Example Database")
+                            .context("Failed to read database name")?
+                    } else {
+                        engine.to_string().to_lowercase()
+                    }
                 }
-            });
+            };
 
             let connection_example = format!("{}://", engine);
-            let url = url.unwrap_or_else(|| read_line("Connection URL", &connection_example));
+            let url = match url {
+                Some(u) => u,
+                None => read_line("Connection URL", &connection_example)
+                    .context("Failed to read connection URL")?,
+            };
 
             let url = validate_connection_string(&url)
                 .context("Invalid connection string")?
@@ -60,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
                     let rows: Vec<_> = sqlx::query_as::<_, (String,)>("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
                         .fetch_all(&pg_pool)
                         .await
-                        .expect("Failed to execute test query");
+                        .context("Failed to query tables — check your permissions and connection")?;
 
                     for (table_name,) in rows {
                         println!("{table_name}");
@@ -68,20 +79,25 @@ async fn main() -> anyhow::Result<()> {
                 }
 
                 DbPool::Mysql(my_pool) => {
-                    let rows: Vec<_> = sqlx::query_as::<_, (String,)>("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
+                    let rows: Vec<_> = sqlx::query_as::<_, (String,)>("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name")
                         .fetch_all(&my_pool)
                         .await
-                        .expect("Failed to execute test query");
+                        .context("Failed to query tables — check your permissions and connection")?;
 
                     for (table_name,) in rows {
                         println!("{table_name}");
                     }
                 }
+
                 DbPool::Sqlite(sq_pool) => {
-                    let rows: Vec<_> = sqlx::query_as::<_, (String,)>("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
-                        .fetch_all(&sq_pool)
-                        .await
-                        .expect("Failed to execute test query");
+                    let rows: Vec<_> = sqlx::query_as::<_, (String,)>(
+                        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+                    )
+                    .fetch_all(&sq_pool)
+                    .await
+                    .context(
+                        "Failed to query tables — check that the database file is accessible",
+                    )?;
 
                     for (table_name,) in rows {
                         println!("{table_name}");
@@ -103,31 +119,32 @@ async fn main() -> anyhow::Result<()> {
                         print_connections();
                     }
                     Err(e) => {
-                        eprintln!("{e}");
+                        eprintln!("Error: {e}");
                     }
                 }
             }
             DbCommands::Delete { name } => match delete_connection(name.clone()) {
                 Ok(_) => {
-                    println!("Connection {} deleted.", name);
+                    println!("Connection '{}' deleted.", name);
                     print_connections();
                 }
                 Err(e) => {
-                    eprintln!("Failed to delete connection: {e}");
+                    eprintln!("Error: Failed to delete connection: {e}");
                 }
             },
         },
 
         None => {
-            // TODO: open up tui and interactive mode
-            println!("Hello darkness my old friend, i must have called a thousand times");
+            // TODO: Run the tui
+            // Cli::parse_from(["shellql", "--help"]);
+            println!("Hello darkness my old friend")
         }
     }
 
     Ok(())
 }
 
-fn prompt_engine() -> Engine {
+fn prompt_engine() -> anyhow::Result<Engine> {
     let items = ["Postgres", "MySQL", "SQLite"];
 
     let selection = Select::with_theme(&ColorfulTheme::default())
@@ -135,17 +152,17 @@ fn prompt_engine() -> Engine {
         .items(&items)
         .default(0)
         .interact()
-        .unwrap();
+        .context("Could not display engine selector — is this an interactive terminal?")?;
 
-    match selection {
+    Ok(match selection {
         0 => Engine::Postgres,
         1 => Engine::Mysql,
         2 => Engine::Sqlite,
         _ => unreachable!(),
-    }
+    })
 }
 
-fn read_line(prompt: &str, initial: &str) -> String {
+fn read_line(prompt: &str, initial: &str) -> anyhow::Result<String> {
     let theme = ColorfulTheme::default();
 
     eprint!(
@@ -155,10 +172,14 @@ fn read_line(prompt: &str, initial: &str) -> String {
         theme.hint_style.apply_to(format!("({})", initial)),
         theme.prompt_suffix,
     );
-    io::stderr().flush().unwrap();
+    io::stderr()
+        .flush()
+        .context("Failed to write to terminal")?;
 
     let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
+    io::stdin()
+        .read_line(&mut input)
+        .context("Failed to read input — is stdin available?")?;
     let input = input.trim();
 
     let result = if input.is_empty() {
@@ -174,18 +195,9 @@ fn read_line(prompt: &str, initial: &str) -> String {
         theme.success_suffix,
         theme.values_style.apply_to(&result),
     );
-    io::stderr().flush().unwrap();
+    io::stderr()
+        .flush()
+        .context("Failed to write to terminal")?;
 
-    result
+    Ok(result)
 }
-
-// TODO: Fix this to work with tmux
-// fn read_line(prompt: &str, initial: &str) -> String {
-//     Input::<String>::with_theme(&ColorfulTheme::default())
-//         .with_prompt(prompt)
-//         .default(initial.to_string())
-//         .interact_text()
-//         .unwrap()
-//         .trim()
-//         .to_string()
-// }

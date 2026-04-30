@@ -312,28 +312,57 @@ fn generate_sqlite_connection_string(sq: &SqliteConnection) -> String {
     }
 }
 
-pub fn get_config_path() -> PathBuf {
-    let mut path = dirs::config_dir().expect("No config directory found");
+pub fn get_config_path() -> io::Result<PathBuf> {
+    let mut path = dirs::config_dir().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "Could not locate system config directory. Set XDG_CONFIG_HOME or HOME.",
+        )
+    })?;
     path.push("shellql");
-    fs::create_dir_all(&path).ok();
+    fs::create_dir_all(&path)?;
     path.push(".connections.json");
-    path
+    Ok(path)
 }
 
 pub fn load_connections() -> DatabaseStore {
-    let path = get_config_path();
+    let path = match get_config_path() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("Warning: could not locate config directory: {e}");
+            return DatabaseStore::default();
+        }
+    };
 
     if !path.exists() {
         return DatabaseStore::default();
     }
 
-    let data = fs::read_to_string(path).unwrap_or_default();
-    serde_json::from_str(&data).unwrap_or_default()
+    let data = match fs::read_to_string(&path) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("Warning: could not read connections file: {e}");
+            return DatabaseStore::default();
+        }
+    };
+
+    match serde_json::from_str(&data) {
+        Ok(store) => store,
+        Err(e) => {
+            eprintln!(
+                "Warning: connections file appears corrupt and will be ignored ({e}). \
+                Your saved connections may be missing. Check: {}",
+                path.display()
+            );
+            DatabaseStore::default()
+        }
+    }
 }
 
 pub fn save_connections(store: &DatabaseStore) -> io::Result<()> {
-    let path = get_config_path();
-    let json = serde_json::to_string_pretty(store).unwrap();
+    let path = get_config_path()?;
+    let json = serde_json::to_string_pretty(store)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     let mut file = fs::File::create(path)?;
     file.write_all(json.as_bytes())
 }
@@ -388,13 +417,6 @@ pub fn update_connection(updated: Database) -> io::Result<()> {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
             "Database not found",
-        ));
-    }
-
-    if store.databases.values().any(|db| db.name == updated.name) {
-        return Err(io::Error::new(
-            io::ErrorKind::AlreadyExists,
-            "Database name already exists",
         ));
     }
 

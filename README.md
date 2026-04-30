@@ -48,8 +48,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] Add preview text to the cli interactive mode
 - [x] Add description to all the commands and params
 - [x] Fix the dupe situation. Connections strings should be comparable
-
-- [ ] Fix the interactive clipboard paste issue
+- [x] Fix the interactive clipboard paste issue
 
 - [ ] Write tests for all the current functions
   - [ ] Connecting with a string
