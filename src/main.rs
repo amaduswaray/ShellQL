@@ -1,10 +1,7 @@
-mod cli;
-mod connection;
 use std::io::{self, Write};
 
 use anyhow::Context;
-
-use crate::{
+use shellql::{
     cli::{Cli, Commands, DbCommands, Engine},
     connection::connect::{
         ConnectionSource, DatabaseString, DbPool, add_connection, connect_db, delete_connection,

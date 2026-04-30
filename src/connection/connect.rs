@@ -21,7 +21,7 @@ pub struct DatabaseStore {
     pub databases: HashMap<String, Database>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Database {
     pub name: String,
     pub engine: Engine,
@@ -41,27 +41,27 @@ pub enum DbPool {
     Sqlite(SqlitePool),
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum ConnectionSource {
     Url(DatabaseString),
     Config(DatabaseConnection),
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum DatabaseString {
     Postgres(String),
     Mysql(String),
     Sqlite(String),
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub enum DatabaseConnection {
     Postgres(PostgresConnection),
     Mysql(MysqlConnection),
     Sqlite(SqliteConnection),
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct PostgresConnection {
     pub username: String,
     pub password: String,
@@ -73,7 +73,7 @@ pub struct PostgresConnection {
     pub ssl: Option<SslOptions>,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct MysqlConnection {
     pub username: String,
     pub password: String,
@@ -85,7 +85,7 @@ pub struct MysqlConnection {
     pub ssl: Option<SslOptions>,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct SqliteConnection {
     pub path: String,
     pub stack_trace: bool,
@@ -99,7 +99,7 @@ pub enum SslVerifyMode {
     Peer,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct SslOptions {
     pub verify: SslVerifyMode,
     pub certfile: Option<String>,
@@ -326,19 +326,21 @@ pub fn get_config_path() -> io::Result<PathBuf> {
 }
 
 pub fn load_connections() -> DatabaseStore {
-    let path = match get_config_path() {
-        Ok(p) => p,
+    match get_config_path() {
+        Ok(path) => load_connections_from(&path),
         Err(e) => {
             eprintln!("Warning: could not locate config directory: {e}");
-            return DatabaseStore::default();
+            DatabaseStore::default()
         }
-    };
+    }
+}
 
+pub fn load_connections_from(path: &PathBuf) -> DatabaseStore {
     if !path.exists() {
         return DatabaseStore::default();
     }
 
-    let data = match fs::read_to_string(&path) {
+    let data = match fs::read_to_string(path) {
         Ok(d) => d,
         Err(e) => {
             eprintln!("Warning: could not read connections file: {e}");
@@ -361,6 +363,13 @@ pub fn load_connections() -> DatabaseStore {
 
 pub fn save_connections(store: &DatabaseStore) -> io::Result<()> {
     let path = get_config_path()?;
+    save_connections_to(store, &path)
+}
+
+pub fn save_connections_to(store: &DatabaseStore, path: &PathBuf) -> io::Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     let json = serde_json::to_string_pretty(store)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     let mut file = fs::File::create(path)?;
@@ -372,7 +381,8 @@ pub fn add_connection(
     connection: ConnectionSource,
     engine: Engine,
 ) -> io::Result<Database> {
-    let mut store = load_connections();
+    let path = get_config_path()?;
+    let mut store = load_connections_from(&path);
 
     if store.databases.values().any(|db| db.name == name) {
         return Err(io::Error::new(
@@ -399,19 +409,21 @@ pub fn add_connection(
     };
 
     store.databases.insert(db.name.clone(), db.clone());
-    save_connections(&store)?;
+    save_connections_to(&store, &path)?;
 
     Ok(db)
 }
 
 pub fn delete_connection(name: String) -> io::Result<()> {
-    let mut store = load_connections();
+    let path = get_config_path()?;
+    let mut store = load_connections_from(&path);
     store.databases.remove(&name);
-    save_connections(&store)
+    save_connections_to(&store, &path)
 }
 
 pub fn update_connection(updated: Database) -> io::Result<()> {
-    let mut store = load_connections();
+    let path = get_config_path()?;
+    let mut store = load_connections_from(&path);
 
     if !store.databases.contains_key(&updated.name) {
         return Err(io::Error::new(
@@ -421,7 +433,7 @@ pub fn update_connection(updated: Database) -> io::Result<()> {
     }
 
     store.databases.insert(updated.name.clone(), updated);
-    save_connections(&store)
+    save_connections_to(&store, &path)
 }
 
 pub fn list_connections() -> Vec<Database> {

@@ -50,9 +50,9 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] Fix the dupe situation. Connections strings should be comparable
 - [x] Fix the interactive clipboard paste issue
 
-- [ ] Write tests for all the current functions
-  - [ ] Connecting with a string
-  - [ ] Not connecting on valid string
-  - [ ] Validating a string
-  - [ ] Not validating a string
-  - [ ] Crud operations on db
+- [x] Write tests for all the current functions
+  - [x] Connecting with a string
+  - [x] Not connecting on valid string
+  - [x] Validating a string
+  - [x] Not validating a string
+  - [x] Crud operations on db
