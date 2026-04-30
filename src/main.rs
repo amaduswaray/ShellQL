@@ -1,6 +1,8 @@
 use std::io::{self, Write};
 
 use anyhow::Context;
+use clap::Parser;
+use dialoguer::{Select, theme::ColorfulTheme};
 use shellql::{
     cli::{Cli, Commands, DbCommands, Engine},
     connection::connect::{
@@ -8,8 +10,6 @@ use shellql::{
         print_connections, validate_connection_string,
     },
 };
-use clap::Parser;
-use dialoguer::{Select, theme::ColorfulTheme};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -161,7 +161,6 @@ fn prompt_engine() -> anyhow::Result<Engine> {
 
 fn read_line(prompt: &str, initial: &str) -> anyhow::Result<String> {
     let theme = ColorfulTheme::default();
-
     eprint!(
         "{} {} {} {} ",
         theme.prompt_prefix,
@@ -177,6 +176,10 @@ fn read_line(prompt: &str, initial: &str) -> anyhow::Result<String> {
     io::stdin()
         .read_line(&mut input)
         .context("Failed to read input — is stdin available?")?;
+
+    let input = input
+        .replace("\x1b[200~", "") // paste start marker
+        .replace("\x1b[201~", ""); // paste end marker
     let input = input.trim();
 
     let result = if input.is_empty() {

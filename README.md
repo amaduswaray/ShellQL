@@ -22,37 +22,10 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 ## Future todos:
 
-- [ ] Raw sql files for premade queries
-- [ ] Colors in general to output
+- [ ] Raw sql files for pre-made queries
 - [ ] Prettyfy the error messages, like the rust compiler
 - [ ] Write TESTTS!!
 - [ ] Session manager - tmux lik sessionizer to change between connctions. Makes connections out of scope and harder to accidentaly change wrong dbs
 
 
-
-
-### TODOS CLI
-- [x] Create new cli command for list
-- [x] Update connections to also contain name
-- [x] Add name option to connect cli command
-- [x] Change the `list` cli arg to be a subset of `connections`. The prefix should be db
-  - [x] Same with delete, add
-
-- [x] remove ID and use name as identifier
-- [x] Create cli steps -> Allow user to fill inn missing optionsConnect
-  - [x] if connect with no other flags, cli asks for all
-  - [x] Otherwise, ask for the missing fields(like connection string or name)
-
-
-- [x] Add -i flag to explicit set interactive. Otherwise the flags should be strict
-- [x] Add preview text to the cli interactive mode
-- [x] Add description to all the commands and params
-- [x] Fix the dupe situation. Connections strings should be comparable
-- [x] Fix the interactive clipboard paste issue
-
-- [x] Write tests for all the current functions
-  - [x] Connecting with a string
-  - [x] Not connecting on valid string
-  - [x] Validating a string
-  - [x] Not validating a string
-  - [x] Crud operations on db
+### TODOS TUI

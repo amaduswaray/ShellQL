@@ -9,6 +9,8 @@ use sqlx::mysql::MySqlPoolOptions;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::sqlite::SqlitePoolOptions;
 use sqlx::{MySqlPool, PgPool, SqlitePool};
+use tabled::settings::{Color, Modify, Style, object::Columns};
+use tabled::{Table, Tabled};
 use url::Url;
 
 use crate::cli::Engine;
@@ -34,7 +36,6 @@ impl Display for Database {
     }
 }
 
-// Runtime pool enum (not serialized)
 pub enum DbPool {
     Postgres(PgPool),
     Mysql(MySqlPool),
@@ -45,6 +46,26 @@ pub enum DbPool {
 pub enum ConnectionSource {
     Url(DatabaseString),
     Config(DatabaseConnection),
+}
+
+impl ConnectionSource {
+    pub fn host(&self) -> String {
+        match self {
+            ConnectionSource::Url(url) => {
+                let s = match url {
+                    DatabaseString::Postgres(s) => s.as_str(),
+                    DatabaseString::Mysql(s) => s.as_str(),
+                    DatabaseString::Sqlite(s) => s.as_str(),
+                };
+                extract_host(s)
+            }
+            ConnectionSource::Config(config) => match config {
+                DatabaseConnection::Postgres(c) => c.hostname.clone(),
+                DatabaseConnection::Mysql(c) => c.hostname.clone(),
+                DatabaseConnection::Sqlite(c) => c.path.clone(),
+            },
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
@@ -440,18 +461,56 @@ pub fn list_connections() -> Vec<Database> {
     load_connections().databases.values().cloned().collect()
 }
 
+pub fn extract_host(url: &str) -> String {
+    if url.starts_with("sqlite://") {
+        return url.trim_start_matches("sqlite://").to_string();
+    }
+
+    let without_scheme = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url);
+
+    let after_at = without_scheme
+        .rsplit_once('@')
+        .map(|(_, rest)| rest)
+        .unwrap_or(without_scheme);
+
+    let host_and_port = after_at
+        .split_once('/')
+        .map(|(host, _)| host)
+        .unwrap_or(after_at);
+
+    host_and_port.to_string()
+}
+
 pub fn print_connections() {
     let dbs = list_connections();
-
     if dbs.is_empty() {
         println!("No databases configured.");
-    } else {
-        println!("{:<20} {:<10}", "DATABASE NAME", "ENGINE");
-        println!("{}", "-".repeat(32));
-
-        // Rows
-        for db in dbs {
-            println!("{:<20} {:<10}", db.name, db.engine);
-        }
+        return;
     }
+
+    #[derive(Tabled)]
+    struct ConnectionRow {
+        #[tabled(rename = "NAME")]
+        name: String,
+        #[tabled(rename = "ENGINE")]
+        engine: String,
+        #[tabled(rename = "HOST")]
+        host: String,
+    }
+
+    let rows: Vec<ConnectionRow> = dbs
+        .into_iter()
+        .map(|db| ConnectionRow {
+            host: db.connection.host(),
+            name: db.name,
+            engine: db.engine.to_string(),
+        })
+        .collect();
+
+    let table = Table::new(rows)
+        .with(Style::modern_rounded())
+        .with(Modify::new(Columns::first()).with(Color::BOLD))
+        .to_string();
+
+    println!("{table}");
 }
