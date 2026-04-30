@@ -23,6 +23,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 ## Future todos:
 
 - [ ] Raw sql files for premade queries
+- [ ] Colors in general to output
 - [ ] Prettyfy the error messages, like the rust compiler
 - [ ] Write TESTTS!!
 - [ ] Session manager - tmux lik sessionizer to change between connctions. Makes connections out of scope and harder to accidentaly change wrong dbs
@@ -46,8 +47,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] Add -i flag to explicit set interactive. Otherwise the flags should be strict
 - [x] Add preview text to the cli interactive mode
 - [x] Add description to all the commands and params
-- [ ] Add colors with the console crate
-- [ ] Fix the dupe situation. Connections strings should be comparable
+- [x] Fix the dupe situation. Connections strings should be comparable
 
 - [ ] Fix the interactive clipboard paste issue
 

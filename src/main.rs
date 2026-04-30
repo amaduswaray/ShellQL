@@ -1,7 +1,8 @@
 mod cli;
 mod connection;
+use std::io::{self, Write};
+
 use anyhow::Context;
-use dialoguer::{Input, Select};
 
 use crate::{
     cli::{Cli, Commands, DbCommands, Engine},
@@ -11,6 +12,7 @@ use crate::{
     },
 };
 use clap::Parser;
+use dialoguer::{Input, Select, theme::ColorfulTheme};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -128,7 +130,7 @@ async fn main() -> anyhow::Result<()> {
 fn prompt_engine() -> Engine {
     let items = ["Postgres", "MySQL", "SQLite"];
 
-    let selection = Select::new()
+    let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Select database engine")
         .items(&items)
         .default(0)
@@ -143,21 +145,47 @@ fn prompt_engine() -> Engine {
     }
 }
 
-// fn read_line(prompt: &str) -> String {
-//     print!("{prompt}: ");
-//     stdout().flush().unwrap();
-//
-//     let mut input = String::new();
-//     stdin().read_line(&mut input).unwrap();
-//
-//     input.trim().to_string()
-// }
-
-// TODO: Use console package to have different colors of the option
 fn read_line(prompt: &str, initial: &str) -> String {
-    Input::<String>::new()
-        .with_prompt(prompt)
-        .default(initial.to_string())
-        .interact_text()
-        .unwrap()
+    let theme = ColorfulTheme::default();
+
+    eprint!(
+        "{} {} {} {} ",
+        theme.prompt_prefix,
+        theme.prompt_style.apply_to(prompt),
+        theme.hint_style.apply_to(format!("({})", initial)),
+        theme.prompt_suffix,
+    );
+    io::stderr().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    let input = input.trim();
+
+    let result = if input.is_empty() {
+        initial.to_string()
+    } else {
+        input.to_string()
+    };
+
+    eprint!(
+        "\x1b[1A\x1b[2K{} {} {} {}\n",
+        theme.success_prefix,
+        theme.prompt_style.apply_to(prompt),
+        theme.success_suffix,
+        theme.values_style.apply_to(&result),
+    );
+    io::stderr().flush().unwrap();
+
+    result
 }
+
+// TODO: Fix this to work with tmux
+// fn read_line(prompt: &str, initial: &str) -> String {
+//     Input::<String>::with_theme(&ColorfulTheme::default())
+//         .with_prompt(prompt)
+//         .default(initial.to_string())
+//         .interact_text()
+//         .unwrap()
+//         .trim()
+//         .to_string()
+// }
