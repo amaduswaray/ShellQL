@@ -1,6 +1,9 @@
 use std::io::{self, Write};
 
-use anyhow::Context;
+use color_eyre::{
+    Section,
+    eyre::{Context, eyre},
+};
 use clap::Parser;
 use dialoguer::{Select, theme::ColorfulTheme};
 use shellql::{
@@ -12,7 +15,9 @@ use shellql::{
 };
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> color_eyre::eyre::Result<()> {
+    color_eyre::install()?;
+
     let args = Cli::parse();
 
     match args.command {
@@ -27,7 +32,11 @@ async fn main() -> anyhow::Result<()> {
 
             let engine = match engine {
                 Some(e) => e,
-                None => prompt_engine().context("Failed to read engine selection")?,
+                None => prompt_engine()
+                    .wrap_err("Failed to read engine selection")
+                    .suggestion(
+                        "Pass --engine <postgres|mysql|sqlite> to skip the interactive prompt",
+                    )?,
             };
 
             let db_name = match name {
@@ -35,22 +44,26 @@ async fn main() -> anyhow::Result<()> {
                 None => {
                     if is_interactive {
                         read_line("Database name", "Example Database")
-                            .context("Failed to read database name")?
+                            .wrap_err("Failed to read database name")?
                     } else {
                         engine.to_string().to_lowercase()
                     }
                 }
             };
 
-            let connection_example = format!("{}://", engine);
+            let connection_example = format!("{}://user:pass@host/dbname", engine);
             let url = match url {
                 Some(u) => u,
                 None => read_line("Connection URL", &connection_example)
-                    .context("Failed to read connection URL")?,
+                    .wrap_err("Failed to read connection URL")?,
             };
 
             let url = validate_connection_string(&url)
-                .context("Invalid connection string")?
+                .wrap_err("Invalid connection string")
+                .suggestion(format!(
+                    "Connection strings must look like: {}://user:pass@host/dbname",
+                    engine
+                ))?
                 .to_string();
 
             let source = match engine {
@@ -61,14 +74,27 @@ async fn main() -> anyhow::Result<()> {
 
             let pool = connect_db(source, db_name)
                 .await
-                .context("Failed to connect to database")?;
+                .wrap_err("Failed to connect to the database")
+                .suggestion(
+                    "Check that the host is reachable, your credentials are correct, \
+                     and the database exists",
+                )?;
 
             match pool {
                 DbPool::Postgres(pg_pool) => {
-                    let rows: Vec<_> = sqlx::query_as::<_, (String,)>("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
-                        .fetch_all(&pg_pool)
-                        .await
-                        .context("Failed to query tables — check your permissions and connection")?;
+                    let rows: Vec<_> = sqlx::query_as::<_, (String,)>(
+                        "SELECT table_name \
+                         FROM information_schema.tables \
+                         WHERE table_schema = 'public' \
+                         ORDER BY table_name",
+                    )
+                    .fetch_all(&pg_pool)
+                    .await
+                    .wrap_err("Failed to list tables")
+                    .suggestion(
+                        "Ensure your database user has SELECT privileges on \
+                         information_schema.tables",
+                    )?;
 
                     for (table_name,) in rows {
                         println!("{table_name}");
@@ -76,10 +102,19 @@ async fn main() -> anyhow::Result<()> {
                 }
 
                 DbPool::Mysql(my_pool) => {
-                    let rows: Vec<_> = sqlx::query_as::<_, (String,)>("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() ORDER BY table_name")
-                        .fetch_all(&my_pool)
-                        .await
-                        .context("Failed to query tables — check your permissions and connection")?;
+                    let rows: Vec<_> = sqlx::query_as::<_, (String,)>(
+                        "SELECT table_name \
+                         FROM information_schema.tables \
+                         WHERE table_schema = DATABASE() \
+                         ORDER BY table_name",
+                    )
+                    .fetch_all(&my_pool)
+                    .await
+                    .wrap_err("Failed to list tables")
+                    .suggestion(
+                        "Ensure your database user has SELECT privileges on \
+                         information_schema.tables",
+                    )?;
 
                     for (table_name,) in rows {
                         println!("{table_name}");
@@ -92,8 +127,10 @@ async fn main() -> anyhow::Result<()> {
                     )
                     .fetch_all(&sq_pool)
                     .await
-                    .context(
-                        "Failed to query tables — check that the database file is accessible",
+                    .wrap_err("Failed to list tables")
+                    .suggestion(
+                        "Ensure the SQLite database file exists and is not locked by \
+                         another process",
                     )?;
 
                     for (table_name,) in rows {
@@ -102,8 +139,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+
         Some(Commands::DB { command }) => match command {
             DbCommands::List => print_connections(),
+
             DbCommands::Add { name, engine, url } => {
                 let connection = match engine {
                     Engine::Postgres => ConnectionSource::Url(DatabaseString::Postgres(url)),
@@ -112,36 +151,44 @@ async fn main() -> anyhow::Result<()> {
                 };
 
                 match add_connection(name, connection, engine) {
-                    Ok(_) => {
-                        print_connections();
-                    }
+                    Ok(_) => print_connections(),
                     Err(e) => {
-                        eprintln!("Error: {e}");
+                        let report = eyre!(e)
+                            .suggestion(
+                                "Run `shellql db list` to see all existing connection names \
+                                 and URLs",
+                            );
+                        return Err(report);
                     }
                 }
             }
+
             DbCommands::Delete { name } => match delete_connection(name.clone()) {
                 Ok(_) => {
                     println!("Connection '{}' deleted.", name);
                     print_connections();
                 }
                 Err(e) => {
-                    eprintln!("Error: Failed to delete connection: {e}");
+                    let report = eyre!(e)
+                        .wrap_err(format!("Failed to delete connection '{name}'"))
+                        .suggestion(
+                            "Run `shellql db list` to verify the connection name exists",
+                        );
+                    return Err(report);
                 }
             },
         },
 
         None => {
-            // TODO: Run the tui
-            // Cli::parse_from(["shellql", "--help"]);
-            println!("Hello darkness my old friend")
+            // TODO: launch TUI
+            println!("Hello darkness my old friend");
         }
     }
 
     Ok(())
 }
 
-fn prompt_engine() -> anyhow::Result<Engine> {
+fn prompt_engine() -> color_eyre::eyre::Result<Engine> {
     let items = ["Postgres", "MySQL", "SQLite"];
 
     let selection = Select::with_theme(&ColorfulTheme::default())
@@ -149,7 +196,8 @@ fn prompt_engine() -> anyhow::Result<Engine> {
         .items(&items)
         .default(0)
         .interact()
-        .context("Could not display engine selector — is this an interactive terminal?")?;
+        .wrap_err("Could not display engine selector")
+        .suggestion("Pass --engine <postgres|mysql|sqlite> to skip interactive mode")?;
 
     Ok(match selection {
         0 => Engine::Postgres,
@@ -159,8 +207,9 @@ fn prompt_engine() -> anyhow::Result<Engine> {
     })
 }
 
-fn read_line(prompt: &str, initial: &str) -> anyhow::Result<String> {
+fn read_line(prompt: &str, initial: &str) -> color_eyre::eyre::Result<String> {
     let theme = ColorfulTheme::default();
+
     eprint!(
         "{} {} {} {} ",
         theme.prompt_prefix,
@@ -170,16 +219,17 @@ fn read_line(prompt: &str, initial: &str) -> anyhow::Result<String> {
     );
     io::stderr()
         .flush()
-        .context("Failed to write to terminal")?;
+        .wrap_err("Failed to write to terminal")?;
 
     let mut input = String::new();
     io::stdin()
         .read_line(&mut input)
-        .context("Failed to read input — is stdin available?")?;
+        .wrap_err("Failed to read input")
+        .suggestion("Make sure stdin is connected to an interactive terminal")?;
 
     let input = input
-        .replace("\x1b[200~", "") // paste start marker
-        .replace("\x1b[201~", ""); // paste end marker
+        .replace("\x1b[200~", "")
+        .replace("\x1b[201~", "");
     let input = input.trim();
 
     let result = if input.is_empty() {
@@ -197,7 +247,7 @@ fn read_line(prompt: &str, initial: &str) -> anyhow::Result<String> {
     );
     io::stderr()
         .flush()
-        .context("Failed to write to terminal")?;
+        .wrap_err("Failed to write to terminal")?;
 
     Ok(result)
 }

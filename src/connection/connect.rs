@@ -4,6 +4,8 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::{fs, io};
 
+use annotate_snippets::{AnnotationKind, Level, Renderer, Snippet};
+use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
 use sqlx::mysql::MySqlPoolOptions;
 use sqlx::postgres::PgPoolOptions;
@@ -17,6 +19,10 @@ use crate::cli::Engine;
 use std::fmt;
 
 static MAX_CONNECTIONS: u32 = 5;
+
+fn warn(msg: impl fmt::Display) {
+    eprintln!("{} {}", "⚠  Warning:".yellow().bold(), msg);
+}
 
 #[derive(Deserialize, Serialize, Default)]
 pub struct DatabaseStore {
@@ -128,27 +134,110 @@ pub struct SslOptions {
 
 #[derive(Debug)]
 pub enum ConnectionError {
-    InvalidUrl(url::ParseError),
-    UnsupportedScheme(String),
-    MissingHost,
-    MissingPath,
+    /// The input string could not be parsed as a URL at all.
+    InvalidUrl {
+        input: String,
+        error: url::ParseError,
+    },
+    /// The URL scheme is not one of the supported database drivers.
+    UnsupportedScheme { input: String, scheme: String },
+    /// A non-SQLite URL has no host component.
+    MissingHost { input: String },
+    /// The URL has no database-name path component (or only a bare `/`).
+    MissingPath { input: String },
 }
 
 impl fmt::Display for ConnectionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ConnectionError::InvalidUrl(e) => write!(f, "Invalid URL: {e}"),
-            ConnectionError::UnsupportedScheme(s) => write!(f, "Unsupported scheme: {s}"),
-            ConnectionError::MissingHost => write!(f, "Missing host in connection string"),
-            ConnectionError::MissingPath => write!(f, "Missing database name/path"),
-        }
+        let renderer = Renderer::styled();
+
+        let output = match self {
+            ConnectionError::InvalidUrl { input, error } => {
+                let msg = error.to_string();
+                let report = &[Level::ERROR
+                    .primary_title("invalid connection string")
+                    .element(
+                        Snippet::source(input.as_str()).annotation(
+                            AnnotationKind::Primary
+                                .span(0..input.len())
+                                .label(msg.as_str()),
+                        ),
+                    )
+                    .element(Level::HELP.message(
+                        "use a connection string in the form: \
+                             postgres://user:pass@host/dbname",
+                    ))];
+                renderer.render(report).to_string()
+            }
+
+            ConnectionError::UnsupportedScheme { input, scheme } => {
+                // Highlight the scheme portion (e.g. "http" in "http://...")
+                let scheme_end = scheme.len();
+                let report = &[Level::ERROR
+                    .primary_title("unsupported database scheme")
+                    .element(
+                        Snippet::source(input.as_str()).annotation(
+                            AnnotationKind::Primary
+                                .span(0..scheme_end)
+                                .label("this scheme is not supported"),
+                        ),
+                    )
+                    .element(
+                        Level::HELP
+                            .message("supported schemes: postgres, postgresql, mysql, sqlite"),
+                    )];
+                renderer.render(report).to_string()
+            }
+
+            ConnectionError::MissingHost { input } => {
+                // The host would appear immediately after "://"
+                let after_scheme = input.find("://").map(|i| i + 3).unwrap_or(input.len());
+                let span_end = (after_scheme + 1).min(input.len()).max(after_scheme);
+                let report = &[Level::ERROR
+                    .primary_title("missing host in connection string")
+                    .element(
+                        Snippet::source(input.as_str()).annotation(
+                            AnnotationKind::Primary
+                                .span(after_scheme..span_end)
+                                .label("expected a hostname here"),
+                        ),
+                    )
+                    .element(Level::HELP.message(
+                        "use a connection string in the form: \
+                             postgres://user:pass@host/dbname",
+                    ))];
+                renderer.render(report).to_string()
+            }
+
+            ConnectionError::MissingPath { input } => {
+                let span_start = input.rfind('/').map(|i| i + 1).unwrap_or(input.len());
+                // If span_start == input.len() the range is empty; pad by one for display
+                let span_end = input.len().max(span_start + 1).min(input.len());
+                let report = &[Level::ERROR
+                    .primary_title("missing database name in connection string")
+                    .element(
+                        Snippet::source(input.as_str()).annotation(
+                            AnnotationKind::Primary
+                                .span(span_start..span_end)
+                                .label("expected a database name after the last '/'"),
+                        ),
+                    )
+                    .element(Level::HELP.message(
+                        "use a connection string in the form: \
+                             postgres://user:pass@host/dbname",
+                    ))];
+                renderer.render(report).to_string()
+            }
+        };
+
+        write!(f, "{output}")
     }
 }
 
 impl std::error::Error for ConnectionError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            ConnectionError::InvalidUrl(e) => Some(e),
+            ConnectionError::InvalidUrl { error, .. } => Some(error),
             _ => None,
         }
     }
@@ -157,31 +246,48 @@ impl std::error::Error for ConnectionError {
 pub fn validate_connection_string(conn: &str) -> Result<Url, ConnectionError> {
     let url = match Url::parse(conn) {
         Ok(u) => u,
-        Err(e) => return Err(ConnectionError::InvalidUrl(e)),
+        Err(e) => {
+            return Err(ConnectionError::InvalidUrl {
+                input: conn.to_string(),
+                error: e,
+            });
+        }
     };
 
     match url.scheme() {
         "postgres" | "postgresql" | "mysql" | "sqlite" => {}
-        other => return Err(ConnectionError::UnsupportedScheme(other.to_string())),
+        other => {
+            return Err(ConnectionError::UnsupportedScheme {
+                input: conn.to_string(),
+                scheme: other.to_string(),
+            });
+        }
     }
 
     match url.scheme() {
         "sqlite" => {}
         _ => {
             if url.host_str().is_none() {
-                return Err(ConnectionError::MissingHost);
+                return Err(ConnectionError::MissingHost {
+                    input: conn.to_string(),
+                });
             }
         }
     }
 
     let path = url.path();
     if path.is_empty() || path == "/" {
-        return Err(ConnectionError::MissingPath);
+        return Err(ConnectionError::MissingPath {
+            input: conn.to_string(),
+        });
     }
 
     Ok(url)
 }
-pub async fn connect_db(connection: ConnectionSource, name: String) -> anyhow::Result<DbPool> {
+pub async fn connect_db(
+    connection: ConnectionSource,
+    name: String,
+) -> color_eyre::eyre::Result<DbPool> {
     let pool = match &connection {
         ConnectionSource::Url(DatabaseString::Postgres(url)) => {
             let pool = PgPoolOptions::new()
@@ -350,7 +456,7 @@ pub fn load_connections() -> DatabaseStore {
     match get_config_path() {
         Ok(path) => load_connections_from(&path),
         Err(e) => {
-            eprintln!("Warning: could not locate config directory: {e}");
+            warn(format!("could not locate config directory: {e}"));
             DatabaseStore::default()
         }
     }
@@ -364,7 +470,7 @@ pub fn load_connections_from(path: &PathBuf) -> DatabaseStore {
     let data = match fs::read_to_string(path) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("Warning: could not read connections file: {e}");
+            warn(format!("could not read connections file: {e}"));
             return DatabaseStore::default();
         }
     };
@@ -372,11 +478,11 @@ pub fn load_connections_from(path: &PathBuf) -> DatabaseStore {
     match serde_json::from_str(&data) {
         Ok(store) => store,
         Err(e) => {
-            eprintln!(
-                "Warning: connections file appears corrupt and will be ignored ({e}). \
+            warn(format!(
+                "connections file appears corrupt and will be ignored ({e}). \
                 Your saved connections may be missing. Check: {}",
                 path.display()
-            );
+            ));
             DatabaseStore::default()
         }
     }
@@ -438,6 +544,11 @@ pub fn add_connection(
 pub fn delete_connection(name: String) -> io::Result<()> {
     let path = get_config_path()?;
     let mut store = load_connections_from(&path);
+
+    if !store.databases.contains_key(&name) {
+        return Err(io::Error::new(io::ErrorKind::NotFound, "Name not found"));
+    }
+
     store.databases.remove(&name);
     save_connections_to(&store, &path)
 }

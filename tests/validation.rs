@@ -1,4 +1,5 @@
-use shellql::connection::connect::{ConnectionError, validate_connection_string};
+/// Tests for `validate_connection_string` — pure function, no I/O.
+use shellql::connection::connect::{validate_connection_string, ConnectionError};
 
 #[test]
 fn valid_postgres_url_is_accepted() {
@@ -29,7 +30,7 @@ fn valid_sqlite_url_is_accepted() {
 fn completely_invalid_url_is_rejected() {
     let result = validate_connection_string("not a url at all");
     assert!(
-        matches!(result, Err(ConnectionError::InvalidUrl(_))),
+        matches!(result, Err(ConnectionError::InvalidUrl { .. })),
         "expected InvalidUrl, got {result:?}"
     );
 }
@@ -38,7 +39,7 @@ fn completely_invalid_url_is_rejected() {
 fn unsupported_scheme_is_rejected() {
     let result = validate_connection_string("http://example.com/mydb");
     assert!(
-        matches!(result, Err(ConnectionError::UnsupportedScheme(_))),
+        matches!(result, Err(ConnectionError::UnsupportedScheme { .. })),
         "expected UnsupportedScheme, got {result:?}"
     );
 }
@@ -48,7 +49,7 @@ fn postgres_url_missing_host_is_rejected() {
     // url crate parses "postgres:///mydb" with an empty host string
     let result = validate_connection_string("postgres:///mydb");
     assert!(
-        matches!(result, Err(ConnectionError::MissingHost)),
+        matches!(result, Err(ConnectionError::MissingHost { .. })),
         "expected MissingHost, got {result:?}"
     );
 }
@@ -57,7 +58,7 @@ fn postgres_url_missing_host_is_rejected() {
 fn postgres_url_missing_database_path_is_rejected() {
     let result = validate_connection_string("postgres://localhost/");
     assert!(
-        matches!(result, Err(ConnectionError::MissingPath)),
+        matches!(result, Err(ConnectionError::MissingPath { .. })),
         "expected MissingPath, got {result:?}"
     );
 }
@@ -66,7 +67,30 @@ fn postgres_url_missing_database_path_is_rejected() {
 fn postgres_url_with_no_path_at_all_is_rejected() {
     let result = validate_connection_string("postgres://localhost");
     assert!(
-        matches!(result, Err(ConnectionError::MissingPath)),
+        matches!(result, Err(ConnectionError::MissingPath { .. })),
         "expected MissingPath, got {result:?}"
+    );
+}
+
+/// Verify that rendered errors echo the original input so users can see
+/// exactly which string was rejected.
+#[test]
+fn error_display_contains_input_string() {
+    let input = "http://example.com/mydb";
+    let err = validate_connection_string(input).unwrap_err();
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains(input),
+        "rendered error should echo the input URL back to the user\ngot:\n{rendered}"
+    );
+}
+
+#[test]
+fn unsupported_scheme_error_highlights_scheme() {
+    let err = validate_connection_string("ftp://host/db").unwrap_err();
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("ftp"),
+        "rendered error should name the bad scheme\ngot:\n{rendered}"
     );
 }

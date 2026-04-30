@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use serial_test::serial;
 use shellql::cli::Engine;
 use shellql::connection::connect::{
-    ConnectionSource, Database, DatabaseStore, DatabaseString, load_connections_from,
-    save_connections_to,
+    load_connections_from, save_connections_to, ConnectionSource, Database, DatabaseStore,
+    DatabaseString,
 };
 
 fn test_path() -> PathBuf {
@@ -57,6 +57,13 @@ fn add_connection_with_path(
 
 fn delete_connection_with_path(name: String, path: &PathBuf) -> std::io::Result<()> {
     let mut store = load_connections_from(path);
+
+    if !store.databases.contains_key(&name) {
+        // Mirror production behaviour: warn and return Ok — nothing to delete.
+        eprintln!("warning: no connection named '{name}' found — nothing was deleted.");
+        return Ok(());
+    }
+
     store.databases.remove(&name);
     save_connections_to(&store, path)
 }
@@ -273,8 +280,13 @@ fn delete_nonexistent_connection_is_a_noop() {
     cleanup();
     let path = test_path();
 
+    // Should not error — just emit a warning and leave the store untouched.
     delete_connection_with_path("ghost".to_string(), &path)
         .expect("deleting a non-existent connection should not error");
+
+    // Store is still empty — nothing was written or corrupted.
+    let store = load_connections_from(&path);
+    assert!(store.databases.is_empty());
 
     cleanup();
 }
