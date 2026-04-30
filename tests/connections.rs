@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use serial_test::serial;
 use shellql::cli::Engine;
-use shellql::connection::connect::{
+use shellql::connection::{
     load_connections_from, save_connections_to, ConnectionSource, Database, DatabaseStore,
     DatabaseString,
 };
