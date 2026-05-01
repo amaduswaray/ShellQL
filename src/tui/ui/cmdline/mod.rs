@@ -45,16 +45,16 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
     }
 
     let mode_label = match state.mode {
-        AppMode::Home => " NORMAL ",
+        AppMode::Home => " HOME ",
         AppMode::Dashboard => " NORMAL ",
     };
 
     let context = match state.mode {
-        AppMode::Home => String::new(),
-        AppMode::Dashboard => {
+        AppMode::Home => {
             let n = state.connections.len();
             format!("  {}  connection{}", n, if n == 1 { "" } else { "s" })
         }
+        AppMode::Dashboard => String::new(),
     };
 
     let line = Line::from(vec![
@@ -206,3 +206,4 @@ fn render_completions(
 
     frame.render_widget(Paragraph::new(lines), inner);
 }
+

@@ -159,3 +159,4 @@ impl CommandLine {
         self.completion_selected = None;
     }
 }
+

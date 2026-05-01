@@ -8,7 +8,7 @@ pub mod session;
 pub mod table;
 
 pub use app::{AppMode, AppState};
-pub use cmdline::{CommandLine, CommandLineMode, ConfirmAction};
+pub use cmdline::{CommandLine, CommandLineMode, ConfirmAction, compute_completions, COMMANDS};
 pub use form::{AddConnectionForm, FieldId, FormInputMode, TextMode};
 pub use data::{Cell, Column, Row, SortDirection, SortState};
 pub use editor::{EditorMode, QueryEditorState, QueryResult};

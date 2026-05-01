@@ -563,3 +563,4 @@ fn remove_at(s: &mut String, char_idx: usize) -> bool {
     s.remove(byte);
     true
 }
+

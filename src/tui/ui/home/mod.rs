@@ -604,7 +604,7 @@ fn text_line_with_cursor(value: String, cursor_pos: usize, mode: &TextMode) -> L
 /// Return the substring of `text` starting at char offset `scroll` that fits
 /// within `width` visible columns. Used to implement horizontal scrolling in
 /// text input fields.
-fn visible_text(text: &str, scroll: usize, width: usize) -> String {
+pub fn visible_text(text: &str, scroll: usize, width: usize) -> String {
     let chars: Vec<char> = text.chars().collect();
     let start = scroll.min(chars.len());
     let end = (start + width).min(chars.len());
@@ -652,3 +652,4 @@ fn render_command_palette(frame: &mut Frame, area: Rect) {
     frame.render_widget(Paragraph::new(lines), content_area);
     render_dismiss_hint(frame, hint_area, "Esc/q  <close> ");
 }
+
