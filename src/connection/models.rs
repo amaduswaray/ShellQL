@@ -25,9 +25,11 @@ impl Engine {
 
     pub fn badge(&self) -> Span<'static> {
         match self {
-            Engine::Postgres => Span::styled("", Style::default().fg(Color::Blue).bold()),
-            Engine::Mysql => Span::styled("", Style::default().fg(Color::Yellow).bold()),
-            Engine::Sqlite => Span::styled("", Style::default().fg(Color::Green).bold()),
+            Engine::Postgres => {
+                Span::styled("[Postgres] ", Style::default().fg(Color::Blue).bold())
+            }
+            Engine::Mysql => Span::styled("[MySQL] ", Style::default().fg(Color::Yellow).bold()),
+            Engine::Sqlite => Span::styled("[SQLite] ", Style::default().fg(Color::Green).bold()),
         }
     }
 }

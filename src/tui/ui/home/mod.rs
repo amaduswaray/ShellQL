@@ -122,7 +122,7 @@ fn render_connections(frame: &mut Frame, area: Rect, state: &AppState) {
         .column_spacing(1)
         .row_highlight_style(
             Style::default()
-                .bg(Color::Rgb(28, 42, 74))
+                .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
         );
 

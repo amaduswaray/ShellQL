@@ -34,3 +34,4 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [ ] All commands like, new session, switch session, delete session, add connection, etc
   - [ ] When an error is there, enter should take you out of the command line mode
   - [ ] Tab completion for command line commands
+- [ ] Connect form

@@ -5,7 +5,7 @@ use crate::{
     tui::{
         state::{
             AppMode, AppState, Overlay,
-            cmdline::{CommandLineMode, ConfirmAction},
+            cmdline::{CommandLineMode, ConfirmAction, compute_completions},
         },
         ui::home::{
             goto_bottom, goto_top, remove_selected, select_next, select_prev, selected_connection,
@@ -58,7 +58,27 @@ fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
             if state.cmdline.input.is_empty() {
                 state.cmdline.reset();
             } else {
+                state.cmdline.clear_completions();
                 state.cmdline.pop();
+            }
+        }
+
+        // Tab — open or cycle forward through completions.
+        KeyCode::Tab => {
+            if let CommandLineMode::Input = state.cmdline.mode {
+                if state.cmdline.completions.is_empty() {
+                    let matches = compute_completions(&state.cmdline.input);
+                    state.cmdline.open_completions(matches);
+                } else {
+                    state.cmdline.next_completion();
+                }
+            }
+        }
+
+        // Shift+Tab — cycle backward through completions.
+        KeyCode::BackTab => {
+            if let CommandLineMode::Input = state.cmdline.mode {
+                state.cmdline.prev_completion();
             }
         }
 
@@ -66,7 +86,11 @@ fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
         KeyCode::Enter => execute_cmdline(state),
 
         KeyCode::Char(c) => match &state.cmdline.mode {
-            CommandLineMode::Input => state.cmdline.push(c),
+            CommandLineMode::Input => {
+                // Any typed character dismisses completions and resumes free input.
+                state.cmdline.clear_completions();
+                state.cmdline.push(c);
+            }
             // Confirm only accepts a single y/n character.
             CommandLineMode::Confirm(_) => {
                 if state.cmdline.input.is_empty() && matches!(c, 'y' | 'Y' | 'n' | 'N') {
