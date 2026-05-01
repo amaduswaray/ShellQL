@@ -12,6 +12,16 @@ pub enum Engine {
     Sqlite,
 }
 
+impl Engine {
+    pub fn to_source(&self, url: String) -> ConnectionSource {
+        match self {
+            Engine::Postgres => ConnectionSource::Url(DatabaseString::Postgres(url)),
+            Engine::Mysql => ConnectionSource::Url(DatabaseString::Mysql(url)),
+            Engine::Sqlite => ConnectionSource::Url(DatabaseString::Sqlite(url)),
+        }
+    }
+}
+
 impl Display for Engine {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         let s = match self {

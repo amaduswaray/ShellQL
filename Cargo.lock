@@ -2255,6 +2255,7 @@ dependencies = [
  "tabled",
  "tokio",
  "url",
+ "uuid",
 ]
 
 [[package]]

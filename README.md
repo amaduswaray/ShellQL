@@ -23,6 +23,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 ## Future todos:
 
 - [ ] Raw sql files for pre-made queries
+- [ ] Create trait that holds common functions for models(host, connection validator, connection builder, connection string extractor, etc)
 - [ ] Prettyfy the error messages, like the rust compiler
 - [ ] Write TESTTS!!
 - [ ] Session manager - tmux lik sessionizer to change between connctions. Makes connections out of scope and harder to accidentaly change wrong dbs

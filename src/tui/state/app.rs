@@ -1,0 +1,34 @@
+use crate::connection::Database;
+
+use super::pane::Overlay;
+use super::session::Session;
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum AppMode {
+    Home,
+    Dashboard,
+}
+
+pub struct AppState {
+    pub mode: AppMode,
+    pub overlay: Option<Overlay>,
+    pub should_quit: bool,
+    pub connections: Vec<Database>,
+    pub selected_connection: usize,
+    pub sessions: Vec<Session>,
+    pub active_session: usize,
+}
+
+impl AppState {
+    pub fn new() -> Self {
+        Self {
+            mode: AppMode::Home,
+            overlay: None,
+            should_quit: false,
+            connections: vec![],
+            selected_connection: 0,
+            sessions: vec![],
+            active_session: 0,
+        }
+    }
+}

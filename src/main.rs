@@ -9,9 +9,10 @@ use shellql::{
         prompt::{prompt_engine, read_line},
     },
     connection::{
-        ConnectionSource, DatabaseString, DbPool, add_connection, delete_connection,
-        models::Engine, print_connections, validate_connection_string,
+        DbPool, add_connection, delete_connection, models::Engine, print_connections,
+        validate_connection_string,
     },
+    tui::app::run_app,
 };
 
 #[tokio::main]
@@ -32,10 +33,7 @@ async fn main() -> color_eyre::eyre::Result<()> {
             handle_db(command).await?;
         }
 
-        None => {
-            // TODO: launch TUI
-            println!("Hello darkness my old friend");
-        }
+        None => run_app().await?,
     }
 
     Ok(())
@@ -80,7 +78,7 @@ async fn handle_connect(
         ))?
         .to_string();
 
-    let source = engine_to_source(engine.clone(), validated_url);
+    let source = engine.clone().to_source(validated_url);
 
     match add_connection(db_name, source, engine).await {
         Ok(_) => print_connections(), // TODO: Go into TUI mode with the added connection
@@ -98,7 +96,7 @@ async fn handle_db(command: DbCommands) -> color_eyre::eyre::Result<()> {
         DbCommands::List => print_connections(),
 
         DbCommands::Add { name, engine, url } => {
-            let connection = engine_to_source(engine.clone(), url);
+            let connection = engine.clone().to_source(url);
             match add_connection(name, connection, engine).await {
                 Ok(_) => print_connections(),
                 Err(e) => {
@@ -123,14 +121,6 @@ async fn handle_db(command: DbCommands) -> color_eyre::eyre::Result<()> {
     }
 
     Ok(())
-}
-
-fn engine_to_source(engine: Engine, url: String) -> ConnectionSource {
-    match engine {
-        Engine::Postgres => ConnectionSource::Url(DatabaseString::Postgres(url)),
-        Engine::Mysql => ConnectionSource::Url(DatabaseString::Mysql(url)),
-        Engine::Sqlite => ConnectionSource::Url(DatabaseString::Sqlite(url)),
-    }
 }
 
 async fn _print_tables(pool: DbPool) -> color_eyre::eyre::Result<()> {
