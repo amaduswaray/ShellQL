@@ -1,11 +1,12 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::{
-    connection::store::delete_connection,
+    connection::store::{add_connection, delete_connection},
     tui::{
         state::{
             AppMode, AppState, Overlay,
             cmdline::{CommandLineMode, ConfirmAction, compute_completions},
+            form::{AddConnectionForm, TextMode},
         },
         ui::home::{
             goto_bottom, goto_top, remove_selected, select_next, select_prev, selected_connection,
@@ -27,8 +28,18 @@ pub async fn handle_key_event(event: KeyEvent, state: &mut AppState) -> color_ey
         return Ok(());
     }
 
-    // Clear any one-shot error from the previous command on the next keypress.
-    state.cmdline.clear_error();
+    // If there's a pending error in the command line, swallow this keypress
+    // to dismiss it — don't let it fall through to the mode handler.
+    if state.cmdline.error.is_some() {
+        state.cmdline.clear_error();
+        return Ok(());
+    }
+
+    // The add-connection form intercepts all keys while open.
+    if state.form.is_some() {
+        handle_form(event, state).await?;
+        return Ok(());
+    }
 
     // Overlays intercept the pipeline before mode handlers.
     if state.overlay.is_some() {
@@ -134,7 +145,10 @@ fn execute_command(cmd: &str, state: &mut AppState) {
 
         // Overlays
         "h" | "help" => state.overlay = Some(Overlay::Help),
-        "add" => state.overlay = Some(Overlay::AddConnection),
+        "add" => {
+            state.overlay = Some(Overlay::AddConnection);
+            state.form = Some(AddConnectionForm::new());
+        }
 
         // Destructive actions — flow into the confirm prompt
         "d" | "delete" => {
@@ -234,6 +248,7 @@ fn handle_home(event: KeyEvent, state: &mut AppState) {
         // a — open AddConnection overlay
         KeyCode::Char('a') => {
             state.overlay = Some(Overlay::AddConnection);
+            state.form = Some(AddConnectionForm::new());
             state.pending_key = None;
         }
 
@@ -263,4 +278,143 @@ fn handle_home(event: KeyEvent, state: &mut AppState) {
         // Any unrecognised key clears the pending buffer.
         _ => state.pending_key = None,
     }
+}
+
+// ── Add-connection form handler ───────────────────────────────────────────────
+
+async fn handle_form(event: KeyEvent, state: &mut AppState) -> color_eyre::Result<()> {
+    if state.form.is_none() {
+        return Ok(());
+    }
+
+    // Ctrl+S always submits regardless of mode or field.
+    if event.modifiers.contains(KeyModifiers::CONTROL) && event.code == KeyCode::Char('s') {
+        submit_form(state).await?;
+        return Ok(());
+    }
+
+    let is_text = state.form.as_ref().unwrap().focused_field().is_text();
+    let text_mode = state.form.as_ref().unwrap().text_mode.clone();
+
+    match event.code {
+        // ── Universal ───────────────────────────────────────────────────────────────
+
+        // Esc: exit Insert → Normal; in Normal → close the form.
+        KeyCode::Esc => {
+            if is_text && text_mode == TextMode::Insert {
+                state.form.as_mut().unwrap().enter_normal();
+            } else {
+                state.form = None;
+                state.overlay = None;
+            }
+        }
+
+        // Tab / Enter — advance field (always resets to Insert on arrival).
+        KeyCode::Tab | KeyCode::Enter => {
+            state.form.as_mut().unwrap().focus_next();
+        }
+
+        // Shift+Tab — go back.
+        KeyCode::BackTab => {
+            state.form.as_mut().unwrap().focus_prev();
+        }
+
+        // ── Text field keys ────────────────────────────────────────────────────────
+
+        // Left / Right: cursor movement on text fields; cycle on selectors.
+        KeyCode::Left => {
+            let form = state.form.as_mut().unwrap();
+            if is_text {
+                form.cursor_left();
+            } else {
+                form.cycle_left();
+            }
+        }
+        KeyCode::Right => {
+            let form = state.form.as_mut().unwrap();
+            if is_text {
+                form.cursor_right();
+            } else {
+                form.cycle_right();
+            }
+        }
+
+        // Backspace: only delete in Insert mode.
+        KeyCode::Backspace if is_text && text_mode == TextMode::Insert => {
+            state.form.as_mut().unwrap().delete_before_cursor();
+        }
+
+        // Space: insert on text fields (Insert mode) or toggle selectors.
+        KeyCode::Char(' ') => {
+            let form = state.form.as_mut().unwrap();
+            if is_text && text_mode == TextMode::Insert {
+                form.insert_char(' ');
+            } else if !is_text {
+                form.toggle_focused();
+            }
+        }
+
+        // Character input.
+        KeyCode::Char(c) => {
+            let form = state.form.as_mut().unwrap();
+            if is_text {
+                match text_mode {
+                    TextMode::Insert => form.insert_char(c),
+                    TextMode::Normal => match c {
+                        'i' => form.enter_insert_before(),
+                        'a' => form.enter_insert_after(),
+                        'I' => form.enter_insert_at_start(),
+                        'A' => form.enter_insert_at_end(),
+                        'h' => form.cursor_left(),
+                        'l' => form.cursor_right(),
+                        '0' => form.cursor_to_start(),
+                        '$' => form.cursor_to_end(),
+                        'x' => form.delete_at_cursor(),
+                        _ => {}
+                    },
+                }
+            }
+        }
+
+        _ => {}
+    }
+
+    Ok(())
+}
+
+async fn submit_form(state: &mut AppState) -> color_eyre::Result<()> {
+    let Some(ref form) = state.form else {
+        return Ok(());
+    };
+
+    // Validate before hitting the network.
+    if let Err(e) = form.validate() {
+        state.cmdline.set_error(e);
+        return Ok(());
+    }
+
+    let name = form.name.trim().to_string();
+    let engine = form.engine.clone();
+    let source = match form.build_source() {
+        Ok(s) => s,
+        Err(e) => {
+            state.cmdline.set_error(e);
+            return Ok(());
+        }
+    };
+
+    // add_connection tests the connection before persisting.
+    match add_connection(name, source, engine).await {
+        Ok(db) => {
+            state.connections.push(db);
+            state.selected_connection = state.connections.len() - 1;
+            state.form = None;
+            state.overlay = None;
+        }
+        Err(e) => {
+            state.cmdline.set_error(e.to_string());
+        }
+    }
+
+    Ok(())
 }

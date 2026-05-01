@@ -45,7 +45,7 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
     }
 
     let mode_label = match state.mode {
-        AppMode::Home => " HOME ",
+        AppMode::Home => " NORMAL ",
         AppMode::Dashboard => " NORMAL ",
     };
 

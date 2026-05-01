@@ -1,6 +1,7 @@
 use crate::connection::{Database, list_connections};
 
 use super::cmdline::CommandLine;
+use super::form::AddConnectionForm;
 use super::pane::Overlay;
 use super::session::Session;
 
@@ -20,6 +21,8 @@ pub struct AppState {
     pub active_session: usize,
     pub pending_key: Option<char>,
     pub cmdline: CommandLine,
+    /// Populated when `Overlay::AddConnection` is active.
+    pub form: Option<AddConnectionForm>,
 }
 
 impl AppState {
@@ -34,6 +37,7 @@ impl AppState {
             active_session: 0,
             pending_key: None,
             cmdline: CommandLine::new(),
+            form: None,
         }
     }
 }

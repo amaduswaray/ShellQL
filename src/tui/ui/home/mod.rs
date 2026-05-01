@@ -4,15 +4,18 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, Borders, Cell, Clear, Paragraph, Row, Scrollbar, ScrollbarOrientation,
+        Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Scrollbar, ScrollbarOrientation,
         ScrollbarState, Table, TableState,
     },
 };
 
 use crate::{
-    connection::models::Database,
+    connection::models::{Database, Engine},
     tui::{
-        state::{AppState, Overlay},
+        state::{
+            AppState, Overlay,
+            form::{AddConnectionForm, FieldId, FormInputMode, TextMode},
+        },
         ui::components::centered_rect,
     },
 };
@@ -36,7 +39,12 @@ pub fn render_home(frame: &mut Frame, area: Rect, state: &AppState) {
 
     render_title(frame, title_area);
     render_connections(frame, connections_area, state);
-    render_instructions(frame, instructions_area);
+
+    // Hide home instructions while any overlay is open — the overlay's own
+    // hint row replaces them and showing both is confusing.
+    if state.overlay.is_none() {
+        render_instructions(frame, instructions_area);
+    }
 
     // Overlays float on top of everything else.
     if state.overlay.is_some() {
@@ -113,9 +121,9 @@ fn render_connections(frame: &mut Frame, area: Rect, state: &AppState) {
         .collect();
 
     let widths = [
-        Constraint::Length(1),
-        Constraint::Fill(1),
-        Constraint::Length(3),
+        Constraint::Length(1),  // ●/○
+        Constraint::Fill(1),    // name
+        Constraint::Length(11), // badge — widest is "[Postgres] " (11 chars)
     ];
 
     let table = Table::new(rows, widths)
@@ -262,7 +270,7 @@ fn render_overlay(frame: &mut Frame, area: Rect, state: &AppState) {
     let Some(overlay) = state.overlay else { return };
     match overlay {
         Overlay::Help => render_help(frame, area),
-        Overlay::AddConnection => render_add_connection(frame, area),
+        Overlay::AddConnection => render_add_connection(frame, area, state),
         Overlay::CommandPalette => render_command_palette(frame, area),
         // ConfirmDelete is handled by the command-line bar, not as an overlay.
         Overlay::ConfirmDelete => {}
@@ -282,7 +290,8 @@ fn open_popup<'a>(frame: &mut Frame, area: Rect, title: &'a str) -> (Block<'a>, 
             ),
         )
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Blue))
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::White))
         .style(Style::default().bg(Color::Reset));
 
     let inner = block.inner(area);
@@ -347,38 +356,270 @@ fn binding_line<'a>(key: &'a str, desc: &'a str, key_style: Style, desc_style: S
     ])
 }
 
-// ── Add connection ──────────────────────────────────────────────────────────
+// ── Add connection form ──────────────────────────────────────────────────────
 
-fn render_add_connection(frame: &mut Frame, area: Rect) {
-    let popup_area = centered_rect(46, 38, area);
-    let (block, inner) = open_popup(frame, popup_area, "Add Connection");
+fn render_add_connection(frame: &mut Frame, area: Rect, state: &AppState) {
+    let Some(ref form) = state.form else {
+        return;
+    };
+
+    let fields = form.visible_fields();
+
+    // ── Compute error height before sizing the popup ───────────────────────────
+    // The popup is 56% wide. Subtract 2 borders + 2×LEFT_PAD to get the text
+    // column width, then measure how many lines the error will need.
+    const LABEL_W: u16 = 13;
+    const LEFT_PAD: u16 = 2;
+    let inner_w = (area.width * 56 / 100).saturating_sub(2 + LEFT_PAD * 2) as usize;
+    let _ = inner_w; // reserved for future per-field validation hints
+
+    // Height: 1 top-pad + fields + 1 blank + 1 hint + 2 borders
+    let content_h = 1 + fields.len() as u16 + 1 + 1;
+    let popup_h_pct = ((content_h + 2) * 100 / area.height.max(1)).clamp(35, 88) as u16;
+    let popup_area = centered_rect(56, popup_h_pct, area);
+
+    frame.render_widget(Clear, popup_area);
+
+    let block = Block::default()
+        .title(
+            Line::from(" Add Connection ").style(
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        )
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::White))
+        .style(Style::default().bg(Color::Reset));
+
+    let inner = block.inner(popup_area);
     frame.render_widget(block, popup_area);
 
-    let [content_area, hint_area] =
-        Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(inner);
+    let [fields_area, hint_area] = Layout::vertical([
+        Constraint::Min(0),
+        Constraint::Length(1),
+    ])
+    .areas(inner);
 
-    let lines = vec![
-        Line::from(""),
-        Line::from(Span::styled(
-            "  Connection form coming soon.",
-            Style::default().fg(Color::Gray),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  In the meantime, use the CLI:",
-            Style::default().fg(Color::DarkGray),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  shql add --name <name> --url <url>",
+    // ── Field rows ────────────────────────────────────────────────────────────
+
+    for (i, field_id) in fields.iter().enumerate() {
+        let y = fields_area.y + 1 + i as u16; // +1 for top padding
+        if y >= fields_area.y + fields_area.height {
+            break;
+        }
+
+        let row = Rect {
+            x: fields_area.x + LEFT_PAD,
+            y,
+            width: fields_area.width.saturating_sub(LEFT_PAD),
+            height: 1,
+        };
+        let is_focused = i == form.focused;
+
+        let [lbl_area, val_area] =
+            Layout::horizontal([Constraint::Length(LABEL_W), Constraint::Min(0)]).areas(row);
+
+        // Label — blue + bold when focused, muted otherwise
+        let lbl_style = if is_focused {
             Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-        )),
-    ];
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        frame.render_widget(
+            Paragraph::new(Line::from(Span::styled(field_id.label(), lbl_style))),
+            lbl_area,
+        );
 
-    frame.render_widget(Paragraph::new(lines), content_area);
-    render_dismiss_hint(frame, hint_area, "Esc/q  <cancel> ");
+        // Horizontal scroll: keep cursor visible when text is wider than the column.
+        let scroll: usize = if is_focused && field_id.is_text() {
+            let w = val_area.width as usize;
+            if form.cursor_pos >= w { form.cursor_pos + 1 - w } else { 0 }
+        } else {
+            0
+        };
+
+        // Value
+        render_field_value(frame, val_area, field_id, form, is_focused, scroll);
+
+        // Terminal cursor for focused text fields in Insert mode;
+        // Normal mode uses a rendered block cursor instead.
+        if is_focused && field_id.is_text() && form.text_mode == TextMode::Insert {
+            let cursor_in_view = form.cursor_pos.saturating_sub(scroll);
+            let cx = (val_area.x + cursor_in_view as u16)
+                .min(val_area.x + val_area.width.saturating_sub(1));
+            frame.set_cursor_position((cx, y));
+        }
+    }
+
+    // ── Hint ──────────────────────────────────────────────────────────────────
+    render_dismiss_hint(
+        frame,
+        hint_area,
+        "Tab <next>  Shift+Tab <prev>  ←→ <cycle>  Ctrl+S <save>  Esc <cancel> ",
+    );
+}
+
+/// Render the value widget for a single form field.
+fn render_field_value(
+    frame: &mut Frame,
+    area: Rect,
+    field: &FieldId,
+    form: &AddConnectionForm,
+    focused: bool,
+    scroll: usize,
+) {
+    match field {
+        FieldId::Engine => {
+            let opts = [
+                ("Postgres", matches!(form.engine, Engine::Postgres)),
+                ("MySQL", matches!(form.engine, Engine::Mysql)),
+                ("SQLite", matches!(form.engine, Engine::Sqlite)),
+            ];
+            frame.render_widget(Paragraph::new(selector_line(&opts, focused)), area);
+        }
+        FieldId::InputMode => {
+            let opts = [
+                ("URL", matches!(form.input_mode, FormInputMode::Url)),
+                ("Config", matches!(form.input_mode, FormInputMode::Config)),
+            ];
+            frame.render_widget(Paragraph::new(selector_line(&opts, focused)), area);
+        }
+        FieldId::Ssl => {
+            let opts = [("None", !form.ssl_enabled), ("Peer", form.ssl_enabled)];
+            frame.render_widget(Paragraph::new(selector_line(&opts, focused)), area);
+        }
+        FieldId::CreateIfMissing => {
+            let opts = [
+                ("No", !form.create_if_missing),
+                ("Yes", form.create_if_missing),
+            ];
+            frame.render_widget(Paragraph::new(selector_line(&opts, focused)), area);
+        }
+        FieldId::Password => {
+            let full: String = "•".repeat(form.password.chars().count());
+            let (display, local_cur) = if focused {
+                (visible_text(&full, scroll, area.width as usize),
+                 form.cursor_pos.saturating_sub(scroll))
+            } else {
+                (full, 0)
+            };
+            let line = if focused {
+                text_line_with_cursor(display, local_cur, &form.text_mode)
+            } else {
+                text_line(display, false)
+            };
+            frame.render_widget(Paragraph::new(line), area);
+        }
+        other => {
+            let full = form.text_for(other).unwrap_or("").to_string();
+            let (display, local_cur) = if focused {
+                (visible_text(&full, scroll, area.width as usize),
+                 form.cursor_pos.saturating_sub(scroll))
+            } else {
+                (full, 0)
+            };
+            let line = if focused {
+                text_line_with_cursor(display, local_cur, &form.text_mode)
+            } else {
+                text_line(display, false)
+            };
+            frame.render_widget(Paragraph::new(line), area);
+        }
+    }
+}
+
+/// Render a row of `● label` / `○ label` selector options.
+fn selector_line(options: &[(&'static str, bool)], focused: bool) -> Line<'static> {
+    let mut spans: Vec<Span<'static>> = Vec::new();
+    for (i, (label, selected)) in options.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("   "));
+        }
+        let style = if *selected {
+            Style::default()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD)
+        } else if focused {
+            Style::default().fg(Color::Gray)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
+        let bullet: &'static str = if *selected { "●" } else { "○" };
+        spans.push(Span::styled(bullet, style));
+        spans.push(Span::styled(format!(" {label}"), style));
+    }
+    Line::from(spans)
+}
+
+/// Render a plain text value with cursor awareness.
+///
+/// - **Insert mode**: plain white text; terminal cursor is set by the caller.
+/// - **Normal mode**: block cursor (blue bg) on the character at `cursor_pos`.
+fn text_line_with_cursor(value: String, cursor_pos: usize, mode: &TextMode) -> Line<'static> {
+    match mode {
+        TextMode::Insert => {
+            if value.is_empty() {
+                Line::from(Span::raw(""))
+            } else {
+                Line::from(Span::styled(value, Style::default().fg(Color::White)))
+            }
+        }
+        TextMode::Normal => {
+            let chars: Vec<char> = value.chars().collect();
+            let len = chars.len();
+            if len == 0 {
+                // Empty field: show a single block to indicate cursor presence.
+                return Line::from(Span::styled(
+                    " ",
+                    Style::default().bg(Color::Blue).fg(Color::Black),
+                ));
+            }
+            let pos = cursor_pos.min(len - 1);
+            let before: String = chars[..pos].iter().collect();
+            let at: String = chars[pos..pos + 1].iter().collect();
+            let after: String = chars[pos + 1..].iter().collect();
+            let mut spans: Vec<Span<'static>> = Vec::new();
+            if !before.is_empty() {
+                spans.push(Span::styled(before, Style::default().fg(Color::White)));
+            }
+            spans.push(Span::styled(
+                at,
+                Style::default()
+                    .bg(Color::Blue)
+                    .fg(Color::Black)
+                    .add_modifier(Modifier::BOLD),
+            ));
+            if !after.is_empty() {
+                spans.push(Span::styled(after, Style::default().fg(Color::White)));
+            }
+            Line::from(spans)
+        }
+    }
+}
+
+/// Return the substring of `text` starting at char offset `scroll` that fits
+/// within `width` visible columns. Used to implement horizontal scrolling in
+/// text input fields.
+fn visible_text(text: &str, scroll: usize, width: usize) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let start = scroll.min(chars.len());
+    let end = (start + width).min(chars.len());
+    chars[start..end].iter().collect()
+}
+
+/// Render a plain text value; shows a dim dash when empty and not focused.
+fn text_line(value: String, focused: bool) -> Line<'static> {
+    if focused {
+        Line::from(Span::styled(value, Style::default().fg(Color::White)))
+    } else if value.is_empty() {
+        Line::from(Span::styled("—", Style::default().fg(Color::DarkGray)))
+    } else {
+        Line::from(Span::styled(value, Style::default().fg(Color::Gray)))
+    }
 }
 
 // ── Command palette ───────────────────────────────────────────────────────────
