@@ -222,6 +222,18 @@ pub fn select_prev(state: &mut AppState) {
     state.selected_connection = (state.selected_connection + len - 1) % len;
 }
 
+/// Jump to the first connection.
+pub fn goto_top(state: &mut AppState) {
+    state.selected_connection = 0;
+}
+
+/// Jump to the last connection.
+pub fn goto_bottom(state: &mut AppState) {
+    if !state.connections.is_empty() {
+        state.selected_connection = state.connections.len() - 1;
+    }
+}
+
 pub fn selected_connection(state: &AppState) -> Option<&Database> {
     state.connections.get(state.selected_connection)
 }

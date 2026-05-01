@@ -34,7 +34,7 @@ pub enum FloatingPane {
     SortMenu,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Overlay {
     Help,
     AddConnection,

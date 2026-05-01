@@ -17,6 +17,8 @@ pub struct AppState {
     pub selected_connection: usize,
     pub sessions: Vec<Session>,
     pub active_session: usize,
+    /// Buffers the last unresolved keypress for multi-key sequences (e.g. `gg`).
+    pub pending_key: Option<char>,
 }
 
 impl AppState {
@@ -29,6 +31,7 @@ impl AppState {
             selected_connection: 0,
             sessions: vec![],
             active_session: 0,
+            pending_key: None,
         }
     }
 }
