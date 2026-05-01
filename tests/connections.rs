@@ -1,10 +1,9 @@
 use std::path::PathBuf;
 
 use serial_test::serial;
-use shellql::cli::Engine;
 use shellql::connection::{
-    load_connections_from, save_connections_to, ConnectionSource, Database, DatabaseStore,
-    DatabaseString,
+    ConnectionSource, Database, DatabaseStore, DatabaseString, load_connections_from,
+    models::Engine, save_connections_to,
 };
 
 fn test_path() -> PathBuf {

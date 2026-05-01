@@ -8,8 +8,7 @@ use tabled::settings::{Color, Modify, Style, object::Columns};
 use tabled::{Table, Tabled};
 
 use super::models::{Database, DatabaseStore};
-use crate::cli::Engine;
-use crate::connection::models::ConnectionSource;
+use crate::connection::models::{ConnectionSource, Engine};
 
 /// Print a styled warning line to stderr:  ⚠  Warning: <msg>
 pub(crate) fn warn(msg: impl fmt::Display) {

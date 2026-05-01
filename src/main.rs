@@ -4,12 +4,14 @@ use color_eyre::{
     eyre::{Context, eyre},
 };
 use shellql::{
-    cli::{Cli, Commands, DbCommands, Engine},
+    cli::{
+        commands::{Cli, Commands, DbCommands},
+        prompt::{prompt_engine, read_line},
+    },
     connection::{
         ConnectionSource, DatabaseString, DbPool, add_connection, connect_db, delete_connection,
-        print_connections, validate_connection_string,
+        models::Engine, print_connections, validate_connection_string,
     },
-    prompt::{prompt_engine, read_line},
 };
 
 #[tokio::main]

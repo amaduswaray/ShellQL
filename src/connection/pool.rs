@@ -1,5 +1,4 @@
-use crate::cli::Engine;
-use crate::connection::models::ConnectionSource;
+use crate::connection::models::{ConnectionSource, Engine};
 use crate::connection::models::{
     DatabaseConnection, DatabaseString, DbPool, MysqlConnection, PostgresConnection,
     SqliteConnection, SslVerifyMode,

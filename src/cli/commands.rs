@@ -1,9 +1,8 @@
-use std::fmt::{Display, Formatter, Result};
-
 use clap::builder::Styles;
 use clap::builder::styling::AnsiColor;
-use clap::{Parser, Subcommand, ValueEnum};
-use serde::{Deserialize, Serialize};
+use clap::{Parser, Subcommand};
+
+use crate::connection::models::Engine;
 
 const STYLES: Styles = Styles::styled()
     .header(AnsiColor::Yellow.on_default().bold())
@@ -13,24 +12,6 @@ const STYLES: Styles = Styles::styled()
     .error(AnsiColor::Red.on_default().bold())
     .valid(AnsiColor::Green.on_default())
     .invalid(AnsiColor::Red.on_default());
-
-#[derive(Debug, Clone, Serialize, Deserialize, ValueEnum)]
-pub enum Engine {
-    Postgres,
-    Mysql,
-    Sqlite,
-}
-
-impl Display for Engine {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        let s = match self {
-            Engine::Postgres => "postgres",
-            Engine::Mysql => "mysql",
-            Engine::Sqlite => "sqlite",
-        };
-        write!(f, "{s}")
-    }
-}
 
 #[derive(Parser, Debug)]
 #[command(name = "ShellQL")]

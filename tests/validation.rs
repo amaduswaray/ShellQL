@@ -1,5 +1,4 @@
-/// Tests for `validate_connection_string` — pure function, no I/O.
-use shellql::connection::{validate_connection_string, ConnectionError};
+use shellql::connection::{ConnectionError, validate_connection_string};
 
 #[test]
 fn valid_postgres_url_is_accepted() {

@@ -1,10 +1,27 @@
 use std::collections::HashMap;
-use std::fmt::{self, Display};
+use std::fmt::{self, Display, Formatter, Result};
 
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use sqlx::{MySqlPool, PgPool, SqlitePool};
 
-use crate::cli::Engine;
+#[derive(Debug, Clone, Serialize, Deserialize, ValueEnum)]
+pub enum Engine {
+    Postgres,
+    Mysql,
+    Sqlite,
+}
+
+impl Display for Engine {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        let s = match self {
+            Engine::Postgres => "postgres",
+            Engine::Mysql => "mysql",
+            Engine::Sqlite => "sqlite",
+        };
+        write!(f, "{s}")
+    }
+}
 
 #[derive(Deserialize, Serialize, Default)]
 pub struct DatabaseStore {
