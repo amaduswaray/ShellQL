@@ -18,6 +18,9 @@ fn cleanup() {
     let _ = std::fs::remove_file(test_path());
 }
 
+/// Test-only helper that mirrors the store logic of `add_connection` but intentionally
+/// skips the async `connect_db` probe. This keeps connection-store unit tests fast and
+/// free of any requirement for a live database.
 fn add_connection_with_path(
     name: String,
     connection: ConnectionSource,
@@ -58,9 +61,8 @@ fn delete_connection_with_path(name: String, path: &PathBuf) -> std::io::Result<
     let mut store = load_connections_from(path);
 
     if !store.databases.contains_key(&name) {
-        // Mirror production behaviour: warn and return Ok — nothing to delete.
-        eprintln!("warning: no connection named '{name}' found — nothing was deleted.");
-        return Ok(());
+        let message = format!("No connection named '{name}' found — nothing was deleted.");
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, message));
     }
 
     store.databases.remove(&name);
@@ -275,13 +277,15 @@ fn delete_connection_happy_path() {
 
 #[test]
 #[serial]
-fn delete_nonexistent_connection_is_a_noop() {
+fn delete_nonexistent_connection_returns_not_found() {
     cleanup();
     let path = test_path();
 
-    // Should not error — just emit a warning and leave the store untouched.
-    delete_connection_with_path("ghost".to_string(), &path)
-        .expect("deleting a non-existent connection should not error");
+    // Production `delete_connection` returns Err(NotFound) for a missing name.
+    let err = delete_connection_with_path("ghost".to_string(), &path)
+        .expect_err("deleting a non-existent connection should return NotFound");
+
+    assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
 
     // Store is still empty — nothing was written or corrupted.
     let store = load_connections_from(&path);

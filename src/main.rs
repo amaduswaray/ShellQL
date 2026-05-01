@@ -9,7 +9,7 @@ use shellql::{
         prompt::{prompt_engine, read_line},
     },
     connection::{
-        ConnectionSource, DatabaseString, DbPool, add_connection, connect_db, delete_connection,
+        ConnectionSource, DatabaseString, DbPool, add_connection, delete_connection,
         models::Engine, print_connections, validate_connection_string,
     },
 };
@@ -29,7 +29,7 @@ async fn main() -> color_eyre::eyre::Result<()> {
         }
 
         Some(Commands::DB { command }) => {
-            handle_db(command)?;
+            handle_db(command).await?;
         }
 
         None => {
@@ -80,32 +80,30 @@ async fn handle_connect(
         ))?
         .to_string();
 
-    let source = engine_to_source(engine, validated_url);
+    let source = engine_to_source(engine.clone(), validated_url);
 
-    let pool = connect_db(source, db_name)
-        .await
-        .wrap_err("Failed to connect to the database")
-        .suggestion(
-            "Check that the host is reachable, your credentials are correct, \
-             and the database exists",
-        )?;
+    match add_connection(db_name, source, engine).await {
+        Ok(_) => print_connections(), // TODO: Go into TUI mode with the added connection
+        Err(e) => {
+            print_connections();
+            return Err(eyre!(e));
+        }
+    }
 
-    print_tables(pool).await?;
     Ok(())
 }
 
-fn handle_db(command: DbCommands) -> color_eyre::eyre::Result<()> {
+async fn handle_db(command: DbCommands) -> color_eyre::eyre::Result<()> {
     match command {
         DbCommands::List => print_connections(),
 
         DbCommands::Add { name, engine, url } => {
             let connection = engine_to_source(engine.clone(), url);
-            match add_connection(name, connection, engine) {
+            match add_connection(name, connection, engine).await {
                 Ok(_) => print_connections(),
                 Err(e) => {
-                    return Err(eyre!(e).suggestion(
-                        "Run `shellql db list` to see all existing connection names and URLs",
-                    ));
+                    print_connections();
+                    return Err(eyre!(e));
                 }
             }
         }
@@ -116,9 +114,10 @@ fn handle_db(command: DbCommands) -> color_eyre::eyre::Result<()> {
                 print_connections();
             }
             Err(e) => {
-                return Err(eyre!(e)
-                    .wrap_err(format!("Failed to delete connection '{name}'"))
-                    .suggestion("Run `shellql db list` to verify the connection name exists"));
+                print_connections();
+                return Err(
+                    eyre!(e).suggestion("Run `shql db list` to verify the connection name exists")
+                );
             }
         },
     }
@@ -134,7 +133,7 @@ fn engine_to_source(engine: Engine, url: String) -> ConnectionSource {
     }
 }
 
-async fn print_tables(pool: DbPool) -> color_eyre::eyre::Result<()> {
+async fn _print_tables(pool: DbPool) -> color_eyre::eyre::Result<()> {
     match pool {
         DbPool::Postgres(pg_pool) => {
             let rows: Vec<(String,)> = sqlx::query_as(

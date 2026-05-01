@@ -1,16 +1,13 @@
-use crate::connection::models::{ConnectionSource, Engine};
+use crate::connection::models::ConnectionSource;
 use crate::connection::models::{
     DatabaseConnection, DatabaseString, DbPool, MysqlConnection, PostgresConnection,
     SqliteConnection, SslVerifyMode,
 };
-use crate::connection::store::add_connection;
 
 static MAX_CONNECTIONS: u32 = 5;
 
-pub async fn connect_db(
-    connection: ConnectionSource,
-    name: String,
-) -> color_eyre::eyre::Result<DbPool> {
+// TODO: Perhaps extrax the add connection - Two different operantions
+pub async fn connect_db(connection: ConnectionSource) -> color_eyre::eyre::Result<DbPool> {
     use sqlx::mysql::MySqlPoolOptions;
     use sqlx::postgres::PgPoolOptions;
     use sqlx::sqlite::SqlitePoolOptions;
@@ -21,7 +18,7 @@ pub async fn connect_db(
                 .max_connections(MAX_CONNECTIONS)
                 .connect(url)
                 .await?;
-            add_connection(name, connection.clone(), Engine::Postgres)?;
+            // add_connection(name, connection.clone(), Engine::Postgres).await?;
             DbPool::Postgres(pool)
         }
 
@@ -30,7 +27,7 @@ pub async fn connect_db(
                 .max_connections(MAX_CONNECTIONS)
                 .connect(url)
                 .await?;
-            add_connection(name, connection.clone(), Engine::Mysql)?;
+            // add_connection(name, connection.clone(), Engine::Mysql).await?;
             DbPool::Mysql(pool)
         }
 
@@ -39,7 +36,7 @@ pub async fn connect_db(
                 .max_connections(MAX_CONNECTIONS)
                 .connect(url)
                 .await?;
-            add_connection(name, connection.clone(), Engine::Sqlite)?;
+            // add_connection(name, connection.clone(), Engine::Sqlite).await?;
             DbPool::Sqlite(pool)
         }
 
@@ -49,7 +46,7 @@ pub async fn connect_db(
                 .max_connections(pg.pool_size as u32)
                 .connect(&url)
                 .await?;
-            add_connection("postgres".to_string(), connection.clone(), Engine::Postgres)?;
+            // add_connection("postgres".to_string(), connection.clone(), Engine::Postgres).await?;
             DbPool::Postgres(pool)
         }
 
@@ -59,7 +56,7 @@ pub async fn connect_db(
                 .max_connections(my.pool_size as u32)
                 .connect(&url)
                 .await?;
-            add_connection("mysql".to_string(), connection.clone(), Engine::Mysql)?;
+            // add_connection("mysql".to_string(), connection.clone(), Engine::Mysql).await?;
             DbPool::Mysql(pool)
         }
 
@@ -69,7 +66,7 @@ pub async fn connect_db(
                 .max_connections(sq.pool_size as u32)
                 .connect(&url)
                 .await?;
-            add_connection("sqlite".to_string(), connection.clone(), Engine::Sqlite)?;
+            // add_connection("sqlite".to_string(), connection.clone(), Engine::Sqlite).await?;
             DbPool::Sqlite(pool)
         }
     };

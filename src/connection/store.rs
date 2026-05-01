@@ -8,6 +8,7 @@ use tabled::settings::{Color, Modify, Style, object::Columns};
 use tabled::{Table, Tabled};
 
 use super::models::{Database, DatabaseStore};
+use crate::connection::connect_db;
 use crate::connection::models::{ConnectionSource, Engine};
 
 /// Print a styled warning line to stderr:  ⚠  Warning: <msg>
@@ -79,11 +80,15 @@ pub fn save_connections_to(store: &DatabaseStore, path: &PathBuf) -> io::Result<
     file.write_all(json.as_bytes())
 }
 
-pub fn add_connection(
+pub async fn add_connection(
     name: String,
     connection: ConnectionSource,
     engine: Engine,
 ) -> io::Result<Database> {
+    connect_db(connection.clone())
+        .await
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to connect: {e}")))?;
+
     let path = get_config_path()?;
     let mut store = load_connections_from(&path);
 
@@ -110,8 +115,10 @@ pub fn add_connection(
         engine,
         connection,
     };
+
     store.databases.insert(db.name.clone(), db.clone());
     save_connections_to(&store, &path)?;
+
     Ok(db)
 }
 
@@ -120,12 +127,12 @@ pub fn delete_connection(name: String) -> io::Result<()> {
     let mut store = load_connections_from(&path);
 
     if !store.databases.contains_key(&name) {
-        warn(format!(
-            "no connection named '{}' found — nothing was deleted. \
-             Run `shellql db list` to see available connections.",
+        let message = format!(
+            "No connection named '{}' found — nothing was deleted.",
             name
-        ));
-        return Ok(());
+        );
+
+        return Err(io::Error::new(io::ErrorKind::NotFound, message));
     }
 
     store.databases.remove(&name);
