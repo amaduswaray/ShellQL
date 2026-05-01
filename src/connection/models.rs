@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter, Result};
 
 use clap::ValueEnum;
+use ratatui::style::{Color, Style};
+use ratatui::text::Span;
 use serde::{Deserialize, Serialize};
 use sqlx::{MySqlPool, PgPool, SqlitePool};
 
@@ -18,6 +20,14 @@ impl Engine {
             Engine::Postgres => ConnectionSource::Url(DatabaseString::Postgres(url)),
             Engine::Mysql => ConnectionSource::Url(DatabaseString::Mysql(url)),
             Engine::Sqlite => ConnectionSource::Url(DatabaseString::Sqlite(url)),
+        }
+    }
+
+    pub fn badge(&self) -> Span<'static> {
+        match self {
+            Engine::Postgres => Span::styled("", Style::default().fg(Color::Blue).bold()),
+            Engine::Mysql => Span::styled("", Style::default().fg(Color::Yellow).bold()),
+            Engine::Sqlite => Span::styled("", Style::default().fg(Color::Green).bold()),
         }
     }
 }

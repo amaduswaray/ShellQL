@@ -1,4 +1,4 @@
-use crate::connection::Database;
+use crate::connection::{Database, list_connections};
 
 use super::pane::Overlay;
 use super::session::Session;
@@ -25,7 +25,7 @@ impl AppState {
             mode: AppMode::Home,
             overlay: None,
             should_quit: false,
-            connections: vec![],
+            connections: list_connections(),
             selected_connection: 0,
             sessions: vec![],
             active_session: 0,
