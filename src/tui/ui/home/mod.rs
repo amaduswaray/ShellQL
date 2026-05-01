@@ -4,19 +4,20 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, Borders, Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        Table, TableState,
+        Block, Borders, Cell, Clear, Paragraph, Row, Scrollbar, ScrollbarOrientation,
+        ScrollbarState, Table, TableState,
     },
 };
 
 use crate::{
     connection::models::Database,
-    tui::{state::AppState, ui::components::centered_rect},
+    tui::{
+        state::{AppState, Overlay},
+        ui::components::centered_rect,
+    },
 };
 
-pub fn render_home(frame: &mut Frame, state: &AppState) {
-    let area = frame.area();
-
+pub fn render_home(frame: &mut Frame, area: Rect, state: &AppState) {
     let narrow = centered_rect(45, 50, area);
     let [title_area, connections_area, _] = Layout::vertical([
         Constraint::Length(5),
@@ -36,8 +37,12 @@ pub fn render_home(frame: &mut Frame, state: &AppState) {
     render_title(frame, title_area);
     render_connections(frame, connections_area, state);
     render_instructions(frame, instructions_area);
-}
 
+    // Overlays float on top of everything else.
+    if state.overlay.is_some() {
+        render_overlay(frame, area, state);
+    }
+}
 fn render_title(frame: &mut Frame, area: Rect) {
     let lines = vec![
         Line::from(""),
@@ -191,12 +196,14 @@ fn render_instructions(frame: &mut Frame, area: Rect) {
         if i > 0 {
             spans.push(Span::styled("  ·  ", Style::default().fg(Color::DarkGray)));
         }
+
         spans.push(Span::styled(
             format!("'{key}'"),
             Style::default()
                 .fg(Color::Blue)
                 .add_modifier(Modifier::BOLD),
         ));
+
         spans.push(Span::styled(
             format!(" {label}"),
             Style::default().fg(Color::Gray),
@@ -218,6 +225,7 @@ pub fn select_prev(state: &mut AppState) {
     if state.connections.is_empty() {
         return;
     }
+
     let len = state.connections.len();
     state.selected_connection = (state.selected_connection + len - 1) % len;
 }
@@ -246,4 +254,160 @@ pub fn remove_selected(state: &mut AppState) {
     if state.selected_connection > 0 && state.selected_connection >= state.connections.len() {
         state.selected_connection -= 1;
     }
+}
+
+// ── Overlay rendering ─────────────────────────────────────────────────────────
+
+fn render_overlay(frame: &mut Frame, area: Rect, state: &AppState) {
+    let Some(overlay) = state.overlay else { return };
+    match overlay {
+        Overlay::Help => render_help(frame, area),
+        Overlay::AddConnection => render_add_connection(frame, area),
+        Overlay::CommandPalette => render_command_palette(frame, area),
+        // ConfirmDelete is handled by the command-line bar, not as an overlay.
+        Overlay::ConfirmDelete => {}
+    }
+}
+
+/// Clear a rect, draw a dark bordered popup block, and return the inner area.
+fn open_popup<'a>(frame: &mut Frame, area: Rect, title: &'a str) -> (Block<'a>, Rect) {
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(
+            Line::from(format!(" {title} ")).style(
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        )
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Blue))
+        .style(Style::default().bg(Color::Reset));
+
+    let inner = block.inner(area);
+
+    (block, inner)
+}
+
+/// Render a right-aligned dim hint line inside a popup's inner area.
+fn render_dismiss_hint(frame: &mut Frame, area: Rect, hint: &str) {
+    let line = Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray))).right_aligned();
+    frame.render_widget(Paragraph::new(vec![line]), area);
+}
+
+// ── Help ──────────────────────────────────────────────────────────────────────
+
+fn render_help(frame: &mut Frame, area: Rect) {
+    let popup_area = centered_rect(46, 72, area);
+    let (block, inner) = open_popup(frame, popup_area, "Help");
+    frame.render_widget(block, popup_area);
+
+    let [content_area, hint_area] =
+        Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(inner);
+
+    let nav_header = Style::default()
+        .fg(Color::Blue)
+        .add_modifier(Modifier::BOLD);
+
+    let key_style = Style::default()
+        .fg(Color::White)
+        .add_modifier(Modifier::BOLD);
+
+    let desc_style = Style::default().fg(Color::Gray);
+    let sep_style = Style::default().fg(Color::DarkGray);
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(Span::styled("  Navigation", nav_header)),
+        Line::from(Span::styled("  ──────────", sep_style)),
+        binding_line("  j / ↓", "move down", key_style, desc_style),
+        binding_line("  k / ↑", "move up", key_style, desc_style),
+        Line::from(""),
+        Line::from(Span::styled("  Actions", nav_header)),
+        Line::from(Span::styled("  ───────", sep_style)),
+        binding_line("  ↵", "connect", key_style, desc_style),
+        binding_line("  a", "add connection", key_style, desc_style),
+        binding_line("  d", "delete connection", key_style, desc_style),
+        binding_line("  ?", "toggle this help", key_style, desc_style),
+        binding_line("  :", "command line", key_style, desc_style),
+        binding_line("  q", "quit", key_style, desc_style),
+        binding_line("  Ctrl+C", "force quit", key_style, desc_style),
+    ];
+
+    frame.render_widget(Paragraph::new(lines), content_area);
+    render_dismiss_hint(frame, hint_area, "Esc/q/?  <close> ");
+}
+
+/// Build a two-column key → description line for the help overlay.
+fn binding_line<'a>(key: &'a str, desc: &'a str, key_style: Style, desc_style: Style) -> Line<'a> {
+    Line::from(vec![
+        Span::styled(format!("{key:<14}"), key_style),
+        Span::styled(desc, desc_style),
+    ])
+}
+
+// ── Add connection ──────────────────────────────────────────────────────────
+
+fn render_add_connection(frame: &mut Frame, area: Rect) {
+    let popup_area = centered_rect(46, 38, area);
+    let (block, inner) = open_popup(frame, popup_area, "Add Connection");
+    frame.render_widget(block, popup_area);
+
+    let [content_area, hint_area] =
+        Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(inner);
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Connection form coming soon.",
+            Style::default().fg(Color::Gray),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  In the meantime, use the CLI:",
+            Style::default().fg(Color::DarkGray),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  shql add --name <name> --url <url>",
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        )),
+    ];
+
+    frame.render_widget(Paragraph::new(lines), content_area);
+    render_dismiss_hint(frame, hint_area, "Esc/q  <cancel> ");
+}
+
+// ── Command palette ───────────────────────────────────────────────────────────
+
+fn render_command_palette(frame: &mut Frame, area: Rect) {
+    let popup_area = centered_rect(55, 50, area);
+    let (block, inner) = open_popup(frame, popup_area, "Command Palette");
+    frame.render_widget(block, popup_area);
+
+    let [content_area, hint_area] =
+        Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(inner);
+
+    let lines = vec![
+        Line::from(vec![
+            Span::styled(
+                "  > ",
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("_", Style::default().fg(Color::White)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Commands coming soon.",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ];
+
+    frame.render_widget(Paragraph::new(lines), content_area);
+    render_dismiss_hint(frame, hint_area, "Esc/q  <close> ");
 }

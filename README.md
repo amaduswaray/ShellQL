@@ -24,9 +24,13 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 - [ ] Raw sql files for pre-made queries
 - [ ] Create trait that holds common functions for models(host, connection validator, connection builder, connection string extractor, etc)
-- [ ] Prettyfy the error messages, like the rust compiler
 - [ ] Write TESTTS!!
 - [ ] Session manager - tmux lik sessionizer to change between connctions. Makes connections out of scope and harder to accidentaly change wrong dbs
 
 
 ### TODOS TUI
+
+- [ ] Complete the command line
+  - [ ] All commands like, new session, switch session, delete session, add connection, etc
+  - [ ] When an error is there, enter should take you out of the command line mode
+  - [ ] Tab completion for command line commands

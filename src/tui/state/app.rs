@@ -1,5 +1,6 @@
 use crate::connection::{Database, list_connections};
 
+use super::cmdline::CommandLine;
 use super::pane::Overlay;
 use super::session::Session;
 
@@ -17,8 +18,8 @@ pub struct AppState {
     pub selected_connection: usize,
     pub sessions: Vec<Session>,
     pub active_session: usize,
-    /// Buffers the last unresolved keypress for multi-key sequences (e.g. `gg`).
     pub pending_key: Option<char>,
+    pub cmdline: CommandLine,
 }
 
 impl AppState {
@@ -32,6 +33,7 @@ impl AppState {
             sessions: vec![],
             active_session: 0,
             pending_key: None,
+            cmdline: CommandLine::new(),
         }
     }
 }

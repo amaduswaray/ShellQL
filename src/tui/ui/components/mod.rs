@@ -1,3 +1,4 @@
+pub mod icons;
 use ratatui::layout::Rect;
 
 pub fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
