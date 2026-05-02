@@ -28,13 +28,6 @@ pub async fn handle_key_event(event: KeyEvent, state: &mut AppState) -> color_ey
         return Ok(());
     }
 
-    // If there's a pending error in the command line, swallow this keypress
-    // to dismiss it — don't let it fall through to the mode handler.
-    if state.cmdline.error.is_some() {
-        state.cmdline.clear_error();
-        return Ok(());
-    }
-
     // The add-connection form intercepts all keys while open.
     if state.form.is_some() {
         handle_form(event, state).await?;
@@ -149,6 +142,7 @@ fn execute_command(cmd: &str, state: &mut AppState) {
             state.overlay = Some(Overlay::AddConnection);
             state.form = Some(AddConnectionForm::new());
         }
+        "connect" => state.overlay = Some(Overlay::ConnectionPicker),
 
         // Destructive actions — flow into the confirm prompt
         "d" | "delete" => {
@@ -194,9 +188,41 @@ fn handle_overlay(event: KeyEvent, state: &mut AppState) {
         }
 
         // ConfirmDelete is now handled via the command-line bar, not as an overlay.
-        // This branch is a safety fallback.
         (Overlay::ConfirmDelete, KeyCode::Esc | KeyCode::Char('q')) => {
             state.overlay = None;
+        }
+
+        // Connection picker — vim navigation + connect
+        (Overlay::ConnectionPicker, KeyCode::Char('j') | KeyCode::Down) => {
+            select_next(state);
+            state.pending_key = None;
+        }
+        (Overlay::ConnectionPicker, KeyCode::Char('k') | KeyCode::Up) => {
+            select_prev(state);
+            state.pending_key = None;
+        }
+        (Overlay::ConnectionPicker, KeyCode::Char('G')) => {
+            goto_bottom(state);
+            state.pending_key = None;
+        }
+        (Overlay::ConnectionPicker, KeyCode::Char('g')) => {
+            if state.pending_key == Some('g') {
+                goto_top(state);
+                state.pending_key = None;
+            } else {
+                state.pending_key = Some('g');
+            }
+        }
+        (Overlay::ConnectionPicker, KeyCode::Enter) => {
+            if selected_connection(state).is_some() {
+                state.overlay = None;
+                state.mode = AppMode::Dashboard; // TODO: initialise session
+            }
+            state.pending_key = None;
+        }
+        (Overlay::ConnectionPicker, KeyCode::Esc | KeyCode::Char('q')) => {
+            state.overlay = None;
+            state.pending_key = None;
         }
 
         _ => {}
@@ -207,75 +233,37 @@ fn handle_overlay(event: KeyEvent, state: &mut AppState) {
 
 fn handle_home(event: KeyEvent, state: &mut AppState) {
     match event.code {
-        // ── Quit ─────────────────────────────────────────────────────────────
-        KeyCode::Char('q') => {
-            state.should_quit = true;
-        }
+        // ── Quit ──────────────────────────────────────────────────────────────
+        KeyCode::Char('q') => state.should_quit = true,
 
-        // ── Vim navigation ────────────────────────────────────────────────────
-        KeyCode::Char('j') | KeyCode::Down => {
-            select_next(state);
-            state.pending_key = None;
-        }
-        KeyCode::Char('k') | KeyCode::Up => {
-            select_prev(state);
-            state.pending_key = None;
-        }
-        // G — jump to last connection
-        KeyCode::Char('G') => {
-            goto_bottom(state);
-            state.pending_key = None;
-        }
-        // g → arms the buffer; gg → jump to first
-        KeyCode::Char('g') => match state.pending_key {
-            Some('g') => {
-                goto_top(state);
-                state.pending_key = None;
-            }
-            _ => state.pending_key = Some('g'),
-        },
-
-        // ── Actions ───────────────────────────────────────────────────────────
-        // Enter — open a session for the selected connection
-        KeyCode::Enter => {
-            if selected_connection(state).is_some() {
-                // TODO: initialise session, then transition
-                state.mode = AppMode::Dashboard;
-            }
+        // ── Open connection picker ─────────────────────────────────────────────
+        KeyCode::Char('c') => {
+            state.overlay = Some(Overlay::ConnectionPicker);
             state.pending_key = None;
         }
 
-        // a — open AddConnection overlay
+        // ── Actions ───────────────────────────────────────────────────────────
         KeyCode::Char('a') => {
             state.overlay = Some(Overlay::AddConnection);
             state.form = Some(AddConnectionForm::new());
             state.pending_key = None;
         }
-
-        // d — inline delete confirmation via the command line
         KeyCode::Char('d') => {
             if let Some(db) = selected_connection(state) {
                 let name = db.name.clone();
-                state
-                    .cmdline
-                    .open_confirm(ConfirmAction::DeleteConnection(name));
+                state.cmdline.open_confirm(ConfirmAction::DeleteConnection(name));
             }
             state.pending_key = None;
         }
-
-        // : — open the vim-style command prompt
         KeyCode::Char(':') => {
             state.cmdline.open_input();
             state.pending_key = None;
         }
-
-        // ? — open help overlay
         KeyCode::Char('?') => {
             state.overlay = Some(Overlay::Help);
             state.pending_key = None;
         }
 
-        // Any unrecognised key clears the pending buffer.
         _ => state.pending_key = None,
     }
 }
@@ -321,6 +309,14 @@ async fn handle_form(event: KeyEvent, state: &mut AppState) -> color_eyre::Resul
 
         // ── Text field keys ────────────────────────────────────────────────────────
 
+        // Up / Down — field navigation, always, regardless of mode.
+        KeyCode::Down => {
+            state.form.as_mut().unwrap().focus_next();
+        }
+        KeyCode::Up => {
+            state.form.as_mut().unwrap().focus_prev();
+        }
+
         // Left / Right: cursor movement on text fields; cycle on selectors.
         KeyCode::Left => {
             let form = state.form.as_mut().unwrap();
@@ -354,6 +350,12 @@ async fn handle_form(event: KeyEvent, state: &mut AppState) -> color_eyre::Resul
             }
         }
 
+        // q in Normal mode — close the form without saving.
+        KeyCode::Char('q') if text_mode == TextMode::Normal => {
+            state.form = None;
+            state.overlay = None;
+        }
+
         // Character input.
         KeyCode::Char(c) => {
             let form = state.form.as_mut().unwrap();
@@ -367,11 +369,24 @@ async fn handle_form(event: KeyEvent, state: &mut AppState) -> color_eyre::Resul
                         'A' => form.enter_insert_at_end(),
                         'h' => form.cursor_left(),
                         'l' => form.cursor_right(),
+                        'j' => form.focus_next(),
+                        'k' => form.focus_prev(),
                         '0' => form.cursor_to_start(),
                         '$' => form.cursor_to_end(),
                         'x' => form.delete_at_cursor(),
                         _ => {}
                     },
+                }
+            } else {
+                // Selector / toggle fields: h/l cycle, j/k navigate in Normal mode.
+                if text_mode == TextMode::Normal {
+                    match c {
+                        'h' => form.cycle_left(),
+                        'l' => form.cycle_right(),
+                        'j' => form.focus_next(),
+                        'k' => form.focus_prev(),
+                        _ => {}
+                    }
                 }
             }
         }

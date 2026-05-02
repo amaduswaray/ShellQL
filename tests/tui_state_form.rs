@@ -154,7 +154,7 @@ fn cursor_to_start_and_end() {
     f.cursor_to_start();
     assert_eq!(f.cursor_pos, 0);
     f.cursor_to_end();
-    assert_eq!(f.cursor_pos, 5); // Insert mode → past last char
+    assert_eq!(f.cursor_pos, 4); // Normal mode → on last char (len - 1)
 }
 
 // ── mode transitions ──────────────────────────────────────────────────────────
@@ -218,7 +218,7 @@ fn focus_next_resets_to_insert_at_text_end() {
     f.text_mode = TextMode::Normal;
     f.focus_next(); // Name(0) → Engine(1)
     assert_eq!(f.focused, 1);
-    assert_eq!(f.text_mode, TextMode::Insert);
+    assert_eq!(f.text_mode, TextMode::Normal);
     assert_eq!(f.cursor_pos, 0); // Engine is not a text field
 }
 
@@ -231,8 +231,8 @@ fn focus_next_on_text_field_puts_cursor_at_end() {
     f.text_mode = TextMode::Normal;
     f.focus_prev(); // → InputMode(2)
     f.focus_next(); // → URL(3) again
-    assert_eq!(f.text_mode, TextMode::Insert);
-    assert_eq!(f.cursor_pos, f.url.chars().count());
+    assert_eq!(f.text_mode, TextMode::Normal);
+    assert_eq!(f.cursor_pos, f.url.chars().count().saturating_sub(1));
 }
 
 #[test]

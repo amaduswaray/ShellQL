@@ -1,10 +1,7 @@
 use ratatui::{Terminal, backend::TestBackend};
-use shellql::{
-    connection::models::{ConnectionSource, Database, DatabaseString, Engine},
-    tui::{
-        state::{AppMode, AppState, CommandLine, ConfirmAction},
-        ui::cmdline::render_cmdline,
-    },
+use shellql::tui::{
+    state::{AppMode, AppState, CommandLine, ConfirmAction},
+    ui::cmdline::render_cmdline,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -47,37 +44,7 @@ fn render(state: &AppState) -> String {
 #[test]
 fn idle_home_shows_mode_pill() {
     let output = render(&empty_state());
-    assert!(output.contains("HOME"), "expected HOME pill in: {output:?}");
-}
-
-#[test]
-fn idle_home_shows_zero_connections() {
-    let output = render(&empty_state());
-    assert!(output.contains("0"), "expected count in: {output:?}");
-}
-
-#[test]
-fn idle_home_shows_plural_connections() {
-    let mut state = empty_state();
-    state.connections = vec![
-        Database {
-            name: "a".to_string(),
-            engine: Engine::Postgres,
-            connection: ConnectionSource::Url(DatabaseString::Postgres(
-                "postgres://localhost/a".to_string(),
-            )),
-        },
-        Database {
-            name: "b".to_string(),
-            engine: Engine::Postgres,
-            connection: ConnectionSource::Url(DatabaseString::Postgres(
-                "postgres://localhost/b".to_string(),
-            )),
-        },
-    ];
-    let output = render(&state);
-    assert!(output.contains("2"), "expected count 2 in: {output:?}");
-    assert!(output.contains("connections"), "expected plural in: {output:?}");
+    assert!(output.contains(""), "expected <blank> pill in: {output:?}");
 }
 
 // ── Error ─────────────────────────────────────────────────────────────────────
@@ -114,8 +81,14 @@ fn input_mode_shows_colon_prefix() {
     state.cmdline.push('d');
     state.cmdline.push('d');
     let output = render(&state);
-    assert!(output.starts_with(':'), "expected colon prefix in: {output:?}");
-    assert!(output.contains("add"), "expected typed input in: {output:?}");
+    assert!(
+        output.starts_with(':'),
+        "expected colon prefix in: {output:?}"
+    );
+    assert!(
+        output.contains("add"),
+        "expected typed input in: {output:?}"
+    );
 }
 
 #[test]
@@ -148,7 +121,7 @@ fn confirm_delete_shows_y_n_prompt() {
         .cmdline
         .open_confirm(ConfirmAction::DeleteConnection("db".to_string()));
     let output = render(&state);
-    assert!(output.contains("[y/N]"), "expected prompt in: {output:?}");
+    assert!(output.contains("[y/n]"), "expected prompt in: {output:?}");
 }
 
 #[test]

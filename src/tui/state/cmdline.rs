@@ -11,8 +11,9 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("h",      "help overlay"),
     ("help",   "help overlay"),
     ("add",    "add connection"),
-    ("d",      "delete selected"),
-    ("delete", "delete selected"),
+    ("d",       "delete selected"),
+    ("delete",  "delete selected"),
+    ("connect", "open connection picker"),
 ];
 
 /// Return every entry in `COMMANDS` whose name starts with `input`.

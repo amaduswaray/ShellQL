@@ -122,7 +122,7 @@ impl AddConnectionForm {
         Self {
             focused: 0,
             cursor_pos: 0,
-            text_mode: TextMode::Insert,
+            text_mode: TextMode::Normal,
             input_mode: FormInputMode::Url,
             engine: Engine::Postgres,
             name: String::new(),
@@ -195,10 +195,12 @@ impl AddConnectionForm {
     }
 
     /// Reset cursor and mode when moving to a new field.
-    /// Starts in Insert mode with the cursor placed at the end of the existing text.
+    /// Lands in Normal mode with the cursor on the last character.
     fn reset_text_state(&mut self) {
-        self.text_mode = TextMode::Insert;
-        self.cursor_pos = self.focused_text_len().unwrap_or(0);
+        self.text_mode = TextMode::Normal;
+        // Place on the last char (vim Normal), or 0 for empty / non-text fields.
+        let len = self.focused_text_len().unwrap_or(0);
+        self.cursor_pos = len.saturating_sub(1);
     }
 
     // ── Text field access ─────────────────────────────────────────────────────

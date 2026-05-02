@@ -1,9 +1,9 @@
 /// Command-line bar — always rendered in the bottom row of the frame.
 ///
 /// Three visual states:
-///   Idle    —  [ HOME ]  2 connections            (status strip)
+///   Idle    —  [ NORMAL ]  2 connections            (status strip)
 ///   Input   —  :add█                              (vim : prompt)
-///   Confirm —  Delete "prod"? [y/N]: █            (inline y/n)
+///   Confirm —  Delete "prod"? [y/n]: █            (inline y/n)
 ///
 /// When in Input mode with active completions a rounded popup floats
 /// just above the bar in the bottom-left corner.
@@ -18,6 +18,7 @@ use ratatui::{
 use crate::tui::state::{
     AppMode, AppState,
     cmdline::{CommandLineMode, ConfirmAction},
+    form::TextMode,
 };
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -44,26 +45,38 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
         return;
     }
 
+    // When the add-connection form is open, reflect its current text mode.
+    if let Some(ref form) = state.form {
+        let line = match form.text_mode {
+            TextMode::Normal => Line::from(Span::styled(
+                " NORMAL ",
+                Style::default().fg(Color::Blue).bold(),
+            )),
+
+            TextMode::Insert => Line::from(Span::styled(
+                " INSERT ",
+                Style::default().fg(Color::Green).bold(),
+            )),
+        };
+        frame.render_widget(Paragraph::new(vec![line]), area);
+        return;
+    }
+
     let mode_label = match state.mode {
-        AppMode::Home => " HOME ",
+        AppMode::Home => " NORMAL ",
         AppMode::Dashboard => " NORMAL ",
     };
 
     let context = match state.mode {
-        AppMode::Home => {
+        AppMode::Home => String::new(),
+        AppMode::Dashboard => {
             let n = state.connections.len();
             format!("  {}  connection{}", n, if n == 1 { "" } else { "s" })
         }
-        AppMode::Dashboard => String::new(),
     };
 
     let line = Line::from(vec![
-        Span::styled(
-            mode_label,
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(mode_label, Style::default().fg(Color::Blue).bold()),
         Span::styled(context, Style::default().fg(Color::DarkGray)),
     ]);
 
@@ -76,12 +89,7 @@ fn render_input(frame: &mut Frame, area: Rect, state: &AppState) {
     let input = &state.cmdline.input;
 
     let line = Line::from(vec![
-        Span::styled(
-            ":",
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(":", Style::default().fg(Color::White).bold()),
         Span::styled(input.clone(), Style::default().fg(Color::White)),
     ]);
 
@@ -112,14 +120,13 @@ fn render_confirm(frame: &mut Frame, area: Rect, action: &ConfirmAction, input: 
 
 fn render_confirm_delete(frame: &mut Frame, area: Rect, name: &str, input: &str) {
     let prefix_spans: Vec<Span> = vec![
-        Span::styled("Delete ", Style::default().fg(Color::White)),
+        Span::styled("Delete ", Style::default().fg(Color::Red)),
         Span::styled(
             format!("\"{}\"", name),
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Red).bold(),
         ),
-        Span::styled("? [y/N]:  ", Style::default().fg(Color::DarkGray)),
+        Span::styled("? ", Style::default().fg(Color::Red)),
+        Span::styled("[y/n]: ", Style::default().fg(Color::DarkGray)),
     ];
 
     let prefix_width: u16 = prefix_spans.iter().map(|s| s.content.len() as u16).sum();
@@ -206,4 +213,3 @@ fn render_completions(
 
     frame.render_widget(Paragraph::new(lines), inner);
 }
-

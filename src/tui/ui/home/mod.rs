@@ -21,38 +21,43 @@ use crate::{
 };
 
 pub fn render_home(frame: &mut Frame, area: Rect, state: &AppState) {
-    let narrow = centered_rect(45, 50, area);
-    let [title_area, connections_area, _] = Layout::vertical([
-        Constraint::Length(5),
-        Constraint::Min(6),
-        Constraint::Length(3),
+    // Content rows: blank + title + subtitle + blank + sep + 4 items + sep = 10
+    let content_h: u16 = 10;
+
+    let [_, horiz, _] = Layout::horizontal([
+        Constraint::Fill(1),
+        Constraint::Percentage(40),
+        Constraint::Fill(1),
     ])
-    .areas(narrow);
+    .areas(area);
 
-    let wide = centered_rect(70, 65, area);
-    let [_, _, instructions_area] = Layout::vertical([
-        Constraint::Length(5),
-        Constraint::Min(6),
-        Constraint::Length(3),
+    let [_, center, _] = Layout::vertical([
+        Constraint::Fill(1),
+        Constraint::Length(content_h),
+        Constraint::Fill(1),
     ])
-    .areas(wide);
+    .areas(horiz);
 
-    render_title(frame, title_area);
-    render_connections(frame, connections_area, state);
+    render_landing(frame, center);
 
-    // Hide home instructions while any overlay is open — the overlay's own
-    // hint row replaces them and showing both is confusing.
-    if state.overlay.is_none() {
-        render_instructions(frame, instructions_area);
-    }
-
-    // Overlays float on top of everything else.
     if state.overlay.is_some() {
         render_overlay(frame, area, state);
     }
 }
-fn render_title(frame: &mut Frame, area: Rect) {
-    let lines = vec![
+
+fn render_landing(frame: &mut Frame, area: Rect) {
+    let width = area.width as usize;
+    let sep = Span::styled("─".repeat(width), Style::default().fg(Color::DarkGray));
+
+    // (command_name, single_key, description)
+    let items: &[(&str, &str)] = &[
+        ("connect", "connect to one of your DBs"),
+        ("add", "add a new DB connection"),
+        ("help", "for help"),
+        ("q", "to quit"),
+    ];
+
+    let mut lines = vec![
         Line::from(""),
         Line::from(Span::styled(
             "ShellQL",
@@ -66,37 +71,48 @@ fn render_title(frame: &mut Frame, area: Rect) {
             Style::default().fg(Color::Gray),
         ))
         .centered(),
-        Line::from(Span::styled(
-            "────────────────────",
-            Style::default().fg(Color::DarkGray),
-        ))
-        .centered(),
+        Line::from(""),
+        Line::from(sep.clone()),
     ];
+
+    let max_cmd_len = items.iter().map(|(cmd, _)| cmd.len()).max().unwrap_or(0);
+
+    for (cmd, desc) in items {
+        lines.push(instruction_line(cmd, desc, max_cmd_len));
+    }
+
+    lines.push(Line::from(sep));
 
     frame.render_widget(Paragraph::new(lines), area);
 }
 
-fn render_connections(frame: &mut Frame, area: Rect, state: &AppState) {
-    let block = Block::default()
-        .title(
-            Line::from(" Connections ").style(
-                Style::default()
-                    .fg(Color::Blue)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        )
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray));
+fn instruction_line(cmd: &str, desc: &str, max_cmd_len: usize) -> Line<'static> {
+    // <Enter> sits directly after the command.
+    // Pad after <Enter> so every description starts at the same column.
+    let after_pad = max_cmd_len.saturating_sub(cmd.len()) + 3; // 3 = minimum gap
 
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+    Line::from(vec![
+        Span::styled("type  ".to_string(), Style::default().fg(Color::White)),
+        Span::styled(
+            ":".to_string(),
+            Style::default()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(cmd.to_string(), Style::default().fg(Color::White)),
+        Span::styled(
+            "<Enter>".to_string(),
+            Style::default()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" ".repeat(after_pad)),
+        Span::styled(desc.to_string(), Style::default().fg(Color::White)),
+    ])
+}
 
-    if state.connections.is_empty() {
-        render_empty_connections(frame, inner);
-        return;
-    }
-
-    let viewport_height = inner.height as usize;
+fn render_connection_list(frame: &mut Frame, area: Rect, state: &AppState) {
+    let viewport_height = area.height as usize;
     let total = state.connections.len();
     let needs_scrollbar = total > viewport_height;
 
@@ -106,11 +122,11 @@ fn render_connections(frame: &mut Frame, area: Rect, state: &AppState) {
 
     let table_area = if needs_scrollbar {
         Rect {
-            width: inner.width.saturating_sub(1),
-            ..inner
+            width: area.width.saturating_sub(1),
+            ..area
         }
     } else {
-        inner
+        area
     };
 
     let rows: Vec<Row> = state
@@ -121,16 +137,16 @@ fn render_connections(frame: &mut Frame, area: Rect, state: &AppState) {
         .collect();
 
     let widths = [
-        Constraint::Length(1),  // ●/○
-        Constraint::Fill(1),    // name
-        Constraint::Length(11), // badge — widest is "[Postgres] " (11 chars)
+        Constraint::Length(1),
+        Constraint::Fill(1),
+        Constraint::Length(11),
     ];
 
     let table = Table::new(rows, widths)
         .column_spacing(1)
         .row_highlight_style(
             Style::default()
-                .fg(Color::Blue)
+                .bg(Color::Rgb(28, 42, 74))
                 .add_modifier(Modifier::BOLD),
         );
 
@@ -142,32 +158,23 @@ fn render_connections(frame: &mut Frame, area: Rect, state: &AppState) {
     if needs_scrollbar {
         let mut scrollbar_state =
             ScrollbarState::new(total.saturating_sub(viewport_height)).position(offset);
-
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
             .begin_symbol(None)
             .end_symbol(None)
             .track_symbol(Some("│"))
             .thumb_symbol("█");
-
-        frame.render_stateful_widget(scrollbar, inner, &mut scrollbar_state);
+        frame.render_stateful_widget(scrollbar, area, &mut scrollbar_state);
     }
 }
 
 fn connection_row(db: &Database, selected: bool) -> Row<'static> {
     let bullet = if selected {
-        Cell::from(Span::styled(
-            "●",
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD),
-        ))
+        Cell::from(Span::styled("●", Style::default().fg(Color::Blue).bold()))
     } else {
         Cell::from(Span::styled("○", Style::default().fg(Color::DarkGray)))
     };
-
     let name = Cell::from(db.name.clone());
     let badge = Cell::from(Line::from(db.engine.badge()));
-
     Row::new(vec![bullet, name, badge])
 }
 
@@ -180,45 +187,11 @@ fn render_empty_connections(frame: &mut Frame, area: Rect) {
         ))
         .centered(),
         Line::from(Span::styled(
-            "Press 'a' to add one",
+            "Press \'a\' to add one",
             Style::default().fg(Color::DarkGray),
         ))
         .centered(),
     ];
-
-    frame.render_widget(Paragraph::new(lines), area);
-}
-
-fn render_instructions(frame: &mut Frame, area: Rect) {
-    let keys: &[(&str, &str)] = &[
-        ("↑ k / ↓ j", "navigate"),
-        ("↵", "connect"),
-        ("a", "add"),
-        ("d", "delete"),
-        ("?", "help"),
-        ("q", "quit"),
-    ];
-
-    let mut spans: Vec<Span> = Vec::new();
-    for (i, (key, label)) in keys.iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::styled("  ·  ", Style::default().fg(Color::DarkGray)));
-        }
-
-        spans.push(Span::styled(
-            format!("'{key}'"),
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD),
-        ));
-
-        spans.push(Span::styled(
-            format!(" {label}"),
-            Style::default().fg(Color::Gray),
-        ));
-    }
-
-    let lines = vec![Line::from(""), Line::from(spans).centered()];
     frame.render_widget(Paragraph::new(lines), area);
 }
 
@@ -272,23 +245,51 @@ fn render_overlay(frame: &mut Frame, area: Rect, state: &AppState) {
         Overlay::Help => render_help(frame, area),
         Overlay::AddConnection => render_add_connection(frame, area, state),
         Overlay::CommandPalette => render_command_palette(frame, area),
-        // ConfirmDelete is handled by the command-line bar, not as an overlay.
+        Overlay::ConnectionPicker => render_connection_picker(frame, area, state),
         Overlay::ConfirmDelete => {}
     }
 }
 
 /// Clear a rect, draw a dark bordered popup block, and return the inner area.
+// ── Connection picker overlay ─────────────────────────────────────────────────────
+
+fn render_connection_picker(frame: &mut Frame, area: Rect, state: &AppState) {
+    let popup = centered_rect(40, 30, area);
+    frame.render_widget(Clear, popup);
+
+    let block = Block::default()
+        .title(
+            Line::from(" Connections ").style(
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        )
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::White))
+        .style(Style::default().bg(Color::Reset));
+
+    let inner = block.inner(popup);
+    frame.render_widget(block, popup);
+
+    let [list_area, hint_area] =
+        Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(inner);
+
+    if state.connections.is_empty() {
+        render_empty_connections(frame, list_area);
+    } else {
+        render_connection_list(frame, list_area, state);
+    }
+
+    render_dismiss_hint(frame, hint_area, "j/k <nav>   ↵ <connect>   esc/q <close> ");
+}
+
 fn open_popup<'a>(frame: &mut Frame, area: Rect, title: &'a str) -> (Block<'a>, Rect) {
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(
-            Line::from(format!(" {title} ")).style(
-                Style::default()
-                    .fg(Color::Blue)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        )
+        .title(Line::from(format!(" {title} ")).style(Style::default().fg(Color::Blue).bold()))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::White))
@@ -315,13 +316,9 @@ fn render_help(frame: &mut Frame, area: Rect) {
     let [content_area, hint_area] =
         Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(inner);
 
-    let nav_header = Style::default()
-        .fg(Color::Blue)
-        .add_modifier(Modifier::BOLD);
+    let nav_header = Style::default().fg(Color::Blue).bold();
 
-    let key_style = Style::default()
-        .fg(Color::White)
-        .add_modifier(Modifier::BOLD);
+    let key_style = Style::default().fg(Color::White).bold();
 
     let desc_style = Style::default().fg(Color::Gray);
     let sep_style = Style::default().fg(Color::DarkGray);
@@ -376,18 +373,12 @@ fn render_add_connection(frame: &mut Frame, area: Rect, state: &AppState) {
     // Height: 1 top-pad + fields + 1 blank + 1 hint + 2 borders
     let content_h = 1 + fields.len() as u16 + 1 + 1;
     let popup_h_pct = ((content_h + 2) * 100 / area.height.max(1)).clamp(35, 88) as u16;
-    let popup_area = centered_rect(56, popup_h_pct, area);
+    let popup_area = centered_rect(40, popup_h_pct, area);
 
     frame.render_widget(Clear, popup_area);
 
     let block = Block::default()
-        .title(
-            Line::from(" Add Connection ").style(
-                Style::default()
-                    .fg(Color::Blue)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        )
+        .title(Line::from(" Add Connection ").style(Style::default().fg(Color::Blue).bold()))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::White))
@@ -396,11 +387,8 @@ fn render_add_connection(frame: &mut Frame, area: Rect, state: &AppState) {
     let inner = block.inner(popup_area);
     frame.render_widget(block, popup_area);
 
-    let [fields_area, hint_area] = Layout::vertical([
-        Constraint::Min(0),
-        Constraint::Length(1),
-    ])
-    .areas(inner);
+    let [fields_area, hint_area] =
+        Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).areas(inner);
 
     // ── Field rows ────────────────────────────────────────────────────────────
 
@@ -423,9 +411,7 @@ fn render_add_connection(frame: &mut Frame, area: Rect, state: &AppState) {
 
         // Label — blue + bold when focused, muted otherwise
         let lbl_style = if is_focused {
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::Blue).bold()
         } else {
             Style::default().fg(Color::DarkGray)
         };
@@ -437,7 +423,11 @@ fn render_add_connection(frame: &mut Frame, area: Rect, state: &AppState) {
         // Horizontal scroll: keep cursor visible when text is wider than the column.
         let scroll: usize = if is_focused && field_id.is_text() {
             let w = val_area.width as usize;
-            if form.cursor_pos >= w { form.cursor_pos + 1 - w } else { 0 }
+            if form.cursor_pos >= w {
+                form.cursor_pos + 1 - w
+            } else {
+                0
+            }
         } else {
             0
         };
@@ -456,11 +446,7 @@ fn render_add_connection(frame: &mut Frame, area: Rect, state: &AppState) {
     }
 
     // ── Hint ──────────────────────────────────────────────────────────────────
-    render_dismiss_hint(
-        frame,
-        hint_area,
-        "Tab <next>  Shift+Tab <prev>  ←→ <cycle>  Ctrl+S <save>  Esc <cancel> ",
-    );
+    render_dismiss_hint(frame, hint_area, "Ctrl+S <save>  Esc/? <cancel> ");
 }
 
 /// Render the value widget for a single form field.
@@ -502,8 +488,10 @@ fn render_field_value(
         FieldId::Password => {
             let full: String = "•".repeat(form.password.chars().count());
             let (display, local_cur) = if focused {
-                (visible_text(&full, scroll, area.width as usize),
-                 form.cursor_pos.saturating_sub(scroll))
+                (
+                    visible_text(&full, scroll, area.width as usize),
+                    form.cursor_pos.saturating_sub(scroll),
+                )
             } else {
                 (full, 0)
             };
@@ -517,8 +505,10 @@ fn render_field_value(
         other => {
             let full = form.text_for(other).unwrap_or("").to_string();
             let (display, local_cur) = if focused {
-                (visible_text(&full, scroll, area.width as usize),
-                 form.cursor_pos.saturating_sub(scroll))
+                (
+                    visible_text(&full, scroll, area.width as usize),
+                    form.cursor_pos.saturating_sub(scroll),
+                )
             } else {
                 (full, 0)
             };
@@ -540,9 +530,7 @@ fn selector_line(options: &[(&'static str, bool)], focused: bool) -> Line<'stati
             spans.push(Span::raw("   "));
         }
         let style = if *selected {
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::Blue).bold()
         } else if focused {
             Style::default().fg(Color::Gray)
         } else {
@@ -588,10 +576,7 @@ fn text_line_with_cursor(value: String, cursor_pos: usize, mode: &TextMode) -> L
             }
             spans.push(Span::styled(
                 at,
-                Style::default()
-                    .bg(Color::Blue)
-                    .fg(Color::Black)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().bg(Color::Blue).fg(Color::Black).bold(),
             ));
             if !after.is_empty() {
                 spans.push(Span::styled(after, Style::default().fg(Color::White)));
@@ -634,12 +619,7 @@ fn render_command_palette(frame: &mut Frame, area: Rect) {
 
     let lines = vec![
         Line::from(vec![
-            Span::styled(
-                "  > ",
-                Style::default()
-                    .fg(Color::Blue)
-                    .add_modifier(Modifier::BOLD),
-            ),
+            Span::styled("  > ", Style::default().fg(Color::Blue).bold()),
             Span::styled("_", Style::default().fg(Color::White)),
         ]),
         Line::from(""),
@@ -652,4 +632,3 @@ fn render_command_palette(frame: &mut Frame, area: Rect) {
     frame.render_widget(Paragraph::new(lines), content_area);
     render_dismiss_hint(frame, hint_area, "Esc/q  <close> ");
 }
-

@@ -40,4 +40,5 @@ pub enum Overlay {
     AddConnection,
     CommandPalette,
     ConfirmDelete,
+    ConnectionPicker,
 }
