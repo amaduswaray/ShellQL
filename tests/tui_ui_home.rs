@@ -1,5 +1,5 @@
 use shellql::{
-    connection::models::{ConnectionSource, Database, DatabaseString, Engine},
+    connection::{ConnectionSource, Database, DatabaseString, Engine},
     tui::{
         state::{AppMode, AppState, CommandLine},
         ui::home::{

@@ -1,12 +1,3 @@
-/// Command-line bar — always rendered in the bottom row of the frame.
-///
-/// Three visual states:
-///   Idle    —  [ NORMAL ]  2 connections            (status strip)
-///   Input   —  :add█                              (vim : prompt)
-///   Confirm —  Delete "prod"? [y/n]: █            (inline y/n)
-///
-/// When in Input mode with active completions a rounded popup floats
-/// just above the bar in the bottom-left corner.
 use ratatui::{
     Frame,
     layout::Rect,
@@ -15,11 +6,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
-use crate::tui::state::{
-    AppMode, AppState,
-    cmdline::{CommandLineMode, ConfirmAction},
-    form::TextMode,
-};
+use crate::tui::state::{AppMode, AppState, CommandLineMode, ConfirmAction, TextMode};
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 

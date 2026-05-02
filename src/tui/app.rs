@@ -1,4 +1,4 @@
-use crate::tui::{controls::handle_key_event, render::render, state::AppState};
+use crate::tui::{controls::handle_key_event, render::render, AppState};
 use crossterm::{
     event::{self, Event},
     execute,

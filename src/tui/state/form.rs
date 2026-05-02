@@ -1,6 +1,6 @@
 /// Add-connection form state — supports both URL and field-by-field Config modes.
 
-use crate::connection::models::{
+use crate::connection::{
     ConnectionSource, DatabaseConnection, DatabaseString, Engine, MysqlConnection,
     PostgresConnection, SqliteConnection, SslOptions, SslVerifyMode,
 };

@@ -6,7 +6,7 @@ pub mod store;
 pub use error::{ConnectionError, validate_connection_string};
 pub use models::{
     ConnectionSource, Database, DatabaseConnection, DatabaseStore, DatabaseString, DbPool,
-    MysqlConnection, PostgresConnection, SqliteConnection, SslOptions, SslVerifyMode,
+    Engine, MysqlConnection, PostgresConnection, SqliteConnection, SslOptions, SslVerifyMode,
 };
 pub use pool::connect_db;
 pub use store::{

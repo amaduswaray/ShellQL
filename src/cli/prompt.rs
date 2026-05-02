@@ -4,7 +4,7 @@ use color_eyre::Section;
 use color_eyre::eyre::WrapErr;
 use dialoguer::{Select, theme::ColorfulTheme};
 
-use crate::connection::models::Engine;
+use crate::connection::Engine;
 
 pub fn prompt_engine() -> color_eyre::eyre::Result<Engine> {
     let items = ["Postgres", "MySQL", "SQLite"];

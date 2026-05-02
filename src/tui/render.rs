@@ -5,7 +5,7 @@ use ratatui::{
 
 use crate::tui::{
     state::{AppMode, AppState},
-    ui::{cmdline::render_cmdline, home::render_home},
+    ui::{render_cmdline, render_home},
 };
 
 pub fn render(frame: &mut Frame, state: &AppState) {

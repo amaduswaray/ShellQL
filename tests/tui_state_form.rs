@@ -1,5 +1,5 @@
 use shellql::{
-    connection::models::{ConnectionSource, DatabaseString, Engine},
+    connection::{ConnectionSource, DatabaseString, Engine},
     tui::state::{
         AddConnectionForm, FieldId, FormInputMode, TextMode,
     },
