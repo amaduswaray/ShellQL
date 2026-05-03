@@ -1,7 +1,7 @@
 use ratatui::{Terminal, backend::TestBackend};
 use shellql::tui::{
     state::{AppMode, AppState, CommandLine, ConfirmAction},
-    ui::cmdline::render_cmdline,
+    ui::render_cmdline,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -20,6 +20,7 @@ fn empty_state() -> AppState {
         pending_key: None,
         cmdline: CommandLine::new(),
         form: None,
+        dashboard: None,
     }
 }
 

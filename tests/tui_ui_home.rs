@@ -32,6 +32,7 @@ fn state_with(names: &[&str]) -> AppState {
         pending_key: None,
         cmdline: CommandLine::new(),
         form: None,
+        dashboard: None,
     }
 }
 

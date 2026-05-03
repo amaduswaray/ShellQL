@@ -38,6 +38,7 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [ ] Tab completion for command line commands
 - [x] Connect form
   - [x] Insert and normal mode for input fields so navigation works
-  - [ ] Implement vim mode commands when in normal mode
+  - [x] Implement vim mode commands when in normal mode
+- [ ] Delete when in connection list
 
 

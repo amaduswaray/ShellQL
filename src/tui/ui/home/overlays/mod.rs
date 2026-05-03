@@ -6,6 +6,7 @@ pub mod help;
 pub use add_connection::{
     goto_bottom, goto_top, remove_selected, render_connection_list,
     render_empty_connections, select_next, select_prev, selected_connection,
+    visible_text,
 };
 use ratatui::{
     Frame,

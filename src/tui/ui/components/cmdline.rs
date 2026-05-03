@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::tui::state::{AppMode, AppState, CommandLineMode, ConfirmAction, TextMode};
+use crate::tui::state::dashboard::TableMode;
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -49,21 +50,47 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
         return;
     }
 
-    let mode_label = match state.mode {
-        AppMode::Home => " NORMAL ",
-        AppMode::Dashboard => " NORMAL ",
-    };
-
-    let context = match state.mode {
-        AppMode::Home => String::new(),
+    let (mode_label, context) = match state.mode {
+        AppMode::Home => (" NORMAL ", String::new()),
         AppMode::Dashboard => {
-            let n = state.connections.len();
-            format!("  {}  connection{}", n, if n == 1 { "" } else { "s" })
+            if let Some(ref dash) = state.dashboard {
+                let mode = if let Some(ref loaded) = dash.loaded {
+                    match loaded.mode {
+                        TableMode::Normal => " NORMAL ",
+                        TableMode::VisualRow | TableMode::VisualColumn => " VISUAL ",
+                        TableMode::Insert => " INSERT ",
+                    }
+                } else {
+                    " NORMAL "
+                };
+
+                let ctx = if let Some(ref loaded) = dash.loaded {
+                    let total_rows = loaded.rows.len();
+                    let total_cols = loaded.headers.len();
+                    let cur_row = loaded.row_cursor + 1;
+                    let cur_col = loaded.cursor_col + 1;
+                    format!(
+                        "  {}  [Row {}/{}, Col {}/{}]",
+                        loaded.name, cur_row, total_rows, cur_col, total_cols
+                    )
+                } else {
+                    format!("  {}  (no table)", dash.connection.name)
+                };
+                (mode, ctx)
+            } else {
+                (" NORMAL ", String::new())
+            }
         }
     };
 
+    let mode_color = match mode_label.trim() {
+        "VISUAL" => Color::Yellow,
+        "INSERT" => Color::Green,
+        _ => Color::Blue,
+    };
+
     let line = Line::from(vec![
-        Span::styled(mode_label, Style::default().fg(Color::Blue).bold()),
+        Span::styled(mode_label, Style::default().fg(mode_color).bold()),
         Span::styled(context, Style::default().fg(Color::DarkGray)),
     ]);
 

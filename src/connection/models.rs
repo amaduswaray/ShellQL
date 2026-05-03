@@ -63,6 +63,7 @@ impl Display for Database {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum DbPool {
     Postgres(PgPool),
     Mysql(MySqlPool),
