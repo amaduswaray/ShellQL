@@ -61,51 +61,81 @@ fn render_nav(frame: &mut Frame, area: Rect, state: &AppState) {
     let Some(ref dash) = state.dashboard else { return };
     let focused = dash.active_pane == ActivePane::Nav;
 
-    // Connection name as a green bold header, then table rows.
-    let header = Line::from(vec![Span::styled(
-        format!(" {}", dash.connection.name),
+    // ── Border block with centered DB name ────────────────────────────────────
+    let border_style = if focused {
+        Style::default().fg(Color::Blue)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let title = Line::from(Span::styled(
+        dash.connection.name.as_str(),
         Style::default()
             .fg(Color::Green)
             .add_modifier(Modifier::BOLD),
-    )]);
+    ))
+    .centered();
 
-    let mut lines: Vec<Line> = vec![header, Line::from("")];
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(border_style);
 
-    let viewport = area.height.saturating_sub(2) as usize;
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    // ── Inner content ─────────────────────────────────────────────────────────
+    let mut lines: Vec<Line> = vec![];
+
+    // Section header
+    lines.push(Line::from(Span::styled(
+        "Tables",
+        Style::default()
+            .fg(Color::Blue)
+            .add_modifier(Modifier::BOLD),
+    )));
+
+    // Subtle separator
+    let sep = "─".repeat(inner.width as usize);
+    lines.push(Line::from(Span::styled(sep, Style::default().fg(Color::DarkGray))));
+
+    // Table list
+    let header_lines = 3; // padding + "Tables" + separator
+    let viewport = inner.height.saturating_sub(header_lines) as usize;
     let start = dash.nav_offset;
     let end = (start + viewport).min(dash.tables.len());
 
-    for table_idx in start..end {
-        let table = &dash.tables[table_idx];
-        let selected = table_idx == dash.nav_cursor;
-
-        let style = if selected && focused {
-            Style::default()
-                .bg(Color::Rgb(28, 42, 74))
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD)
-        } else if selected {
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-
-        // Pad to full width so the highlight background fills the entire nav pane.
-        let display = format!(" {table}");
-        let padded = format!("{:width$}", display, width = area.width as usize);
-        lines.push(Line::from(Span::styled(padded, style)));
-    }
-
     if dash.tables.is_empty() {
         lines.push(Line::from(Span::styled(
-            " No tables found",
+            "No tables",
             Style::default().fg(Color::DarkGray),
         )));
+    } else {
+        for table_idx in start..end {
+            let table = &dash.tables[table_idx];
+            let selected = table_idx == dash.nav_cursor;
+
+            let style = if selected && focused {
+                Style::default()
+                    .bg(Color::Rgb(28, 42, 74))
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD)
+            } else if selected {
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+
+            // Pad to full inner width for clean highlight
+            let padded = format!("{:width$}", table.as_str(), width = inner.width as usize);
+            lines.push(Line::from(Span::styled(padded, style)));
+        }
     }
 
-    frame.render_widget(Paragraph::new(lines), area);
+    frame.render_widget(Paragraph::new(lines), inner);
 }
 
 // ── Table view ────────────────────────────────────────────────────────────────
