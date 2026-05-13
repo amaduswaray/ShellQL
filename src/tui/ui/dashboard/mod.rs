@@ -235,11 +235,13 @@ fn render_loaded_table(
     }
 
     // ── Compute visible columns once ──────────────────────────────────────────
+    // Conservative right boundary: always reserve 1 cell for a potential ▸ indicator.
+    let conservative_right = (area.x + area.width).saturating_sub(1 + EDGE_PADDING);
 
     let mut x_cursor = area.x + gutter_width + EDGE_PADDING;
     let mut visible_cols = 0;
     for col_idx in loaded.col_offset..loaded.headers.len() {
-        if x_cursor >= area.x + area.width {
+        if x_cursor >= conservative_right {
             break;
         }
         x_cursor += column_widths[col_idx];
@@ -248,6 +250,13 @@ fn render_loaded_table(
 
     let has_more_left = loaded.col_offset > 0;
     let has_more_right = loaded.col_offset + visible_cols < loaded.headers.len();
+
+    // Final right boundary: only reserve indicator space if there actually are more columns.
+    let right_boundary = if has_more_right {
+        conservative_right
+    } else {
+        (area.x + area.width).saturating_sub(EDGE_PADDING)
+    };
 
     // ── Layout ────────────────────────────────────────────────────────────────
 
@@ -284,11 +293,13 @@ fn render_loaded_table(
 
     let mut x = area.x + gutter_width + EDGE_PADDING;
     for (col_idx, header) in loaded.headers.iter().enumerate().skip(loaded.col_offset) {
-        if x >= area.x + area.width {
+        if x >= right_boundary {
             break;
         }
         let width = column_widths[col_idx];
-        let effective_width = width.saturating_sub(NUM_SPACES_BETWEEN_COLUMNS);
+        let effective_width = width
+            .saturating_sub(NUM_SPACES_BETWEEN_COLUMNS)
+            .min(right_boundary - x);
 
         let is_selected_col = matches!(
             loaded.mode,
@@ -371,11 +382,13 @@ fn render_loaded_table(
         // Cells
         let mut x = area.x + gutter_width + EDGE_PADDING;
         for (col_idx, cell_text) in row.iter().enumerate().skip(loaded.col_offset) {
-            if x >= area.x + area.width {
+            if x >= right_boundary {
                 break;
             }
             let width = column_widths[col_idx];
-            let effective_width = width.saturating_sub(NUM_SPACES_BETWEEN_COLUMNS);
+            let effective_width = width
+                .saturating_sub(NUM_SPACES_BETWEEN_COLUMNS)
+                .min(right_boundary - x);
 
             let is_selected = match loaded.mode {
                 TableMode::Normal | TableMode::Insert => {
