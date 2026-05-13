@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::tui::{
-    AppMode, AppState, DashboardState, Overlay,
+    AppState, Overlay,
     ui::home::{goto_bottom, goto_top, select_next, select_prev, selected_connection},
 };
 
@@ -64,20 +64,10 @@ pub async fn handle_overlay(
                 return Ok(());
             };
 
-            // Show a loading signal in the cmdline while connecting.
-            state.cmdline.set_error(String::new()); // clears any old error
-
-            // Connect and fetch the table list.
-            match connect_and_load(&db).await {
-                Ok((pool, tables)) => {
-                    state.dashboard = Some(DashboardState::new(db, pool, tables));
-                    state.overlay = None;
-                    state.mode = AppMode::Dashboard;
-                }
-                Err(e) => {
-                    state.cmdline.set_error(format!("Connection failed: {e}"));
-                }
-            }
+            // Hand off to the event loop so it can show a spinner while connecting.
+            state.cmdline.clear_error();
+            state.pending_connection = Some(db);
+            state.overlay = None;
         }
 
         (Overlay::ConnectionPicker, KeyCode::Esc | KeyCode::Char('q')) => {
@@ -91,12 +81,4 @@ pub async fn handle_overlay(
     Ok(())
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
-async fn connect_and_load(
-    db: &crate::connection::Database,
-) -> color_eyre::eyre::Result<(crate::connection::DbPool, Vec<String>)> {
-    let pool = crate::connection::connect_db(db.connection.clone()).await?;
-    let tables = crate::connection::list_tables(&pool).await?;
-    Ok((pool, tables))
-}

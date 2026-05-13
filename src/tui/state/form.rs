@@ -1,5 +1,4 @@
 /// Add-connection form state — supports both URL and field-by-field Config modes.
-
 use crate::connection::{
     ConnectionSource, DatabaseConnection, DatabaseString, Engine, MysqlConnection,
     PostgresConnection, SqliteConnection, SslOptions, SslVerifyMode,
@@ -263,7 +262,9 @@ impl AddConnectionForm {
         self.cursor_pos = (self.cursor_pos + 1).min(max);
     }
 
-    pub fn cursor_to_start(&mut self) { self.cursor_pos = 0; }
+    pub fn cursor_to_start(&mut self) {
+        self.cursor_pos = 0;
+    }
 
     pub fn cursor_to_end(&mut self) {
         let len = self.focused_text_len().unwrap_or(0);
@@ -276,7 +277,9 @@ impl AddConnectionForm {
     // ── Mode transitions ────────────────────────────────────────────────────────
 
     /// `i` — insert before cursor.
-    pub fn enter_insert_before(&mut self) { self.text_mode = TextMode::Insert; }
+    pub fn enter_insert_before(&mut self) {
+        self.text_mode = TextMode::Insert;
+    }
 
     /// `a` — insert after cursor.
     pub fn enter_insert_after(&mut self) {
@@ -326,18 +329,38 @@ impl AddConnectionForm {
     }
 
     pub fn delete_before_cursor(&mut self) {
-        if self.cursor_pos == 0 { return; }
+        if self.cursor_pos == 0 {
+            return;
+        }
         let pos = self.cursor_pos - 1;
         match self.focused_field() {
-            FieldId::Name => { remove_at(&mut self.name, pos); }
-            FieldId::Url => { remove_at(&mut self.url, pos); }
-            FieldId::Hostname => { remove_at(&mut self.hostname, pos); }
-            FieldId::Port => { remove_at(&mut self.port, pos); }
-            FieldId::Username => { remove_at(&mut self.username, pos); }
-            FieldId::Password => { remove_at(&mut self.password, pos); }
-            FieldId::Database => { remove_at(&mut self.database, pos); }
-            FieldId::PoolSize => { remove_at(&mut self.pool_size, pos); }
-            FieldId::SqlitePath => { remove_at(&mut self.sqlite_path, pos); }
+            FieldId::Name => {
+                remove_at(&mut self.name, pos);
+            }
+            FieldId::Url => {
+                remove_at(&mut self.url, pos);
+            }
+            FieldId::Hostname => {
+                remove_at(&mut self.hostname, pos);
+            }
+            FieldId::Port => {
+                remove_at(&mut self.port, pos);
+            }
+            FieldId::Username => {
+                remove_at(&mut self.username, pos);
+            }
+            FieldId::Password => {
+                remove_at(&mut self.password, pos);
+            }
+            FieldId::Database => {
+                remove_at(&mut self.database, pos);
+            }
+            FieldId::PoolSize => {
+                remove_at(&mut self.pool_size, pos);
+            }
+            FieldId::SqlitePath => {
+                remove_at(&mut self.sqlite_path, pos);
+            }
             _ => return,
         }
         self.cursor_pos -= 1;
@@ -359,8 +382,11 @@ impl AddConnectionForm {
         };
         if deleted {
             let new_len = self.focused_text_len().unwrap_or(0);
-            if new_len == 0 { self.cursor_pos = 0; }
-            else if self.cursor_pos >= new_len { self.cursor_pos = new_len - 1; }
+            if new_len == 0 {
+                self.cursor_pos = 0;
+            } else if self.cursor_pos >= new_len {
+                self.cursor_pos = new_len - 1;
+            }
         }
     }
 
@@ -461,9 +487,7 @@ impl AddConnectionForm {
                     Engine::Postgres => {
                         ConnectionSource::Url(DatabaseString::Postgres(self.url.clone()))
                     }
-                    Engine::Mysql => {
-                        ConnectionSource::Url(DatabaseString::Mysql(self.url.clone()))
-                    }
+                    Engine::Mysql => ConnectionSource::Url(DatabaseString::Mysql(self.url.clone())),
                     Engine::Sqlite => {
                         ConnectionSource::Url(DatabaseString::Sqlite(self.url.clone()))
                     }
@@ -496,18 +520,16 @@ impl AddConnectionForm {
                             certfile: None,
                         });
                         let conn = match self.engine {
-                            Engine::Postgres => {
-                                DatabaseConnection::Postgres(PostgresConnection {
-                                    username: self.username.clone(),
-                                    password: self.password.clone(),
-                                    hostname: self.hostname.clone(),
-                                    database: self.database.clone(),
-                                    stack_trace: false,
-                                    port,
-                                    pool_size: pool,
-                                    ssl,
-                                })
-                            }
+                            Engine::Postgres => DatabaseConnection::Postgres(PostgresConnection {
+                                username: self.username.clone(),
+                                password: self.password.clone(),
+                                hostname: self.hostname.clone(),
+                                database: self.database.clone(),
+                                stack_trace: false,
+                                port,
+                                pool_size: pool,
+                                ssl,
+                            }),
                             Engine::Mysql => DatabaseConnection::Mysql(MysqlConnection {
                                 username: self.username.clone(),
                                 password: self.password.clone(),
@@ -565,4 +587,3 @@ fn remove_at(s: &mut String, char_idx: usize) -> bool {
     s.remove(byte);
     true
 }
-

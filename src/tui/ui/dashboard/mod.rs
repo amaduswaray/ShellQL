@@ -42,7 +42,8 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, state: &mut AppState) {
 
     // Sync scroll offsets before drawing (needs mutable access).
     if let Some(ref mut dash) = state.dashboard {
-        let nav_viewport = nav_area.height.saturating_sub(2) as usize;
+        // Nav pane: 2 border rows + 3 inner header lines (padding, "Tables", separator).
+        let nav_viewport = nav_area.height.saturating_sub(2 + 3).max(1) as usize;
         dash.sync_nav_offset(nav_viewport);
 
         if let Some(ref mut loaded) = dash.loaded {

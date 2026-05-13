@@ -52,6 +52,8 @@ pub struct CommandLine {
     pub input: String,
     /// One-shot error message shown in idle mode after a failed command.
     pub error: Option<String>,
+    /// Loading / spinner message shown in idle mode during async work.
+    pub loading: Option<String>,
     /// Active completion candidates `(command, description)`.
     pub completions: Vec<(&'static str, &'static str)>,
     /// Which entry in `completions` is currently highlighted.
@@ -64,6 +66,7 @@ impl CommandLine {
             mode: CommandLineMode::Idle,
             input: String::new(),
             error: None,
+            loading: None,
             completions: Vec::new(),
             completion_selected: None,
         }
@@ -118,6 +121,16 @@ impl CommandLine {
 
     pub fn clear_error(&mut self) {
         self.error = None;
+    }
+
+    // ── Loading ───────────────────────────────────────────────────────────────
+
+    pub fn set_loading(&mut self, msg: impl Into<String>) {
+        self.loading = Some(msg.into());
+    }
+
+    pub fn clear_loading(&mut self) {
+        self.loading = None;
     }
 
     // ── Completions ───────────────────────────────────────────────────────────

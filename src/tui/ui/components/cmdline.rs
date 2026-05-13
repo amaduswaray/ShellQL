@@ -24,6 +24,15 @@ pub fn render_cmdline(frame: &mut Frame, area: Rect, state: &AppState) {
 // ── Idle — status strip ───────────────────────────────────────────────────────
 
 fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
+    if let Some(ref loading) = state.cmdline.loading {
+        let line = Line::from(Span::styled(
+            loading.as_str(),
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        ));
+        frame.render_widget(Paragraph::new(vec![line]), area);
+        return;
+    }
+
     if let Some(ref err) = state.cmdline.error {
         let line = Line::from(Span::styled(
             format!("{err}"),

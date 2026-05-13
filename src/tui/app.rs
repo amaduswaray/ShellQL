@@ -1,4 +1,9 @@
-use crate::tui::{controls::handle_key_event, render::render, AppState};
+use crate::tui::{
+    controls::handle_key_event,
+    render::render,
+    state::{AppMode, DashboardState},
+    AppState,
+};
 use crossterm::{
     event::{self, Event},
     execute,
@@ -24,6 +29,12 @@ async fn app(state: &mut AppState) -> color_eyre::Result<()> {
     loop {
         terminal.draw(|f| render(f, state))?;
 
+        // ── Async connection with spinner ─────────────────────────────────────
+        if state.pending_connection.is_some() {
+            handle_pending_connection(state, &mut terminal).await?;
+            continue;
+        }
+
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
                 state.should_quit = true;
@@ -41,6 +52,63 @@ async fn app(state: &mut AppState) -> color_eyre::Result<()> {
             break;
         }
     }
+    Ok(())
+}
+
+// ── Connection helper with animated spinner ───────────────────────────────────
+
+async fn handle_pending_connection(
+    state: &mut AppState,
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) -> color_eyre::Result<()> {
+    let Some(db) = state.pending_connection.take() else {
+        return Ok(());
+    };
+
+    let mut interval = tokio::time::interval(Duration::from_millis(100));
+    let mut spinner_frame = 0usize;
+    const SPINNER: [char; 10] = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+    let conn = db.connection.clone();
+    let connect_fut = async move {
+        let pool = crate::connection::connect_db(conn).await?;
+        let tables = crate::connection::list_tables(&pool).await?;
+        Ok::<_, color_eyre::eyre::Error>((pool, tables))
+    };
+    tokio::pin!(connect_fut);
+
+    loop {
+        tokio::select! {
+            biased;
+
+            _ = tokio::signal::ctrl_c() => {
+                state.should_quit = true;
+                break;
+            }
+
+            result = &mut connect_fut => {
+                match result {
+                    Ok((pool, tables)) => {
+                        state.dashboard = Some(DashboardState::new(db, pool, tables));
+                        state.mode = AppMode::Dashboard;
+                        state.cmdline.clear_loading();
+                    }
+                    Err(e) => {
+                        state.cmdline.set_error(format!("Connection failed: {e}"));
+                    }
+                }
+                break;
+            }
+
+            _ = interval.tick() => {
+                let ch = SPINNER[spinner_frame % SPINNER.len()];
+                state.cmdline.set_loading(format!("{ch}  Connecting to {}...", db.name));
+                spinner_frame += 1;
+                terminal.draw(|f| render(f, state))?;
+            }
+        }
+    }
+
     Ok(())
 }
 

@@ -26,6 +26,8 @@ pub struct AppState {
     pub form: Option<AddConnectionForm>,
     /// Populated once the user connects to a database.
     pub dashboard: Option<DashboardState>,
+    /// Set by the connection picker; handled in the event loop with a spinner.
+    pub pending_connection: Option<Database>,
 }
 
 impl AppState {
@@ -42,6 +44,7 @@ impl AppState {
             cmdline: CommandLine::new(),
             form: None,
             dashboard: None,
+            pending_connection: None,
         }
     }
 }
