@@ -9,7 +9,7 @@ pub use state::{
     AppMode, AppState,
     AddConnectionForm, FieldId, FormInputMode, TextMode,
     CommandLine, CommandLineMode, ConfirmAction, compute_completions, COMMANDS,
-    ActivePane, DashboardState, LoadedTable,
+    DashboardState, LoadedTable,
     Cell, Column, Row, SortDirection, SortState,
     EditorMode, QueryEditorState, QueryResult,
     FloatingPane, Overlay, Pane, PaneId,

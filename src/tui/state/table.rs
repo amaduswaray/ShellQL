@@ -1,3 +1,4 @@
+use super::dashboard::TableMode;
 use super::data::{Column, Row, SortState};
 use super::pane::PaneId;
 
@@ -18,14 +19,6 @@ pub struct TableViewState {
     pub filter: Option<String>,
     pub sort: Option<SortState>,
     pub selected_rows: Vec<usize>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TableMode {
-    Normal,
-    Visual,
-    Filter,
-    Editing,
 }
 
 impl TableViewState {

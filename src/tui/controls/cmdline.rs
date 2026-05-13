@@ -102,6 +102,32 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         }
         "connect" => state.overlay = Some(Overlay::ConnectionPicker),
 
+        // Pane management (dashboard only)
+        "vnew" => {
+            if let Some(ref mut dash) = state.dashboard {
+                let _ = dash.tree.split_active_v(crate::tui::state::PaneType::TableView);
+            } else {
+                state.cmdline.set_error("not in dashboard");
+            }
+        }
+        "new" => {
+            if let Some(ref mut dash) = state.dashboard {
+                let _ = dash.tree.split_active_h(crate::tui::state::PaneType::SchemaView);
+            } else {
+                state.cmdline.set_error("not in dashboard");
+            }
+        }
+        "close" => {
+            if let Some(ref mut dash) = state.dashboard {
+                if dash.tree.close_active() {
+                    state.mode = crate::tui::state::AppMode::Home;
+                    state.dashboard = None;
+                }
+            } else {
+                state.cmdline.set_error("not in dashboard");
+            }
+        }
+
         // Destructive actions — flow into the confirm prompt
         "d" | "delete" => {
             if let Some(db) = selected_connection(state) {

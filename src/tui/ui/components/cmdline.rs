@@ -6,8 +6,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
-use crate::tui::state::{AppMode, AppState, CommandLineMode, ConfirmAction, TextMode};
-use crate::tui::state::dashboard::TableMode;
+use crate::tui::state::{AppMode, AppState, CommandLineMode, ConfirmAction, TableMode, TextMode};
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -63,8 +62,11 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
         AppMode::Home => (" NORMAL ", String::new()),
         AppMode::Dashboard => {
             if let Some(ref dash) = state.dashboard {
-                let mode = if let Some(ref loaded) = dash.loaded {
-                    match loaded.mode {
+                let active_id = dash.tree.active_pane;
+                let active = dash.tree.panes.get(&active_id);
+
+                let mode = if let Some(pane) = active {
+                    match pane.mode {
                         TableMode::Normal => " NORMAL ",
                         TableMode::VisualRow | TableMode::VisualColumn => " VISUAL ",
                         TableMode::Insert => " INSERT ",
@@ -73,15 +75,19 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
                     " NORMAL "
                 };
 
-                let ctx = if let Some(ref loaded) = dash.loaded {
-                    let total_rows = loaded.rows.len();
-                    let total_cols = loaded.headers.len();
-                    let cur_row = loaded.row_cursor + 1;
-                    let cur_col = loaded.cursor_col + 1;
-                    format!(
-                        "  {}  [Row {}/{}, Col {}/{}]",
-                        loaded.name, cur_row, total_rows, cur_col, total_cols
-                    )
+                let ctx = if let Some(pane) = active {
+                    if let Some(ref loaded) = dash.loaded {
+                        let total_rows = loaded.rows.len();
+                        let total_cols = loaded.headers.len();
+                        let cur_row = pane.row_cursor + 1;
+                        let cur_col = pane.cursor_col + 1;
+                        format!(
+                            "  {}  [Row {}/{}, Col {}/{}]",
+                            loaded.name, cur_row, total_rows, cur_col, total_cols
+                        )
+                    } else {
+                        format!("  {}  (no table)", dash.connection.name)
+                    }
                 } else {
                     format!("  {}  (no table)", dash.connection.name)
                 };

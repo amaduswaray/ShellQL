@@ -26,6 +26,8 @@ async fn app(state: &mut AppState) -> color_eyre::Result<()> {
     let backend = CrosstermBackend::new(stdout());
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
+    let mut anim_interval = tokio::time::interval(Duration::from_millis(16));
+
     loop {
         terminal.draw(|f| render(f, state))?;
 
@@ -39,7 +41,10 @@ async fn app(state: &mut AppState) -> color_eyre::Result<()> {
             _ = tokio::signal::ctrl_c() => {
                 state.should_quit = true;
             }
-            ready = async { event::poll(Duration::from_millis(100)) } => {
+            _ = anim_interval.tick(), if is_animating(state) => {
+                // Redraw triggered by animation; loop continues.
+            }
+            ready = async { event::poll(Duration::from_millis(50)) } => {
                 if ready? {
                     if let Event::Key(key) = event::read()? {
                         handle_key_event(key, state).await?;
@@ -110,6 +115,14 @@ async fn handle_pending_connection(
     }
 
     Ok(())
+}
+
+fn is_animating(state: &AppState) -> bool {
+    state
+        .dashboard
+        .as_ref()
+        .map(|d| d.tree.root.is_animating())
+        .unwrap_or(false)
 }
 
 fn setup_terminal() -> color_eyre::Result<()> {

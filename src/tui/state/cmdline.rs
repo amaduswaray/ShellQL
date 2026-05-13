@@ -5,15 +5,18 @@
 /// Every command the `:` prompt accepts, paired with a short description.
 /// This drives both execution and tab-completion.
 pub const COMMANDS: &[(&str, &str)] = &[
-    ("q",      "quit"),
-    ("quit",   "quit"),
-    ("q!",     "force quit"),
-    ("h",      "help overlay"),
-    ("help",   "help overlay"),
-    ("add",    "add connection"),
+    ("q",       "quit"),
+    ("quit",    "quit"),
+    ("q!",      "force quit"),
+    ("h",       "help overlay"),
+    ("help",    "help overlay"),
+    ("add",     "add connection"),
     ("d",       "delete selected"),
     ("delete",  "delete selected"),
     ("connect", "open connection picker"),
+    ("vnew",    "vertical split"),
+    ("new",     "horizontal split"),
+    ("close",   "close pane"),
 ];
 
 /// Return every entry in `COMMANDS` whose name starts with `input`.
