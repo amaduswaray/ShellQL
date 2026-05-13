@@ -15,7 +15,12 @@ pub const COMMANDS: &[(&str, &str)] = &[
     ("delete",  "delete selected"),
     ("connect", "open connection picker"),
     ("vnew",    "vertical split"),
-    ("new",     "horizontal split"),
+    ("hnew",    "horizontal split"),
+    ("new",     "vertical split"),
+    ("table",   "switch to table view"),
+    ("schema",  "switch to schema view"),
+    ("sql",     "switch to query editor"),
+    ("query",   "switch to query editor"),
     ("close",   "close pane"),
 ];
 

@@ -1,10 +1,12 @@
 //! Dashboard state — active DB session with pane-based layout.
 
+use std::collections::HashMap;
+
 use crate::connection::{ColumnInfo, Database, DbPool};
 
 use super::pane_layout::{PaneTree, PaneType};
 
-// ── Re-exports from old dashboard ─────────────────────────────────────────────
+// ── Re-exports ────────────────────────────────────────────────────────────────
 
 pub use super::pane_layout::{Pane, PaneDirection};
 
@@ -53,7 +55,10 @@ pub struct DashboardState {
 
     // ── Data ──────────────────────────────────────────────────────────────────
     pub tables: Vec<String>,
-    pub loaded: Option<LoadedTable>,
+
+    // ── Shared table cache (name → loaded data) ───────────────────────────────
+    /// Populated on first load; reused when another pane views the same table.
+    pub table_cache: HashMap<String, LoadedTable>,
 
     // ── Async-load signal ─────────────────────────────────────────────────────
     pub pending_load: Option<String>,
@@ -65,15 +70,13 @@ pub struct DashboardState {
 
 impl DashboardState {
     pub fn new(connection: Database, pool: DbPool, tables: Vec<String>) -> Self {
-        let mut tree = PaneTree::new(PaneType::TableList);
-        // Also create a TableView pane side-by-side for the default 2-pane look.
-        let _ = tree.split_active_v(PaneType::TableView);
+        let tree = PaneTree::new(PaneType::TableList);
         Self {
             connection,
             pool,
             tree,
             tables,
-            loaded: None,
+            table_cache: HashMap::new(),
             pending_load: None,
             loading: false,
             error: None,
@@ -81,8 +84,8 @@ impl DashboardState {
     }
 
     /// Signal that the currently selected table in the active list pane should be loaded.
+    /// The pane will be converted to a TableView after the async load completes.
     pub fn request_load(&mut self) {
-        // Find the active pane that is a TableList and load its selected table.
         if let Some(pane) = self.tree.active() {
             if pane.kind == PaneType::TableList {
                 if let Some(name) = self.tables.get(pane.nav_cursor) {

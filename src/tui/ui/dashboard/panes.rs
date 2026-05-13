@@ -41,6 +41,49 @@ pub fn render_pane(
     }
 }
 
+// ── Border title helpers ──────────────────────────────────────────────────────
+
+fn make_title(pane: &Pane) -> String {
+    match pane.kind {
+        PaneType::TableList => format!(" {} ", pane.display_id),
+        PaneType::TableView => {
+            if let Some(ref table) = pane.bound_table {
+                format!(" {}: {} ", pane.display_id, table)
+            } else {
+                format!(" {} ", pane.display_id)
+            }
+        }
+        PaneType::SchemaView => {
+            if let Some(ref table) = pane.bound_table {
+                format!(" {}: Schema({}) ", pane.display_id, table)
+            } else {
+                format!(" {}: Schema ", pane.display_id)
+            }
+        }
+        PaneType::QueryEditor => format!(" {}: Query ", pane.display_id),
+    }
+}
+
+fn pane_block(title: &str, focused: bool) -> Block<'_> {
+    let border_style = if focused {
+        Style::default().fg(Color::Blue)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let title_style = if focused {
+        Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    Block::default()
+        .title(Line::from(title).style(title_style))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(border_style)
+}
+
 // ── TableList pane ────────────────────────────────────────────────────────────
 
 fn render_table_list(
@@ -50,24 +93,8 @@ fn render_table_list(
     dash: &DashboardState,
     focused: bool,
 ) {
-    let border_style = if focused {
-        Style::default().fg(Color::Blue)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-
-    let title = Line::from(Span::styled(
-        dash.connection.name.as_str(),
-        Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
-    ))
-    .centered();
-
-    let block = Block::default()
-        .title(title)
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(border_style);
-
+    let title = make_title(pane);
+    let block = pane_block(&title, focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -126,17 +153,12 @@ fn render_table_view(
     dash: &DashboardState,
     focused: bool,
 ) {
-    let title = if let Some(ref loaded) = dash.loaded {
-        format!(" {} ", loaded.name)
-    } else {
-        String::new()
-    };
-
+    let title = make_title(pane);
     let block = pane_block(&title, focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    if dash.loading {
+    if dash.loading && pane.bound_table.as_ref() == dash.pending_load.as_ref() {
         frame.render_widget(
             Paragraph::new(Span::styled(" Loading…", Style::default().fg(Color::DarkGray))),
             inner,
@@ -145,17 +167,30 @@ fn render_table_view(
     }
 
     if let Some(ref err) = dash.error {
+        if pane.bound_table.as_ref() == dash.pending_load.as_ref() {
+            frame.render_widget(
+                Paragraph::new(Span::styled(format!(" {err}"), Style::default().fg(Color::Red))),
+                inner,
+            );
+            return;
+        }
+    }
+
+    let Some(ref table_name) = pane.bound_table else {
         frame.render_widget(
-            Paragraph::new(Span::styled(format!(" {err}"), Style::default().fg(Color::Red))),
+            Paragraph::new(Span::styled(
+                " No table bound.",
+                Style::default().fg(Color::DarkGray),
+            )),
             inner,
         );
         return;
-    }
+    };
 
-    let Some(ref loaded) = dash.loaded else {
+    let Some(ref loaded) = dash.table_cache.get(table_name) else {
         frame.render_widget(
             Paragraph::new(Span::styled(
-                " Select a table from a list pane to load.",
+                " Loading table data…",
                 Style::default().fg(Color::DarkGray),
             )),
             inner,
@@ -391,17 +426,26 @@ fn render_loaded_table(
 fn render_schema_view(
     frame: &mut Frame,
     area: Rect,
-    _pane: &Pane,
+    pane: &Pane,
     dash: &DashboardState,
     focused: bool,
 ) {
-    let block = pane_block(" Schema ", focused);
+    let title = make_title(pane);
+    let block = pane_block(&title, focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let Some(ref loaded) = dash.loaded else {
+    let Some(ref table_name) = pane.bound_table else {
         frame.render_widget(
             Paragraph::new(Span::styled(" —", Style::default().fg(Color::DarkGray))),
+            inner,
+        );
+        return;
+    };
+
+    let Some(ref loaded) = dash.table_cache.get(table_name) else {
+        frame.render_widget(
+            Paragraph::new(Span::styled(" Loading…", Style::default().fg(Color::DarkGray))),
             inner,
         );
         return;
@@ -442,10 +486,11 @@ fn render_schema_view(
 fn render_query_editor(
     frame: &mut Frame,
     area: Rect,
-    _pane: &Pane,
+    pane: &Pane,
     focused: bool,
 ) {
-    let block = pane_block(" Query Editor ", focused);
+    let title = make_title(pane);
+    let block = pane_block(&title, focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -463,30 +508,4 @@ fn render_query_editor(
     ];
 
     frame.render_widget(Paragraph::new(lines), inner);
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-fn pane_block(title: &str, focused: bool) -> Block<'_> {
-    let border_style = if focused {
-        Style::default().fg(Color::Blue)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-
-    let title_style = if focused {
-        Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
-
-    Block::default()
-        .title(if title.is_empty() {
-            Line::from("")
-        } else {
-            Line::from(title).style(title_style)
-        })
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(border_style)
 }

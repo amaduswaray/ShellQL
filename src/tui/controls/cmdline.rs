@@ -10,12 +10,8 @@ use crate::{
 
 pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
     match event.code {
-        // Esc always cancels and returns to idle.
-        KeyCode::Esc => {
-            state.cmdline.reset();
-        }
+        KeyCode::Esc => state.cmdline.reset(),
 
-        // Backspace on an empty buffer also cancels (vim behaviour).
         KeyCode::Backspace => {
             if state.cmdline.input.is_empty() {
                 state.cmdline.reset();
@@ -25,7 +21,6 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
             }
         }
 
-        // Tab — open or cycle forward through completions.
         KeyCode::Tab => {
             if let CommandLineMode::Input = state.cmdline.mode {
                 if state.cmdline.completions.is_empty() {
@@ -37,23 +32,19 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
             }
         }
 
-        // Shift+Tab — cycle backward through completions.
         KeyCode::BackTab => {
             if let CommandLineMode::Input = state.cmdline.mode {
                 state.cmdline.prev_completion();
             }
         }
 
-        // Enter commits whatever is in the buffer.
         KeyCode::Enter => execute_cmdline(state),
 
         KeyCode::Char(c) => match &state.cmdline.mode {
             CommandLineMode::Input => {
-                // Any typed character dismisses completions and resumes free input.
                 state.cmdline.clear_completions();
                 state.cmdline.push(c);
             }
-            // Confirm only accepts a single y/n character.
             CommandLineMode::Confirm(_) => {
                 if state.cmdline.input.is_empty() && matches!(c, 'y' | 'Y' | 'n' | 'N') {
                     state.cmdline.push(c);
@@ -86,10 +77,17 @@ fn execute_cmdline(state: &mut AppState) {
     }
 }
 
-/// Parse and dispatch a `:command` string.
+/// Parse and dispatch a `:command` string with optional arguments.
 fn execute_command(cmd: &str, state: &mut AppState) {
-    match cmd {
-        // Navigation / app control
+    let parts: Vec<&str> = cmd.split_whitespace().collect();
+    if parts.is_empty() {
+        return;
+    }
+
+    let name = parts[0];
+    let args = &parts[1..];
+
+    match name {
         "" => {}
         "q" | "quit" => state.should_quit = true,
         "q!" => state.should_quit = true,
@@ -102,50 +100,183 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         }
         "connect" => state.overlay = Some(Overlay::ConnectionPicker),
 
-        // Pane management (dashboard only)
-        "vnew" => {
-            if let Some(ref mut dash) = state.dashboard {
-                let _ = dash.tree.split_active_v(crate::tui::state::PaneType::TableView);
-            } else {
-                state.cmdline.set_error("not in dashboard");
-            }
-        }
-        "new" => {
-            if let Some(ref mut dash) = state.dashboard {
-                let _ = dash.tree.split_active_h(crate::tui::state::PaneType::SchemaView);
-            } else {
-                state.cmdline.set_error("not in dashboard");
-            }
-        }
-        "close" => {
-            if let Some(ref mut dash) = state.dashboard {
-                if dash.tree.close_active() {
-                    state.mode = crate::tui::state::AppMode::Home;
-                    state.dashboard = None;
-                }
-            } else {
-                state.cmdline.set_error("not in dashboard");
-            }
-        }
+        // Pane management
+        "vnew" => cmd_vnew(state, args),
+        "hnew" => cmd_hnew(state, args),
+        "new" => cmd_vnew(state, args), // alias for vnew
 
-        // Destructive actions — flow into the confirm prompt
+        "table" => cmd_table(state, args),
+        "schema" => cmd_schema(state, args),
+        "sql" | "query" => cmd_sql(state, args),
+
+        "close" => cmd_close(state, args),
+
+        // Destructive actions
         "d" | "delete" => {
             if let Some(db) = selected_connection(state) {
                 let name = db.name.clone();
-                state
-                    .cmdline
-                    .open_confirm(ConfirmAction::DeleteConnection(name));
+                state.cmdline.open_confirm(ConfirmAction::DeleteConnection(name));
             } else {
-                state
-                    .cmdline
-                    .set_error("no connection selected".to_string());
+                state.cmdline.set_error("no connection selected");
             }
         }
 
-        other => {
-            state
-                .cmdline
-                .set_error(format!("Error: not a command `{other}`"));
+        other => state.cmdline.set_error(format!("Error: not a command `{other}`")),
+    }
+}
+
+// ── Pane commands ─────────────────────────────────────────────────────────────
+
+fn require_dashboard(state: &mut AppState) -> Option<&mut crate::tui::state::DashboardState> {
+    state.dashboard.as_mut()
+}
+
+fn parse_pane_type(arg: Option<&&str>) -> crate::tui::state::PaneType {
+    match arg {
+        Some(s) if s.eq_ignore_ascii_case("table") => crate::tui::state::PaneType::TableView,
+        Some(s) if s.eq_ignore_ascii_case("schema") => crate::tui::state::PaneType::SchemaView,
+        Some(s) if s.eq_ignore_ascii_case("sql") || s.eq_ignore_ascii_case("query") => {
+            crate::tui::state::PaneType::QueryEditor
         }
+        _ => crate::tui::state::PaneType::TableList,
+    }
+}
+
+fn cmd_vnew(state: &mut AppState, args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    let kind = parse_pane_type(args.first());
+    let table_name = args.get(1).map(|s| s.to_string());
+
+    match dash.tree.split_active_v(kind) {
+        Ok(id) => {
+            if let Some(table) = table_name {
+                if let Some(pane) = dash.tree.panes.get_mut(&id) {
+                    match pane.kind {
+                        crate::tui::state::PaneType::TableView => {
+                            pane.set_table_view(table.clone());
+                            if !dash.table_cache.contains_key(&table) {
+                                dash.pending_load = Some(table);
+                                dash.loading = true;
+                                dash.error = None;
+                            }
+                        }
+                        crate::tui::state::PaneType::SchemaView => {
+                            pane.set_schema_view(table);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        Err(e) => state.cmdline.set_error(e),
+    }
+}
+
+fn cmd_hnew(state: &mut AppState, args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    let kind = parse_pane_type(args.first());
+    let table_name = args.get(1).map(|s| s.to_string());
+
+    match dash.tree.split_active_h(kind) {
+        Ok(id) => {
+            if let Some(table) = table_name {
+                if let Some(pane) = dash.tree.panes.get_mut(&id) {
+                    match pane.kind {
+                        crate::tui::state::PaneType::TableView => {
+                            pane.set_table_view(table.clone());
+                            if !dash.table_cache.contains_key(&table) {
+                                dash.pending_load = Some(table);
+                                dash.loading = true;
+                                dash.error = None;
+                            }
+                        }
+                        crate::tui::state::PaneType::SchemaView => {
+                            pane.set_schema_view(table);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        Err(e) => state.cmdline.set_error(e),
+    }
+}
+
+fn cmd_table(state: &mut AppState, args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    let table_name = args.first().map(|s| s.to_string());
+
+    if let Some(pane) = dash.tree.active_mut() {
+        if let Some(name) = table_name {
+            pane.set_table_view(name.clone());
+            if !dash.table_cache.contains_key(&name) {
+                dash.pending_load = Some(name);
+                dash.loading = true;
+                dash.error = None;
+            }
+        } else {
+            state.cmdline.set_error(":table requires a table name");
+        }
+    }
+}
+
+fn cmd_schema(state: &mut AppState, args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    let table_name = args.first().map(|s| s.to_string());
+
+    if let Some(pane) = dash.tree.active_mut() {
+        if let Some(name) = table_name {
+            pane.set_schema_view(name);
+        } else {
+            state.cmdline.set_error(":schema requires a table name");
+        }
+    }
+}
+
+fn cmd_sql(state: &mut AppState, _args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    if let Some(pane) = dash.tree.active_mut() {
+        pane.set_query_editor();
+    }
+}
+
+fn cmd_close(state: &mut AppState, args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    let closed = if args.is_empty() {
+        dash.tree.close_active()
+    } else if let Ok(id) = args[0].parse::<usize>() {
+        dash.tree.close_by_display_id(id)
+    } else {
+        state.cmdline.set_error(format!("invalid pane id `{}`", args[0]));
+        return;
+    };
+
+    if closed {
+        state.mode = crate::tui::state::AppMode::Home;
+        state.dashboard = None;
     }
 }

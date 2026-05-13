@@ -65,7 +65,7 @@ pub async fn handle_key_event(
             ) {
                 Ok((schema, (headers, rows))) => {
                     use crate::tui::state::dashboard::LoadedTable;
-                    dash.loaded = Some(LoadedTable::new(table, schema, headers, rows));
+                    dash.table_cache.insert(table.clone(), LoadedTable::new(table, schema, headers, rows));
                     dash.loading = false;
                 }
                 Err(e) => {

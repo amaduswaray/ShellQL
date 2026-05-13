@@ -36,9 +36,10 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [ ] All commands like, new session, switch session, delete session, add connection, etc
   - [ ] When an error is there, enter should take you out of the command line mode
   - [ ] Tab completion for command line commands
-- [x] Connect form
-  - [x] Insert and normal mode for input fields so navigation works
-  - [x] Implement vim mode commands when in normal mode
 - [ ] Delete when in connection list
 
+- [ ] :show<tabs> feature for showing side bars and top sql bar wihtout taking too much space. These exists outside of the pane system
 
+- [ ] Filter and sort logic
+- [ ] Windows, sessions
+- [ ] :disconnect command to take user to homescreen

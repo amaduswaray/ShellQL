@@ -58,57 +58,63 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
         return;
     }
 
-    let (mode_label, context) = match state.mode {
-        AppMode::Home => (" NORMAL ", String::new()),
+    // Build the cmdline as a vector of spans so each piece gets its own style.
+    let mut spans: Vec<Span> = vec![];
+    let mut right_text = String::new();
+
+    match state.mode {
+        AppMode::Home => {
+            spans.push(Span::styled("NORMAL", Style::default().fg(Color::Blue).bold()));
+        }
         AppMode::Dashboard => {
             if let Some(ref dash) = state.dashboard {
                 let active_id = dash.tree.active_pane;
                 let active = dash.tree.panes.get(&active_id);
 
-                let mode = if let Some(pane) = active {
+                let (mode_label, mode_color) = if let Some(pane) = active {
                     match pane.mode {
-                        TableMode::Normal => " NORMAL ",
-                        TableMode::VisualRow | TableMode::VisualColumn => " VISUAL ",
-                        TableMode::Insert => " INSERT ",
+                        TableMode::Normal => ("NORMAL", Color::Blue),
+                        TableMode::VisualRow | TableMode::VisualColumn => ("VISUAL", Color::Yellow),
+                        TableMode::Insert => ("INSERT", Color::Green),
                     }
                 } else {
-                    " NORMAL "
+                    ("NORMAL", Color::Blue)
                 };
 
-                let ctx = if let Some(pane) = active {
-                    if let Some(ref loaded) = dash.loaded {
-                        let total_rows = loaded.rows.len();
-                        let total_cols = loaded.headers.len();
-                        let cur_row = pane.row_cursor + 1;
-                        let cur_col = pane.cursor_col + 1;
-                        format!(
-                            "  {}  [Row {}/{}, Col {}/{}]",
-                            loaded.name, cur_row, total_rows, cur_col, total_cols
-                        )
-                    } else {
-                        format!("  {}  (no table)", dash.connection.name)
+                spans.push(Span::styled(mode_label, Style::default().fg(mode_color).bold()));
+                spans.push(Span::styled(" ", Style::default()));
+                spans.push(Span::styled(dash.connection.name.as_str(), Style::default().fg(Color::Blue).bold()));
+
+                if let Some(pane) = active {
+                    if let Some(ref table_name) = pane.bound_table {
+                        spans.push(Span::styled(" ", Style::default()));
+                        spans.push(Span::styled(table_name.as_str(), Style::default().fg(Color::DarkGray)));
+
+                        if let Some(ref loaded) = dash.table_cache.get(table_name) {
+                            let total_rows = loaded.rows.len();
+                            let total_cols = loaded.headers.len();
+                            let cur_row = pane.row_cursor + 1;
+                            let cur_col = pane.cursor_col + 1;
+                            right_text = format!("Row {}/{}, Col {}/{}", cur_row, total_rows, cur_col, total_cols);
+                        }
                     }
-                } else {
-                    format!("  {}  (no table)", dash.connection.name)
-                };
-                (mode, ctx)
+                }
             } else {
-                (" NORMAL ", String::new())
+                spans.push(Span::styled("NORMAL", Style::default().fg(Color::Blue).bold()));
             }
         }
-    };
+    }
 
-    let mode_color = match mode_label.trim() {
-        "VISUAL" => Color::Yellow,
-        "INSERT" => Color::Green,
-        _ => Color::Blue,
-    };
+    // Pad the right_text to push it to the right edge.
+    let left_width: usize = spans.iter().map(|s| s.width()).sum();
+    let right_width = right_text.chars().count();
+    let gap = area.width as usize - left_width - right_width;
+    if gap > 0 {
+        spans.push(Span::styled(" ".repeat(gap), Style::default()));
+    }
+    spans.push(Span::styled(right_text, Style::default().fg(Color::DarkGray)));
 
-    let line = Line::from(vec![
-        Span::styled(mode_label, Style::default().fg(mode_color).bold()),
-        Span::styled(context, Style::default().fg(Color::DarkGray)),
-    ]);
-
+    let line = Line::from(spans);
     frame.render_widget(Paragraph::new(vec![line]), area);
 }
 

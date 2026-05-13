@@ -59,6 +59,15 @@ pub struct Pane {
     pub id: PaneId,
     pub kind: PaneType,
 
+    // ── Display ID ────────────────────────────────────────────────────────────
+    /// Human-readable number shown in the border title (1, 2, 3…).
+    pub display_id: usize,
+
+    // ── Bound table ───────────────────────────────────────────────────────────
+    /// Which table this pane is associated with (set when converting to
+    /// TableView / SchemaView / QueryEditor).
+    pub bound_table: Option<String>,
+
     // ── TableList state ─────────────────────────────────────────────────────
     pub nav_cursor: usize,
     pub nav_offset: usize,
@@ -75,10 +84,12 @@ pub struct Pane {
 }
 
 impl Pane {
-    pub fn new(id: PaneId, kind: PaneType) -> Self {
+    pub fn new(id: PaneId, kind: PaneType, display_id: usize) -> Self {
         Self {
             id,
             kind,
+            display_id,
+            bound_table: None,
             nav_cursor: 0,
             nav_offset: 0,
             row_cursor: 0,
@@ -88,6 +99,39 @@ impl Pane {
             mode: TableMode::Normal,
             area: None,
         }
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    pub fn reset_to_list(&mut self) {
+        self.kind = PaneType::TableList;
+        self.bound_table = None;
+        self.nav_cursor = 0;
+        self.nav_offset = 0;
+        self.row_cursor = 0;
+        self.row_offset = 0;
+        self.cursor_col = 0;
+        self.col_offset = 0;
+        self.mode = TableMode::Normal;
+    }
+
+    pub fn set_table_view(&mut self, table_name: String) {
+        self.kind = PaneType::TableView;
+        self.bound_table = Some(table_name);
+        self.row_cursor = 0;
+        self.row_offset = 0;
+        self.cursor_col = 0;
+        self.col_offset = 0;
+        self.mode = TableMode::Normal;
+    }
+
+    pub fn set_schema_view(&mut self, table_name: String) {
+        self.kind = PaneType::SchemaView;
+        self.bound_table = Some(table_name);
+    }
+
+    pub fn set_query_editor(&mut self) {
+        self.kind = PaneType::QueryEditor;
     }
 
     // ── Row navigation ──────────────────────────────────────────────────────
@@ -271,50 +315,6 @@ impl LayoutNode {
             }
         }
     }
-
-    /// Find the PaneId at a geometric position (for navigation).
-    pub fn find_at(&self, area: Rect, x: u16, y: u16, panes: &HashMap<PaneId, Pane>) -> Option<PaneId> {
-        match self {
-            LayoutNode::Leaf(id) => {
-                if let Some(pane) = panes.get(id) {
-                    if let Some(rect) = pane.area {
-                        if rect.x <= x && x < rect.x + rect.width && rect.y <= y && y < rect.y + rect.height {
-                            return Some(*id);
-                        }
-                    }
-                }
-                None
-            }
-            LayoutNode::HSplit { ratio, left, right, .. } => {
-                let split_x = area.x + (area.width as f32 * ratio) as u16;
-                if x < split_x {
-                    let left_area = Rect { width: split_x - area.x, ..area };
-                    left.find_at(left_area, x, y, panes)
-                } else {
-                    let right_area = Rect {
-                        x: split_x,
-                        width: area.x + area.width - split_x,
-                        ..area
-                    };
-                    right.find_at(right_area, x, y, panes)
-                }
-            }
-            LayoutNode::VSplit { ratio, top, bottom, .. } => {
-                let split_y = area.y + (area.height as f32 * ratio) as u16;
-                if y < split_y {
-                    let top_area = Rect { height: split_y - area.y, ..area };
-                    top.find_at(top_area, x, y, panes)
-                } else {
-                    let bottom_area = Rect {
-                        y: split_y,
-                        height: area.y + area.height - split_y,
-                        ..area
-                    };
-                    bottom.find_at(bottom_area, x, y, panes)
-                }
-            }
-        }
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -326,17 +326,33 @@ pub struct PaneTree {
     pub root: LayoutNode,
     pub panes: HashMap<PaneId, Pane>,
     pub active_pane: PaneId,
+    /// Next display ID to assign (recycled IDs are used first).
+    next_display_id: usize,
+    /// IDs that were freed when panes were closed and can be reused.
+    recycled_ids: Vec<usize>,
 }
 
 impl PaneTree {
     pub fn new(initial: PaneType) -> Self {
         let id = PaneId::new();
         let mut panes = HashMap::new();
-        panes.insert(id, Pane::new(id, initial));
+        panes.insert(id, Pane::new(id, initial, 1));
         Self {
             root: LayoutNode::leaf(id),
             panes,
             active_pane: id,
+            next_display_id: 2,
+            recycled_ids: Vec::new(),
+        }
+    }
+
+    fn alloc_display_id(&mut self) -> usize {
+        if let Some(id) = self.recycled_ids.pop() {
+            id
+        } else {
+            let id = self.next_display_id;
+            self.next_display_id += 1;
+            id
         }
     }
 
@@ -357,57 +373,27 @@ impl PaneTree {
 
     // ── Splitting ────────────────────────────────────────────────────────────
 
-    /// Vertical split (new pane to the right) — vim "vsplit".
-    pub fn split_vertical(&mut self, new_kind: PaneType) -> Result<PaneId, &'static str> {
-        if self.pane_count() >= 8 {
-            return Err("maximum pane count (8) reached");
-        }
-
-        let new_id = PaneId::new();
-        self.panes.insert(new_id, Pane::new(new_id, new_kind));
-
-        let old_root = std::mem::replace(&mut self.root, LayoutNode::leaf(new_id));
-        self.root = LayoutNode::hsplit(old_root, LayoutNode::leaf(new_id));
-        self.active_pane = new_id;
-
-        Ok(new_id)
-    }
-
-    /// Horizontal split (new pane below) — vim "split".
-    pub fn split_horizontal(&mut self, new_kind: PaneType) -> Result<PaneId, &'static str> {
-        if self.pane_count() >= 8 {
-            return Err("maximum pane count (8) reached");
-        }
-
-        let new_id = PaneId::new();
-        self.panes.insert(new_id, Pane::new(new_id, new_kind));
-
-        let old_root = std::mem::replace(&mut self.root, LayoutNode::leaf(new_id));
-        self.root = LayoutNode::vsplit(old_root, LayoutNode::leaf(new_id));
-        self.active_pane = new_id;
-
-        Ok(new_id)
-    }
-
-    /// Split the active pane vertically.
+    /// Split the active pane vertically (new pane to the right).
     pub fn split_active_v(&mut self, new_kind: PaneType) -> Result<PaneId, &'static str> {
         if self.pane_count() >= 8 {
             return Err("maximum pane count (8) reached");
         }
         let new_id = PaneId::new();
-        self.panes.insert(new_id, Pane::new(new_id, new_kind));
+        let display_id = self.alloc_display_id();
+        self.panes.insert(new_id, Pane::new(new_id, new_kind, display_id));
         self.replace_leaf_with_split(self.active_pane, true, new_id);
         self.active_pane = new_id;
         Ok(new_id)
     }
 
-    /// Split the active pane horizontally.
+    /// Split the active pane horizontally (new pane below).
     pub fn split_active_h(&mut self, new_kind: PaneType) -> Result<PaneId, &'static str> {
         if self.pane_count() >= 8 {
             return Err("maximum pane count (8) reached");
         }
         let new_id = PaneId::new();
-        self.panes.insert(new_id, Pane::new(new_id, new_kind));
+        let display_id = self.alloc_display_id();
+        self.panes.insert(new_id, Pane::new(new_id, new_kind, display_id));
         self.replace_leaf_with_split(self.active_pane, false, new_id);
         self.active_pane = new_id;
         Ok(new_id)
@@ -465,7 +451,36 @@ impl PaneTree {
         }
 
         let target = self.active_pane;
-        self.panes.remove(&target);
+        if let Some(pane) = self.panes.remove(&target) {
+            self.recycled_ids.push(pane.display_id);
+        }
+
+        let (new_root, sibling) = Self::remove_leaf_recursive(self.root.clone(), target);
+        self.root = new_root.unwrap_or_else(|| LayoutNode::Leaf(target));
+
+        self.active_pane = sibling
+            .or_else(|| self.panes.keys().next().copied())
+            .unwrap_or(target);
+
+        false
+    }
+
+    /// Close a pane by its display ID.
+    pub fn close_by_display_id(&mut self, display_id: usize) -> bool {
+        let target = self.panes.iter()
+            .find(|(_, p)| p.display_id == display_id)
+            .map(|(id, _)| *id);
+
+        let Some(target) = target else { return false };
+
+        if self.pane_count() <= 1 {
+            self.panes.clear();
+            return true;
+        }
+
+        if let Some(pane) = self.panes.remove(&target) {
+            self.recycled_ids.push(pane.display_id);
+        }
 
         let (new_root, sibling) = Self::remove_leaf_recursive(self.root.clone(), target);
         self.root = new_root.unwrap_or_else(|| LayoutNode::Leaf(target));
@@ -478,18 +493,15 @@ impl PaneTree {
     }
 
     /// Recursively remove a leaf from the tree and return the promoted sibling.
-    /// Returns `(new_subtree, first_leaf_id_of_promoted_subtree)`.
     fn remove_leaf_recursive(
         node: LayoutNode,
         target: PaneId,
     ) -> (Option<LayoutNode>, Option<PaneId>) {
         match node {
             LayoutNode::Leaf(id) if id == target => {
-                // Remove this leaf entirely.
                 (None, None)
             }
             leaf @ LayoutNode::Leaf(_) => {
-                // Keep this leaf.
                 (Some(leaf), None)
             }
             LayoutNode::HSplit {
@@ -498,25 +510,19 @@ impl PaneTree {
                 left,
                 right,
             } => {
-                // Compute sibling IDs before we move the boxes.
                 let right_sibling = first_leaf_id(&right);
                 let left_sibling = first_leaf_id(&left);
 
-                // Try removing from left first.
                 let (new_left, s1) = Self::remove_leaf_recursive(*left, target);
                 if new_left.is_none() {
-                    // Left was removed — promote right subtree.
                     return (Some(*right), right_sibling);
                 }
 
-                // Try removing from right.
                 let (new_right, s2) = Self::remove_leaf_recursive(*right, target);
                 if new_right.is_none() {
-                    // Right was removed — promote left subtree.
                     return (new_left, left_sibling);
                 }
 
-                // Neither removed — rebuild split.
                 (
                     Some(LayoutNode::HSplit {
                         ratio,
@@ -533,25 +539,19 @@ impl PaneTree {
                 top,
                 bottom,
             } => {
-                // Compute sibling IDs before we move the boxes.
                 let bottom_sibling = first_leaf_id(&bottom);
                 let top_sibling = first_leaf_id(&top);
 
-                // Try removing from top first.
                 let (new_top, s1) = Self::remove_leaf_recursive(*top, target);
                 if new_top.is_none() {
-                    // Top was removed — promote bottom subtree.
                     return (Some(*bottom), bottom_sibling);
                 }
 
-                // Try removing from bottom.
                 let (new_bottom, s2) = Self::remove_leaf_recursive(*bottom, target);
                 if new_bottom.is_none() {
-                    // Bottom was removed — promote top subtree.
                     return (new_top, top_sibling);
                 }
 
-                // Neither removed — rebuild split.
                 (
                     Some(LayoutNode::VSplit {
                         ratio,
@@ -568,13 +568,11 @@ impl PaneTree {
     // ── Navigation ───────────────────────────────────────────────────────────
 
     /// Move focus to the pane in the given direction.
-    /// Searches through actual cached pane areas (not the layout tree) so
-    /// navigation works correctly even while splits are animating.
     pub fn navigate(&mut self, direction: PaneDirection) {
         let Some(active) = self.active() else { return };
         let Some(active_area) = active.area else { return };
 
-        let mut best: Option<(PaneId, u16)> = None; // (pane_id, distance)
+        let mut best: Option<(PaneId, u16)> = None;
 
         for (id, pane) in &self.panes {
             if *id == self.active_pane {
@@ -747,17 +745,4 @@ fn first_leaf_id(node: &LayoutNode) -> Option<PaneId> {
         LayoutNode::HSplit { left, .. } => first_leaf_id(left),
         LayoutNode::VSplit { top, .. } => first_leaf_id(top),
     }
-}
-
-impl PaneDirection {
-    pub fn from_key(key: char) -> Option<Self> {
-        match key {
-            'h' => Some(PaneDirection::Left),
-            'j' => Some(PaneDirection::Down),
-            'k' => Some(PaneDirection::Up),
-            'l' => Some(PaneDirection::Right),
-            _ => None,
-        }
-    }
-
 }

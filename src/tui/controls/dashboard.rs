@@ -48,6 +48,13 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
         KeyCode::Char(':') => {
             state.cmdline.open_input();
             state.pending_key = None;
+            return;
+        }
+        // Fallback for terminals that report Shift+; as ';' with SHIFT modifier
+        KeyCode::Char(';') if event.modifiers.contains(KeyModifiers::SHIFT) => {
+            state.cmdline.open_input();
+            state.pending_key = None;
+            return;
         }
 
         // ── Quit back to home ──────────────────────────────────────────────────
@@ -92,9 +99,11 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                 match pane.kind {
                     PaneType::TableList => pane.nav_next(dash.tables.len()),
                     PaneType::TableView => {
-                        if let Some(ref _loaded) = dash.loaded {
-                            pane.row_next(dash.loaded.as_ref().unwrap().rows.len());
-                        }
+                        let bound = pane.bound_table.as_ref()
+                            .and_then(|name| dash.table_cache.get(name))
+                            .map(|lt| lt.rows.len())
+                            .unwrap_or(0);
+                        pane.row_next(bound);
                     }
                     _ => {}
                 }
@@ -105,9 +114,11 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                 match pane.kind {
                     PaneType::TableList => pane.nav_prev(),
                     PaneType::TableView => {
-                        if dash.loaded.is_some() {
-                            pane.row_prev();
-                        }
+                        let bound = pane.bound_table.as_ref()
+                            .and_then(|name| dash.table_cache.get(name))
+                            .map(|lt| lt.rows.len())
+                            .unwrap_or(0);
+                        if bound > 0 { pane.row_prev(); }
                     }
                     _ => {}
                 }
@@ -115,25 +126,19 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
         }
         KeyCode::Char('h') | KeyCode::Left => {
             if let Some(pane) = dash.tree.active_mut() {
-                match pane.kind {
-                    PaneType::TableView => {
-                        if pane.cursor_col > 0 {
-                            pane.col_left();
-                        }
-                    }
-                    _ => {}
+                if pane.kind == PaneType::TableView && pane.cursor_col > 0 {
+                    pane.col_left();
                 }
             }
         }
         KeyCode::Char('l') | KeyCode::Right => {
             if let Some(pane) = dash.tree.active_mut() {
-                match pane.kind {
-                    PaneType::TableView => {
-                        if let Some(ref loaded) = dash.loaded {
-                            pane.col_right(loaded.headers.len());
-                        }
-                    }
-                    _ => {}
+                if pane.kind == PaneType::TableView {
+                    let bound = pane.bound_table.as_ref()
+                        .and_then(|name| dash.table_cache.get(name))
+                        .map(|lt| lt.headers.len())
+                        .unwrap_or(0);
+                    pane.col_right(bound);
                 }
             }
         }
@@ -144,9 +149,11 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                 match pane.kind {
                     PaneType::TableList => pane.nav_bottom(dash.tables.len()),
                     PaneType::TableView => {
-                        if let Some(ref loaded) = dash.loaded {
-                            pane.row_bottom(loaded.rows.len());
-                        }
+                        let bound = pane.bound_table.as_ref()
+                            .and_then(|name| dash.table_cache.get(name))
+                            .map(|lt| lt.rows.len())
+                            .unwrap_or(0);
+                        pane.row_bottom(bound);
                     }
                     _ => {}
                 }
@@ -156,11 +163,20 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
             state.pending_key = Some('g');
         }
 
-        // ── Enter — load selected table ────────────────────────────────────────
+        // ── Enter — select table or load into current pane ─────────────────────
         KeyCode::Enter => {
-            if let Some(pane) = dash.tree.active() {
+            if let Some(pane) = dash.tree.active_mut() {
                 if pane.kind == PaneType::TableList && !dash.loading {
-                    dash.request_load();
+                    if let Some(name) = dash.tables.get(pane.nav_cursor).cloned() {
+                        // Convert the active pane to a TableView bound to this table.
+                        pane.set_table_view(name.clone());
+                        // If not cached, trigger an async load.
+                        if !dash.table_cache.contains_key(&name) {
+                            dash.pending_load = Some(name);
+                            dash.loading = true;
+                            dash.error = None;
+                        }
+                    }
                 }
             }
         }
@@ -168,4 +184,3 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
         _ => {}
     }
 }
-
