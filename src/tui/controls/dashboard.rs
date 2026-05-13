@@ -36,6 +36,7 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                 match pane.kind {
                     PaneType::TableList => pane.nav_top(),
                     PaneType::TableView => pane.row_top(),
+                    PaneType::SchemaView => pane.nav_top(),
                     _ => {}
                 }
             }
@@ -99,6 +100,13 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                             .unwrap_or(0);
                         pane.row_next(bound);
                     }
+                    PaneType::SchemaView => {
+                        let bound = pane.bound_table.as_ref()
+                            .and_then(|name| dash.table_cache.get(name))
+                            .map(|lt| lt.schema.len())
+                            .unwrap_or(0);
+                        pane.nav_next(bound);
+                    }
                     _ => {}
                 }
             }
@@ -113,6 +121,13 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                             .map(|lt| lt.rows.len())
                             .unwrap_or(0);
                         if bound > 0 { pane.row_prev(); }
+                    }
+                    PaneType::SchemaView => {
+                        let bound = pane.bound_table.as_ref()
+                            .and_then(|name| dash.table_cache.get(name))
+                            .map(|lt| lt.schema.len())
+                            .unwrap_or(0);
+                        if bound > 0 { pane.nav_prev(); }
                     }
                     _ => {}
                 }
@@ -148,6 +163,13 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                             .map(|lt| lt.rows.len())
                             .unwrap_or(0);
                         pane.row_bottom(bound);
+                    }
+                    PaneType::SchemaView => {
+                        let bound = pane.bound_table.as_ref()
+                            .and_then(|name| dash.table_cache.get(name))
+                            .map(|lt| lt.schema.len())
+                            .unwrap_or(0);
+                        pane.nav_bottom(bound);
                     }
                     _ => {}
                 }

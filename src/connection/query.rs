@@ -13,6 +13,7 @@ pub struct ColumnInfo {
     pub data_type: String,
     pub nullable: bool,
     pub is_primary_key: bool,
+    pub default_value: Option<String>,
 }
 
 // ── Table list ────────────────────────────────────────────────────────────────
@@ -104,9 +105,10 @@ pub async fn table_schema(
 
             Ok(rows
                 .into_iter()
-                .map(|(name, data_type, nullable, _default)| ColumnInfo {
+                .map(|(name, data_type, nullable, default)| ColumnInfo {
                     is_primary_key: pk_cols.contains(&name),
                     nullable: nullable == "YES",
+                    default_value: default,
                     name,
                     data_type,
                 })
@@ -114,11 +116,12 @@ pub async fn table_schema(
         }
 
         DbPool::Mysql(my) => {
-            let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+            let rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
                 "SELECT column_name,
                         data_type,
                         is_nullable,
-                        column_key
+                        column_key,
+                        column_default
                  FROM information_schema.columns
                  WHERE table_schema = DATABASE()
                    AND table_name   = ?
@@ -130,9 +133,10 @@ pub async fn table_schema(
 
             Ok(rows
                 .into_iter()
-                .map(|(name, data_type, nullable, key)| ColumnInfo {
+                .map(|(name, data_type, nullable, key, default)| ColumnInfo {
                     nullable: nullable == "YES",
                     is_primary_key: key == "PRI",
+                    default_value: default,
                     name,
                     data_type,
                 })
@@ -148,9 +152,10 @@ pub async fn table_schema(
 
             Ok(rows
                 .into_iter()
-                .map(|(_cid, name, data_type, notnull, _dflt, pk)| ColumnInfo {
+                .map(|(_cid, name, data_type, notnull, dflt, pk)| ColumnInfo {
                     nullable: notnull == 0,
                     is_primary_key: pk > 0,
+                    default_value: dflt,
                     name,
                     data_type,
                 })

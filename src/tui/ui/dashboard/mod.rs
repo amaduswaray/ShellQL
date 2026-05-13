@@ -60,6 +60,12 @@ fn sync_pane_scroll(dash: &mut DashboardState, _area: Rect) {
                 let col_viewport = (pane_area.width / 10).max(1) as usize;
                 pane.sync_col_offset(col_viewport);
             }
+            crate::tui::state::PaneType::SchemaView => {
+                // Each card = 2 content lines + 1 separator = 3 lines.
+                let card_h = 3usize;
+                let viewport = pane_area.height.saturating_sub(2) as usize / card_h.max(1);
+                pane.sync_nav_offset(viewport);
+            }
             _ => {}
         }
     }
