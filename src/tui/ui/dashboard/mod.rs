@@ -12,7 +12,7 @@ use ratatui::{
     prelude::Position,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph},
 };
 
 use crate::tui::{
@@ -28,6 +28,8 @@ const NUM_SPACES_BETWEEN_COLUMNS: u16 = 3;
 const ROW_NUMBER_PADDING: u16 = 2;
 /// No single column may occupy more than this fraction of the viewport width.
 const MAX_COLUMN_WIDTH_FRACTION: f32 = 0.3;
+/// Extra horizontal padding between the pane border and the first/last data column.
+const EDGE_PADDING: u16 = 2;
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -178,7 +180,7 @@ fn render_loaded_table(
     let row_num_width = format!("{}", max_row_num).len() as u16;
     let gutter_width = row_num_width + 2 * ROW_NUMBER_PADDING + 1; // +1 = separator
 
-    let data_area_width = area.width.saturating_sub(gutter_width);
+    let data_area_width = area.width.saturating_sub(gutter_width).saturating_sub(2 * EDGE_PADDING);
     let max_single_width = (data_area_width as f32 * MAX_COLUMN_WIDTH_FRACTION) as u16;
 
     // ── Column widths ─────────────────────────────────────────────────────────
@@ -234,7 +236,7 @@ fn render_loaded_table(
 
     // ── Compute visible columns once ──────────────────────────────────────────
 
-    let mut x_cursor = area.x + gutter_width;
+    let mut x_cursor = area.x + gutter_width + EDGE_PADDING;
     let mut visible_cols = 0;
     for col_idx in loaded.col_offset..loaded.headers.len() {
         if x_cursor >= area.x + area.width {
@@ -280,7 +282,7 @@ fn render_loaded_table(
 
     // ── Header row ────────────────────────────────────────────────────────────
 
-    let mut x = area.x + gutter_width;
+    let mut x = area.x + gutter_width + EDGE_PADDING;
     for (col_idx, header) in loaded.headers.iter().enumerate().skip(loaded.col_offset) {
         if x >= area.x + area.width {
             break;
@@ -314,7 +316,7 @@ fn render_loaded_table(
 
     // Left-scroll indicator
     if has_more_left {
-        let indicator_x = area.x + gutter_width;
+        let indicator_x = area.x + gutter_width + EDGE_PADDING;
         if let Some(cell) = buf.cell_mut(Position::new(indicator_x, y_header_text)) {
             cell.set_symbol("◂");
             cell.set_style(Style::default().fg(Color::DarkGray));
@@ -322,7 +324,7 @@ fn render_loaded_table(
     }
     // Right-scroll indicator
     if has_more_right {
-        let indicator_x = (area.x + area.width).saturating_sub(1);
+        let indicator_x = (area.x + area.width).saturating_sub(1 + EDGE_PADDING);
         if let Some(cell) = buf.cell_mut(Position::new(indicator_x, y_header_text)) {
             cell.set_symbol("▸");
             cell.set_style(Style::default().fg(Color::DarkGray));
@@ -367,7 +369,7 @@ fn render_loaded_table(
         buf.set_span(area.x + ROW_NUMBER_PADDING, y, &row_num_span, row_num_width);
 
         // Cells
-        let mut x = area.x + gutter_width;
+        let mut x = area.x + gutter_width + EDGE_PADDING;
         for (col_idx, cell_text) in row.iter().enumerate().skip(loaded.col_offset) {
             if x >= area.x + area.width {
                 break;
@@ -404,7 +406,7 @@ fn render_loaded_table(
 
         // Left-scroll indicator at row start
         if has_more_left {
-            let indicator_x = area.x + gutter_width;
+            let indicator_x = area.x + gutter_width + EDGE_PADDING;
             if let Some(cell) = buf.cell_mut(Position::new(indicator_x, y)) {
                 cell.set_symbol("◂");
                 cell.set_style(Style::default().fg(Color::DarkGray));
@@ -412,7 +414,7 @@ fn render_loaded_table(
         }
         // Right-scroll indicator at row end
         if has_more_right {
-            let indicator_x = (area.x + area.width).saturating_sub(1);
+            let indicator_x = (area.x + area.width).saturating_sub(1 + EDGE_PADDING);
             if let Some(cell) = buf.cell_mut(Position::new(indicator_x, y)) {
                 cell.set_symbol("▸");
                 cell.set_style(Style::default().fg(Color::DarkGray));
@@ -457,5 +459,6 @@ fn pane_block(title: &str, focused: bool) -> Block<'_> {
             Line::from(format!(" {title} ")).style(title_style)
         })
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .border_style(border_style)
 }
