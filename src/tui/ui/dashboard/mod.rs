@@ -1,11 +1,11 @@
 /// Dashboard — two-pane layout with scrollable nav and cell-navigable table view.
 ///
-///  ┌──────────────┬──────────────────────────────────────┐
-///  │  Tables      │  #   id    name      email           │
-///  │  (nav, 25%)  │──1───2─────alice─────a@ex.com───────│
-///  │  orders      │  2   3      bob       b@ex.com       │
-///  │  products  ◄ │  3   4      carol     c@ex.com       │
-///  └──────────────┴──────────────────────────────────────┘
+///  ┌────────────┬────────────────────────────────────────┐
+///  │  Tables    │  #   id    name      email             │
+///  │  (nav,18%) │──1───2─────alice─────a@ex.com─────────│
+///  │  orders    │  2   3      bob       b@ex.com         │
+///  │  products ◄│  3   4      carol     c@ex.com         │
+///  └────────────┴────────────────────────────────────────┘
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -33,8 +33,8 @@ const MAX_COLUMN_WIDTH_FRACTION: f32 = 0.3;
 
 pub fn render_dashboard(frame: &mut Frame, area: Rect, state: &mut AppState) {
     let [nav_area, table_area] = Layout::horizontal([
-        Constraint::Percentage(25),
-        Constraint::Percentage(75),
+        Constraint::Percentage(18),
+        Constraint::Percentage(82),
     ])
     .areas(area);
 
@@ -59,11 +59,11 @@ fn render_nav(frame: &mut Frame, area: Rect, state: &AppState) {
     let Some(ref dash) = state.dashboard else { return };
     let focused = dash.active_pane == ActivePane::Nav;
 
-    // Connection name as a dim header, then table rows.
+    // Connection name as a green bold header, then table rows.
     let header = Line::from(vec![Span::styled(
         format!(" {}", dash.connection.name),
         Style::default()
-            .fg(Color::DarkGray)
+            .fg(Color::Green)
             .add_modifier(Modifier::BOLD),
     )]);
 
@@ -90,7 +90,10 @@ fn render_nav(frame: &mut Frame, area: Rect, state: &AppState) {
             Style::default().fg(Color::DarkGray)
         };
 
-        lines.push(Line::from(Span::styled(format!(" {table}"), style)));
+        // Pad to full width so the highlight background fills the entire nav pane.
+        let display = format!(" {table}");
+        let padded = format!("{:width$}", display, width = area.width as usize);
+        lines.push(Line::from(Span::styled(padded, style)));
     }
 
     if dash.tables.is_empty() {
@@ -198,7 +201,6 @@ fn render_loaded_table(
 
     // ── Horizontal-scroll sanity ──────────────────────────────────────────────
 
-    // Ensure col_offset isn't past the last column.
     loaded.col_offset = loaded
         .col_offset
         .min(loaded.headers.len().saturating_sub(1));
@@ -215,7 +217,6 @@ fn render_loaded_table(
             visible_cols += 1;
         }
         if visible_cols == 0 {
-            // Viewport is too narrow to show even one column — show it anyway.
             break;
         }
         if loaded.cursor_col < loaded.col_offset && loaded.col_offset > 0 {
@@ -230,6 +231,21 @@ fn render_loaded_table(
         }
         break;
     }
+
+    // ── Compute visible columns once ──────────────────────────────────────────
+
+    let mut x_cursor = area.x + gutter_width;
+    let mut visible_cols = 0;
+    for col_idx in loaded.col_offset..loaded.headers.len() {
+        if x_cursor >= area.x + area.width {
+            break;
+        }
+        x_cursor += column_widths[col_idx];
+        visible_cols += 1;
+    }
+
+    let has_more_left = loaded.col_offset > 0;
+    let has_more_right = loaded.col_offset + visible_cols < loaded.headers.len();
 
     // ── Layout ────────────────────────────────────────────────────────────────
 
@@ -288,24 +304,24 @@ fn render_loaded_table(
                 .add_modifier(Modifier::BOLD)
         };
 
-        let span = Span::styled(header.as_str(), style);
+        // Pad to full effective width for clean full-width highlight.
+        let padded = format!("{:width$}", header.as_str(), width = effective_width as usize);
+        let span = Span::styled(padded, style);
         buf.set_span(x, y_header_text, &span, effective_width);
 
         x += width;
     }
 
-    // "More columns" indicator on the right edge
-    let last_visible_col = loaded.col_offset
-        + column_widths
-            .iter()
-            .skip(loaded.col_offset)
-            .take_while(|&&w| {
-                let current_x = x;
-                x += w;
-                current_x < area.x + area.width
-            })
-            .count();
-    if last_visible_col < loaded.headers.len() {
+    // Left-scroll indicator
+    if has_more_left {
+        let indicator_x = area.x + gutter_width;
+        if let Some(cell) = buf.cell_mut(Position::new(indicator_x, y_header_text)) {
+            cell.set_symbol("◂");
+            cell.set_style(Style::default().fg(Color::DarkGray));
+        }
+    }
+    // Right-scroll indicator
+    if has_more_right {
         let indicator_x = (area.x + area.width).saturating_sub(1);
         if let Some(cell) = buf.cell_mut(Position::new(indicator_x, y_header_text)) {
             cell.set_symbol("▸");
@@ -326,12 +342,27 @@ fn render_loaded_table(
         }
 
         let row = &loaded.rows[row_idx];
+        let is_selected_row = match loaded.mode {
+            TableMode::VisualRow => row_idx == loaded.row_cursor,
+            _ => false,
+        };
 
         // Row number
         let row_num_str = format!("{}", row_idx + 1);
+        let row_num_style = if is_selected_row && focused {
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+        } else if is_selected_row {
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        };
         let row_num_span = Span::styled(
             format!("{:>width$}", row_num_str, width = row_num_width as usize),
-            Style::default().fg(Color::DarkGray),
+            row_num_style,
         );
         buf.set_span(area.x + ROW_NUMBER_PADDING, y, &row_num_span, row_num_width);
 
@@ -364,14 +395,23 @@ fn render_loaded_table(
             };
 
             let display = if cell_text.is_empty() { " " } else { cell_text.as_str() };
-            let span = Span::styled(display, style);
+            let padded = format!("{:width$}", display, width = effective_width as usize);
+            let span = Span::styled(padded, style);
             buf.set_span(x, y, &span, effective_width);
 
             x += width;
         }
 
-        // "More columns" indicator at row end
-        if last_visible_col < loaded.headers.len() {
+        // Left-scroll indicator at row start
+        if has_more_left {
+            let indicator_x = area.x + gutter_width;
+            if let Some(cell) = buf.cell_mut(Position::new(indicator_x, y)) {
+                cell.set_symbol("◂");
+                cell.set_style(Style::default().fg(Color::DarkGray));
+            }
+        }
+        // Right-scroll indicator at row end
+        if has_more_right {
             let indicator_x = (area.x + area.width).saturating_sub(1);
             if let Some(cell) = buf.cell_mut(Position::new(indicator_x, y)) {
                 cell.set_symbol("▸");
