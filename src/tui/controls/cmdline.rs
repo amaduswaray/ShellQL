@@ -29,6 +29,7 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
                         AppMode::Home => HOME_COMMANDS,
                         AppMode::Dashboard => DASHBOARD_COMMANDS,
                     };
+
                     let matches = compute_completions(&state.cmdline.input, list);
                     state.cmdline.open_completions(matches);
                 } else {
@@ -90,34 +91,39 @@ fn execute_cmdline(state: &mut AppState) {
     }
 }
 
-/// Commit a search query: find matches and jump the cursor.
 fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) {
-    let Some(dash) = state.dashboard.as_mut() else { return };
-    let Some(pane) = dash.tree.active_mut() else { return };
+    let Some(dash) = state.dashboard.as_mut() else {
+        return;
+    };
+    let Some(pane) = dash.tree.active_mut() else {
+        return;
+    };
 
     match pane.kind {
         crate::tui::state::PaneType::TableList => {
             let query_lower = query.to_lowercase();
-            let matches: Vec<usize> = dash.tables.iter().enumerate()
+            let matches: Vec<usize> = dash
+                .tables
+                .iter()
+                .enumerate()
                 .filter(|(_, name)| name.to_lowercase().contains(&query_lower))
                 .map(|(i, _)| i)
                 .collect();
 
             if matches.is_empty() {
-                state.cmdline.set_error(format!("Pattern not found: {query}"));
+                state
+                    .cmdline
+                    .set_error(format!("Pattern not found: {query}"));
                 return;
             }
 
             let current = pane.nav_cursor;
             let current_idx = match direction {
-                SearchDirection::Forward => {
-                    matches.iter().position(|&m| m >= current)
-                        .unwrap_or(0)
-                }
-                SearchDirection::Backward => {
-                    matches.iter().rposition(|&m| m <= current)
-                        .unwrap_or(matches.len() - 1)
-                }
+                SearchDirection::Forward => matches.iter().position(|&m| m >= current).unwrap_or(0),
+                SearchDirection::Backward => matches
+                    .iter()
+                    .rposition(|&m| m <= current)
+                    .unwrap_or(matches.len() - 1),
             };
 
             pane.nav_cursor = matches[current_idx];
@@ -129,7 +135,9 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
             });
         }
         _ => {
-            state.cmdline.set_error("Search only supported in table list for now");
+            state
+                .cmdline
+                .set_error("Search only supported in table list for now");
         }
     }
 }
@@ -182,13 +190,17 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "d" | "delete" => {
             if let Some(db) = selected_connection(state) {
                 let name = db.name.clone();
-                state.cmdline.open_confirm(ConfirmAction::DeleteConnection(name));
+                state
+                    .cmdline
+                    .open_confirm(ConfirmAction::DeleteConnection(name));
             } else {
                 state.cmdline.set_error("no connection selected");
             }
         }
 
-        other => state.cmdline.set_error(format!("Error: not a command `{other}`")),
+        other => state
+            .cmdline
+            .set_error(format!("Error: not a command `{other}`")),
     }
 }
 
@@ -331,14 +343,18 @@ fn cmd_schema(state: &mut AppState, args: &[&str]) {
 
     // If an argument is provided, use it; otherwise fall back to the
     // active pane's bound table (useful when already viewing a table).
-    let table_name = args.first().map(|s| s.to_string())
+    let table_name = args
+        .first()
+        .map(|s| s.to_string())
         .or_else(|| dash.tree.active().and_then(|p| p.bound_table.clone()));
 
     if let Some(pane) = dash.tree.active_mut() {
         if let Some(name) = table_name {
             pane.set_schema_view(name);
         } else {
-            state.cmdline.set_error(":schema requires a table name (no bound table)");
+            state
+                .cmdline
+                .set_error(":schema requires a table name (no bound table)");
         }
     }
 }
@@ -365,7 +381,9 @@ fn cmd_close(state: &mut AppState, args: &[&str]) {
     } else if let Ok(id) = args[0].parse::<usize>() {
         dash.tree.close_by_display_id(id)
     } else {
-        state.cmdline.set_error(format!("invalid pane id `{}`", args[0]));
+        state
+            .cmdline
+            .set_error(format!("invalid pane id `{}`", args[0]));
         return;
     };
 

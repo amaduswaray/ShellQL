@@ -396,17 +396,32 @@ fn render_loaded_table(
     let start_row = pane.row_offset;
     let end_row = (start_row + visible_rows).min(loaded.rows.len());
 
+    // Helper: is this row inside the current visual selection?
+    let in_visual_row = |row_idx: usize| -> bool {
+        if pane.mode != TableMode::VisualRow {
+            return false;
+        }
+        let cursor = pane.row_cursor;
+        match pane.visual_anchor {
+            Some(anchor) if row_idx >= anchor.min(cursor) && row_idx <= anchor.max(cursor) => true,
+            _ => row_idx == cursor,
+        }
+    };
+
     for row_idx in start_row..end_row {
         let y = y_first_record + (row_idx - start_row) as u16;
         if y >= area.y + area.height {
             break;
         }
         let row = &loaded.rows[row_idx];
-        let is_selected_row = matches!(pane.mode, TableMode::VisualRow if row_idx == pane.row_cursor);
+        let is_selected_row = in_visual_row(row_idx);
+        let is_cursor_row = row_idx == pane.row_cursor;
 
         let row_num_str = format!("{}", row_idx + 1);
-        let row_num_style = if is_selected_row && focused {
+        let row_num_style = if is_cursor_row && focused {
             Style::default().fg(Color::White).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+        } else if is_selected_row && focused {
+            Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
         } else if is_selected_row {
             Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
         } else {
@@ -428,7 +443,7 @@ fn render_loaded_table(
 
             let is_selected = match pane.mode {
                 TableMode::Normal | TableMode::Insert => row_idx == pane.row_cursor && col_idx == cursor_col,
-                TableMode::VisualRow => row_idx == pane.row_cursor,
+                TableMode::VisualRow => in_visual_row(row_idx),
                 TableMode::VisualColumn => col_idx == cursor_col,
             };
 

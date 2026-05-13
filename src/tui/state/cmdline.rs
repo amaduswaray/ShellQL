@@ -4,34 +4,34 @@
 
 /// Commands available on the **home** screen.
 pub const HOME_COMMANDS: &[(&str, &str)] = &[
-    ("exit",    "quit program"),
-    ("q",       "quit"),
-    ("quit",    "quit"),
-    ("h",       "help overlay"),
-    ("help",    "help overlay"),
-    ("add",     "add connection"),
-    ("d",       "delete selected"),
-    ("delete",  "delete selected"),
+    ("exit", "quit program"),
+    ("q", "quit"),
+    ("quit", "quit"),
+    ("h", "help overlay"),
+    ("help", "help overlay"),
+    ("add", "add connection"),
+    ("d", "delete selected"),
+    ("delete", "delete selected"),
     ("connect", "open connection picker"),
 ];
 
 /// Commands available on the **dashboard**.
 pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
-    ("exit",    "quit program"),
-    ("q",       "close pane"),
-    ("quit",    "close pane"),
-    ("h",       "help overlay"),
-    ("help",    "help overlay"),
-    ("vnew",    "vertical split"),
-    ("hnew",    "horizontal split"),
-    ("new",     "vertical split"),
-    ("open",    "open table"),
-    ("tables",  "table list view"),
-    ("noh",     "clear search highlight"),
-    ("schema",  "switch to schema view"),
-    ("sql",     "switch to query editor"),
-    ("query",   "switch to query editor"),
-    ("close",   "close pane"),
+    ("exit", "quit program"),
+    ("q", "close pane"),
+    ("quit", "close pane"),
+    ("h", "help overlay"),
+    ("help", "help overlay"),
+    ("vnew", "vertical split"),
+    ("hnew", "horizontal split"),
+    ("new", "vertical split"),
+    ("open", "open table"),
+    ("tables", "table list view"),
+    ("noh", "clear search highlight"),
+    ("schema", "switch to schema view"),
+    ("sql", "switch to query editor"),
+    ("query", "switch to query editor"),
+    ("close", "close pane"),
 ];
 
 /// Return every entry in `list` whose name starts with `input`.
@@ -211,4 +211,3 @@ impl CommandLine {
         self.completion_selected = None;
     }
 }
-

@@ -1,9 +1,15 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::tui::{AppState, SearchDirection, state::TableMode, state::pane_layout::{PaneDirection, PaneType}};
+use crate::tui::{
+    AppState, SearchDirection,
+    state::TableMode,
+    state::pane_layout::{PaneDirection, PaneType},
+};
 
 pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
-    let Some(ref mut dash) = state.dashboard else { return };
+    let Some(ref mut dash) = state.dashboard else {
+        return;
+    };
 
     // Ctrl+hjkl / Ctrl+Arrows — pane navigation
     if event.modifiers.contains(KeyModifiers::CONTROL) {
@@ -75,10 +81,13 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                     if !search.matches.is_empty() {
                         match search.direction {
                             SearchDirection::Forward => {
-                                search.current_idx = (search.current_idx + 1) % search.matches.len();
+                                search.current_idx =
+                                    (search.current_idx + 1) % search.matches.len();
                             }
                             SearchDirection::Backward => {
-                                search.current_idx = (search.current_idx + search.matches.len() - 1) % search.matches.len();
+                                search.current_idx = (search.current_idx + search.matches.len()
+                                    - 1)
+                                    % search.matches.len();
                             }
                         }
                         pane.nav_cursor = search.matches[search.current_idx];
@@ -92,10 +101,13 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                     if !search.matches.is_empty() {
                         match search.direction {
                             SearchDirection::Forward => {
-                                search.current_idx = (search.current_idx + search.matches.len() - 1) % search.matches.len();
+                                search.current_idx = (search.current_idx + search.matches.len()
+                                    - 1)
+                                    % search.matches.len();
                             }
                             SearchDirection::Backward => {
-                                search.current_idx = (search.current_idx + 1) % search.matches.len();
+                                search.current_idx =
+                                    (search.current_idx + 1) % search.matches.len();
                             }
                         }
                         pane.nav_cursor = search.matches[search.current_idx];
@@ -105,17 +117,27 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
         }
 
         // ── Mode switching ─────────────────────────────────────────────────────
+        KeyCode::Char('v') if event.modifiers.contains(KeyModifiers::CONTROL) => {
+            if let Some(pane) = dash.tree.active_mut() {
+                if pane.kind == PaneType::TableView {
+                    pane.mode = TableMode::VisualColumn;
+                    pane.visual_anchor = Some(pane.row_cursor);
+                }
+            }
+        }
         KeyCode::Char('v') => {
             if let Some(pane) = dash.tree.active_mut() {
                 if pane.kind == PaneType::TableView {
                     pane.mode = TableMode::VisualRow;
+                    pane.visual_anchor = Some(pane.row_cursor);
                 }
             }
         }
         KeyCode::Char('V') => {
             if let Some(pane) = dash.tree.active_mut() {
                 if pane.kind == PaneType::TableView {
-                    pane.mode = TableMode::VisualColumn;
+                    pane.mode = TableMode::VisualRow;
+                    pane.visual_anchor = Some(pane.row_cursor);
                 }
             }
         }
@@ -123,6 +145,7 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
             if let Some(pane) = dash.tree.active_mut() {
                 if pane.kind == PaneType::TableView {
                     pane.mode = TableMode::Insert;
+                    pane.visual_anchor = None;
                 }
             }
         }
@@ -130,6 +153,7 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
             if let Some(pane) = dash.tree.active_mut() {
                 if pane.kind == PaneType::TableView {
                     pane.mode = TableMode::Normal;
+                    pane.visual_anchor = None;
                 }
             }
         }
@@ -140,14 +164,18 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                 match pane.kind {
                     PaneType::TableList => pane.nav_next(dash.tables.len()),
                     PaneType::TableView => {
-                        let bound = pane.bound_table.as_ref()
+                        let bound = pane
+                            .bound_table
+                            .as_ref()
                             .and_then(|name| dash.table_cache.get(name))
                             .map(|lt| lt.rows.len())
                             .unwrap_or(0);
                         pane.row_next(bound);
                     }
                     PaneType::SchemaView => {
-                        let bound = pane.bound_table.as_ref()
+                        let bound = pane
+                            .bound_table
+                            .as_ref()
                             .and_then(|name| dash.table_cache.get(name))
                             .map(|lt| lt.schema.len())
                             .unwrap_or(0);
@@ -162,18 +190,26 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                 match pane.kind {
                     PaneType::TableList => pane.nav_prev(),
                     PaneType::TableView => {
-                        let bound = pane.bound_table.as_ref()
+                        let bound = pane
+                            .bound_table
+                            .as_ref()
                             .and_then(|name| dash.table_cache.get(name))
                             .map(|lt| lt.rows.len())
                             .unwrap_or(0);
-                        if bound > 0 { pane.row_prev(); }
+                        if bound > 0 {
+                            pane.row_prev();
+                        }
                     }
                     PaneType::SchemaView => {
-                        let bound = pane.bound_table.as_ref()
+                        let bound = pane
+                            .bound_table
+                            .as_ref()
                             .and_then(|name| dash.table_cache.get(name))
                             .map(|lt| lt.schema.len())
                             .unwrap_or(0);
-                        if bound > 0 { pane.nav_prev(); }
+                        if bound > 0 {
+                            pane.nav_prev();
+                        }
                     }
                     _ => {}
                 }
@@ -189,7 +225,9 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
         KeyCode::Char('l') | KeyCode::Right => {
             if let Some(pane) = dash.tree.active_mut() {
                 if pane.kind == PaneType::TableView {
-                    let bound = pane.bound_table.as_ref()
+                    let bound = pane
+                        .bound_table
+                        .as_ref()
                         .and_then(|name| dash.table_cache.get(name))
                         .map(|lt| lt.headers.len())
                         .unwrap_or(0);
@@ -204,14 +242,18 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                 match pane.kind {
                     PaneType::TableList => pane.nav_bottom(dash.tables.len()),
                     PaneType::TableView => {
-                        let bound = pane.bound_table.as_ref()
+                        let bound = pane
+                            .bound_table
+                            .as_ref()
                             .and_then(|name| dash.table_cache.get(name))
                             .map(|lt| lt.rows.len())
                             .unwrap_or(0);
                         pane.row_bottom(bound);
                     }
                     PaneType::SchemaView => {
-                        let bound = pane.bound_table.as_ref()
+                        let bound = pane
+                            .bound_table
+                            .as_ref()
                             .and_then(|name| dash.table_cache.get(name))
                             .map(|lt| lt.schema.len())
                             .unwrap_or(0);

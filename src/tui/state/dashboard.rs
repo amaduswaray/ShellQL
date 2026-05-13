@@ -37,7 +37,12 @@ impl LoadedTable {
         headers: Vec<String>,
         rows: Vec<Vec<String>>,
     ) -> Self {
-        Self { name, schema, headers, rows }
+        Self {
+            name,
+            schema,
+            headers,
+            rows,
+        }
     }
 }
 

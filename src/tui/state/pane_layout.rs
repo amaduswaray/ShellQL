@@ -94,6 +94,11 @@ pub struct Pane {
     // ── Search state (pane-local) ───────────────────────────────────────────
     pub last_search: Option<SearchState>,
 
+    // ── Visual selection anchor ─────────────────────────────────────────────
+    /// When in VisualRow / VisualColumn, this is the row where the selection
+    /// started. All rows between anchor and cursor are highlighted.
+    pub visual_anchor: Option<usize>,
+
     // ── Cached render area (updated every frame) ────────────────────────────
     pub area: Option<Rect>,
 }
@@ -113,6 +118,7 @@ impl Pane {
             col_offset: 0,
             mode: TableMode::Normal,
             last_search: None,
+            visual_anchor: None,
             area: None,
         }
     }
@@ -140,6 +146,7 @@ impl Pane {
         self.col_offset = 0;
         self.mode = TableMode::Normal;
         self.last_search = None; // clear search highlight when leaving list
+        self.visual_anchor = None;
     }
 
     pub fn set_schema_view(&mut self, table_name: String) {

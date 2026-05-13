@@ -37,11 +37,21 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [ ] When an error is there, enter should take you out of the command line mode
   - [ ] Tab completion for command line commands
 - [ ] Delete when in connection list
+- [ ] For new table or shcema, if table dont exist, give error, dont create pane
+  - [ ] Auto complete on table rows
+- [ ] sql queries and testing. Boot up docker compose file with seed script, and run tests on the data
 
-- [ ] :show<tabs> feature for showing side bars and top sql bar wihtout taking too much space. These exists outside of the pane system
+
+- [ ] Moving panes around
+- [ ] resizing panes
+- [ ] :q when 1 pane left should exit
+- [ ] :q in home view should exit
 
 - [ ] Filter and sort logic
-- [ ] Search logic when in files. vim like search
+  - [ ] use queres
+  - [ ] How to filter with multiple columns? what is ergonomic
+- [x] Search logic when in files. vim like search
 - [ ] Visual mode proper for row and column Visual mode proper for row and columnss
 - [ ] Windows, sessions
-- [ ] :disconnect command to take user to homescreen
+- [x] :exit command to take user to homescreen
+- [ ] fix new pane function when having 1 vertical split and trying to make a new vsplit

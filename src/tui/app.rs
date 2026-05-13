@@ -1,8 +1,8 @@
 use crate::tui::{
+    AppState,
     controls::handle_key_event,
     render::render,
     state::{AppMode, DashboardState},
-    AppState,
 };
 use crossterm::{
     event::{self, Event},
@@ -30,7 +30,7 @@ async fn app(state: &mut AppState) -> color_eyre::Result<()> {
     loop {
         terminal.draw(|f| render(f, state))?;
 
-        // ── Async connection with spinner ─────────────────────────────────────
+        // Async connection with spinner
         if state.pending_connection.is_some() {
             handle_pending_connection(state, &mut terminal).await?;
             continue;
@@ -56,7 +56,17 @@ async fn app(state: &mut AppState) -> color_eyre::Result<()> {
     Ok(())
 }
 
-// ── Connection helper with animated spinner ───────────────────────────────────
+fn setup_terminal() -> color_eyre::Result<()> {
+    enable_raw_mode()?;
+    execute!(stdout(), EnterAlternateScreen)?;
+    Ok(())
+}
+
+fn restore_terminal() -> color_eyre::Result<()> {
+    execute!(stdout(), LeaveAlternateScreen)?;
+    disable_raw_mode()?;
+    Ok(())
+}
 
 async fn handle_pending_connection(
     state: &mut AppState,
@@ -110,17 +120,5 @@ async fn handle_pending_connection(
         }
     }
 
-    Ok(())
-}
-
-fn setup_terminal() -> color_eyre::Result<()> {
-    enable_raw_mode()?;
-    execute!(stdout(), EnterAlternateScreen)?;
-    Ok(())
-}
-
-fn restore_terminal() -> color_eyre::Result<()> {
-    execute!(stdout(), LeaveAlternateScreen)?;
-    disable_raw_mode()?;
     Ok(())
 }
