@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::tui::{AppState, state::TableMode, state::pane_layout::{PaneDirection, PaneType}};
+use crate::tui::{AppState, SearchDirection, state::TableMode, state::pane_layout::{PaneDirection, PaneType}};
 
 pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
     let Some(ref mut dash) = state.dashboard else { return };
@@ -56,6 +56,52 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
             state.cmdline.open_input();
             state.pending_key = None;
             return;
+        }
+
+        // ── Search ─────────────────────────────────────────────────────────────
+        KeyCode::Char('/') => {
+            state.cmdline.open_search(SearchDirection::Forward);
+            state.pending_key = None;
+            return;
+        }
+        KeyCode::Char('?') => {
+            state.cmdline.open_search(SearchDirection::Backward);
+            state.pending_key = None;
+            return;
+        }
+        KeyCode::Char('n') => {
+            if let Some(pane) = dash.tree.active_mut() {
+                if let Some(ref mut search) = pane.last_search {
+                    if !search.matches.is_empty() {
+                        match search.direction {
+                            SearchDirection::Forward => {
+                                search.current_idx = (search.current_idx + 1) % search.matches.len();
+                            }
+                            SearchDirection::Backward => {
+                                search.current_idx = (search.current_idx + search.matches.len() - 1) % search.matches.len();
+                            }
+                        }
+                        pane.nav_cursor = search.matches[search.current_idx];
+                    }
+                }
+            }
+        }
+        KeyCode::Char('N') => {
+            if let Some(pane) = dash.tree.active_mut() {
+                if let Some(ref mut search) = pane.last_search {
+                    if !search.matches.is_empty() {
+                        match search.direction {
+                            SearchDirection::Forward => {
+                                search.current_idx = (search.current_idx + search.matches.len() - 1) % search.matches.len();
+                            }
+                            SearchDirection::Backward => {
+                                search.current_idx = (search.current_idx + 1) % search.matches.len();
+                            }
+                        }
+                        pane.nav_cursor = search.matches[search.current_idx];
+                    }
+                }
+            }
         }
 
         // ── Mode switching ─────────────────────────────────────────────────────
@@ -186,6 +232,7 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                     if let Some(name) = dash.tables.get(pane.nav_cursor).cloned() {
                         // Convert the active pane to a TableView bound to this table.
                         pane.set_table_view(name.clone());
+                        pane.last_search = None; // clear search highlight
                         // If not cached, trigger an async load.
                         if !dash.table_cache.contains_key(&name) {
                             dash.pending_load = Some(name);

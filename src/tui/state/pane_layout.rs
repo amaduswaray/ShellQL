@@ -12,7 +12,7 @@
 use ratatui::layout::Rect;
 use std::collections::HashMap;
 
-use super::dashboard::TableMode;
+use super::{cmdline::SearchDirection, dashboard::TableMode};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Pane identity
@@ -51,6 +51,18 @@ impl std::fmt::Display for PaneType {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Search state (pane-local)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Clone)]
+pub struct SearchState {
+    pub query: String,
+    pub direction: SearchDirection,
+    pub matches: Vec<usize>,
+    pub current_idx: usize,
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Pane state
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -79,6 +91,9 @@ pub struct Pane {
     pub col_offset: usize,
     pub mode: TableMode,
 
+    // ── Search state (pane-local) ───────────────────────────────────────────
+    pub last_search: Option<SearchState>,
+
     // ── Cached render area (updated every frame) ────────────────────────────
     pub area: Option<Rect>,
 }
@@ -97,6 +112,7 @@ impl Pane {
             cursor_col: 0,
             col_offset: 0,
             mode: TableMode::Normal,
+            last_search: None,
             area: None,
         }
     }
@@ -123,6 +139,7 @@ impl Pane {
         self.cursor_col = 0;
         self.col_offset = 0;
         self.mode = TableMode::Normal;
+        self.last_search = None; // clear search highlight when leaving list
     }
 
     pub fn set_schema_view(&mut self, table_name: String) {

@@ -84,6 +84,34 @@ fn pane_block(title: &str, focused: bool) -> Block<'_> {
         .border_style(border_style)
 }
 
+// ── Match highlighting helper ─────────────────────────────────────────────────
+
+/// Split `text` into spans where occurrences of `query` (case-insensitive) are
+/// rendered with `hl_style` and the rest with `base_style`.
+fn highlight_matches<'a>(text: &'a str, query: &str, base: Style, hl: Style) -> Vec<Span<'a>> {
+    if query.is_empty() {
+        return vec![Span::styled(text, base)];
+    }
+    let lower_text = text.to_lowercase();
+    let lower_query = query.to_lowercase();
+    let mut spans = vec![];
+    let mut last = 0;
+
+    for (start, part) in lower_text.match_indices(&lower_query) {
+        if start > last {
+            spans.push(Span::styled(&text[last..start], base));
+        }
+        spans.push(Span::styled(&text[start..start + part.len()], hl));
+        last = start + part.len();
+    }
+
+    if last < text.len() {
+        spans.push(Span::styled(&text[last..], base));
+    }
+
+    spans
+}
+
 // ── TableList pane ────────────────────────────────────────────────────────────
 
 fn render_table_list(
@@ -119,11 +147,13 @@ fn render_table_list(
             Style::default().fg(Color::DarkGray),
         )));
     } else {
+        let search_query = pane.last_search.as_ref().map(|s| s.query.as_str());
+
         for table_idx in start..end {
             let table = &dash.tables[table_idx];
             let selected = table_idx == pane.nav_cursor;
 
-            let style = if selected && focused {
+            let base_style = if selected && focused {
                 Style::default()
                     .bg(Color::Rgb(28, 42, 74))
                     .fg(Color::White)
@@ -136,8 +166,29 @@ fn render_table_list(
                 Style::default().fg(Color::DarkGray)
             };
 
-            let padded = format!("{:width$}", table.as_str(), width = inner.width as usize);
-            lines.push(Line::from(Span::styled(padded, style)));
+            let match_style = if selected && focused {
+                Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else if selected {
+                Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::Black).bg(Color::Yellow)
+            };
+
+            let name_spans = if let Some(query) = search_query {
+                highlight_matches(table, query, base_style, match_style)
+            } else {
+                vec![Span::styled(table.as_str(), base_style)]
+            };
+
+            // Pad the remainder of the line with spaces so the background colour
+            // extends to the right edge on selected rows.
+            let text_w: usize = name_spans.iter().map(|s| s.content.chars().count()).sum();
+            let pad = inner.width as usize - text_w;
+            let mut spans = name_spans;
+            if pad > 0 {
+                spans.push(Span::styled(" ".repeat(pad), base_style));
+            }
+            lines.push(Line::from(spans));
         }
     }
 

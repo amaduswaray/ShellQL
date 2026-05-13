@@ -6,7 +6,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
-use crate::tui::state::{AppMode, AppState, CommandLineMode, ConfirmAction, TableMode, TextMode};
+use crate::tui::state::{AppMode, AppState, CommandLineMode, ConfirmAction, SearchDirection, TableMode, TextMode};
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
@@ -14,6 +14,7 @@ pub fn render_cmdline(frame: &mut Frame, area: Rect, state: &AppState) {
     match &state.cmdline.mode {
         CommandLineMode::Idle => render_idle(frame, area, state),
         CommandLineMode::Input => render_input(frame, area, state),
+        CommandLineMode::Search(direction) => render_search(frame, area, state, *direction),
         CommandLineMode::Confirm(action) => {
             render_confirm(frame, area, action, &state.cmdline.input)
         }
@@ -143,6 +144,26 @@ fn render_input(frame: &mut Frame, area: Rect, state: &AppState) {
             state.cmdline.completion_selected,
         );
     }
+}
+
+// ── Search — `/` or `?` prompt ────────────────────────────────────────────────
+
+fn render_search(frame: &mut Frame, area: Rect, state: &AppState, direction: SearchDirection) {
+    let prefix = match direction {
+        SearchDirection::Forward => "/",
+        SearchDirection::Backward => "?",
+    };
+    let input = &state.cmdline.input;
+
+    let line = Line::from(vec![
+        Span::styled(prefix, Style::default().fg(Color::Yellow).bold()),
+        Span::styled(input.clone(), Style::default().fg(Color::White)),
+    ]);
+
+    frame.render_widget(Paragraph::new(vec![line]), area);
+
+    let cursor_x = (area.x + 1 + input.len() as u16).min(area.right().saturating_sub(1));
+    frame.set_cursor_position((cursor_x, area.y));
 }
 
 // ── Confirm — inline y/n prompt ───────────────────────────────────────────────

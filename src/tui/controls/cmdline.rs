@@ -4,7 +4,7 @@ use crate::{
     connection::delete_connection,
     tui::{
         AddConnectionForm, AppMode, AppState, CommandLineMode, ConfirmAction, DASHBOARD_COMMANDS,
-        HOME_COMMANDS, Overlay, compute_completions,
+        HOME_COMMANDS, Overlay, SearchDirection, compute_completions,
         ui::home::{remove_selected, selected_connection},
     },
 };
@@ -46,7 +46,7 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
         KeyCode::Enter => execute_cmdline(state),
 
         KeyCode::Char(c) => match &state.cmdline.mode {
-            CommandLineMode::Input => {
+            CommandLineMode::Input | CommandLineMode::Search(_) => {
                 state.cmdline.clear_completions();
                 state.cmdline.push(c);
             }
@@ -78,7 +78,59 @@ fn execute_cmdline(state: &mut AppState) {
             execute_command(&cmd, state);
         }
 
+        CommandLineMode::Search(direction) => {
+            let query = state.cmdline.input.trim().to_string();
+            state.cmdline.reset();
+            if !query.is_empty() {
+                commit_search(&query, direction, state);
+            }
+        }
+
         CommandLineMode::Idle => {}
+    }
+}
+
+/// Commit a search query: find matches and jump the cursor.
+fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) {
+    let Some(dash) = state.dashboard.as_mut() else { return };
+    let Some(pane) = dash.tree.active_mut() else { return };
+
+    match pane.kind {
+        crate::tui::state::PaneType::TableList => {
+            let query_lower = query.to_lowercase();
+            let matches: Vec<usize> = dash.tables.iter().enumerate()
+                .filter(|(_, name)| name.to_lowercase().contains(&query_lower))
+                .map(|(i, _)| i)
+                .collect();
+
+            if matches.is_empty() {
+                state.cmdline.set_error(format!("Pattern not found: {query}"));
+                return;
+            }
+
+            let current = pane.nav_cursor;
+            let current_idx = match direction {
+                SearchDirection::Forward => {
+                    matches.iter().position(|&m| m >= current)
+                        .unwrap_or(0)
+                }
+                SearchDirection::Backward => {
+                    matches.iter().rposition(|&m| m <= current)
+                        .unwrap_or(matches.len() - 1)
+                }
+            };
+
+            pane.nav_cursor = matches[current_idx];
+            pane.last_search = Some(crate::tui::SearchState {
+                query: query.to_string(),
+                direction,
+                matches,
+                current_idx,
+            });
+        }
+        _ => {
+            state.cmdline.set_error("Search only supported in table list for now");
+        }
     }
 }
 
@@ -120,6 +172,7 @@ fn execute_command(cmd: &str, state: &mut AppState) {
 
         "open" => cmd_open(state, args),
         "tables" => cmd_tables(state, args),
+        "noh" => cmd_noh(state),
         "schema" => cmd_schema(state, args),
         "sql" | "query" => cmd_sql(state, args),
 
@@ -235,6 +288,7 @@ fn cmd_open(state: &mut AppState, args: &[&str]) {
     if let Some(pane) = dash.tree.active_mut() {
         if let Some(name) = table_name {
             pane.set_table_view(name.clone());
+            pane.last_search = None; // clear search highlight
             if !dash.table_cache.contains_key(&name) {
                 dash.pending_load = Some(name);
                 dash.loading = true;
@@ -254,6 +308,18 @@ fn cmd_tables(state: &mut AppState, _args: &[&str]) {
 
     if let Some(pane) = dash.tree.active_mut() {
         pane.reset_to_list();
+        pane.last_search = None; // clear search highlight
+    }
+}
+
+fn cmd_noh(state: &mut AppState) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    if let Some(pane) = dash.tree.active_mut() {
+        pane.last_search = None;
     }
 }
 

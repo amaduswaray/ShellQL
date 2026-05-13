@@ -10,13 +10,13 @@ pub mod session;
 pub mod table;
 
 pub use app::{AppMode, AppState};
-pub use cmdline::{CommandLine, CommandLineMode, ConfirmAction, compute_completions, DASHBOARD_COMMANDS, HOME_COMMANDS};
+pub use cmdline::{CommandLine, CommandLineMode, ConfirmAction, SearchDirection, compute_completions, DASHBOARD_COMMANDS, HOME_COMMANDS};
 pub use dashboard::{DashboardState, LoadedTable, Pane, PaneDirection};
 pub use form::{AddConnectionForm, FieldId, FormInputMode, TextMode};
 pub use data::{Cell, Column, Row, SortDirection, SortState};
 pub use editor::{EditorMode, QueryEditorState, QueryResult};
 pub use pane::{FloatingPane, Overlay, PaneId};
-pub use pane_layout::{PaneTree, PaneType};
+pub use pane_layout::{PaneTree, PaneType, SearchState};
 pub use session::{Session, Tab};
 pub use dashboard::TableMode;
 pub use table::TableViewState;

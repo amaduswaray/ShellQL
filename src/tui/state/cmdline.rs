@@ -27,6 +27,7 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("new",     "vertical split"),
     ("open",    "open table"),
     ("tables",  "table list view"),
+    ("noh",     "clear search highlight"),
     ("schema",  "switch to schema view"),
     ("sql",     "switch to query editor"),
     ("query",   "switch to query editor"),
@@ -44,6 +45,14 @@ pub fn compute_completions(
         .collect()
 }
 
+// ── Search direction ──────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchDirection {
+    Forward,  // /
+    Backward, // ?
+}
+
 // ── Mode ──────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +61,8 @@ pub enum CommandLineMode {
     Idle,
     /// The `:` prompt is open and the user is typing a command.
     Input,
+    /// The `/` or `?` search prompt is open.
+    Search(SearchDirection),
     /// Awaiting a `y` / `n` answer before executing a destructive action.
     Confirm(ConfirmAction),
 }
@@ -101,6 +112,14 @@ impl CommandLine {
     /// Open the `:` input prompt.
     pub fn open_input(&mut self) {
         self.mode = CommandLineMode::Input;
+        self.input.clear();
+        self.error = None;
+        self.clear_completions();
+    }
+
+    /// Open the `/` or `?` search prompt.
+    pub fn open_search(&mut self, direction: SearchDirection) {
+        self.mode = CommandLineMode::Search(direction);
         self.input.clear();
         self.error = None;
         self.clear_completions();
