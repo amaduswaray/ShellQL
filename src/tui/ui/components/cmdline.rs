@@ -64,7 +64,7 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
 
     match state.mode {
         AppMode::Home => {
-            spans.push(Span::styled("NORMAL", Style::default().fg(Color::Blue).bold()));
+            spans.push(Span::styled("NORMAL", Style::default().fg(Color::Magenta).bold()));
         }
         AppMode::Dashboard => {
             if let Some(ref dash) = state.dashboard {
@@ -73,12 +73,12 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
 
                 let (mode_label, mode_color) = if let Some(pane) = active {
                     match pane.mode {
-                        TableMode::Normal => ("NORMAL", Color::Blue),
+                        TableMode::Normal => ("NORMAL", Color::Magenta),
                         TableMode::VisualRow | TableMode::VisualColumn => ("VISUAL", Color::Yellow),
                         TableMode::Insert => ("INSERT", Color::Green),
                     }
                 } else {
-                    ("NORMAL", Color::Blue)
+                    ("NORMAL", Color::Magenta)
                 };
 
                 spans.push(Span::styled(mode_label, Style::default().fg(mode_color).bold()));

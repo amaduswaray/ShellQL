@@ -3,7 +3,8 @@ use crossterm::event::{KeyCode, KeyEvent};
 use crate::{
     connection::delete_connection,
     tui::{
-        AddConnectionForm, AppState, CommandLineMode, ConfirmAction, Overlay, compute_completions,
+        AddConnectionForm, AppMode, AppState, CommandLineMode, ConfirmAction, DASHBOARD_COMMANDS,
+        HOME_COMMANDS, Overlay, compute_completions,
         ui::home::{remove_selected, selected_connection},
     },
 };
@@ -24,7 +25,11 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
         KeyCode::Tab => {
             if let CommandLineMode::Input = state.cmdline.mode {
                 if state.cmdline.completions.is_empty() {
-                    let matches = compute_completions(&state.cmdline.input);
+                    let list = match state.mode {
+                        AppMode::Home => HOME_COMMANDS,
+                        AppMode::Dashboard => DASHBOARD_COMMANDS,
+                    };
+                    let matches = compute_completions(&state.cmdline.input, list);
                     state.cmdline.open_completions(matches);
                 } else {
                     state.cmdline.next_completion();
@@ -89,8 +94,16 @@ fn execute_command(cmd: &str, state: &mut AppState) {
 
     match name {
         "" => {}
-        "q" | "quit" => state.should_quit = true,
-        "q!" => state.should_quit = true,
+
+        // Quit
+        "exit" => state.should_quit = true,
+
+        // On dashboard :q acts like :close; on home it does nothing useful.
+        "q" | "quit" => {
+            if state.dashboard.is_some() {
+                cmd_close(state, args);
+            }
+        }
 
         // Overlays
         "h" | "help" => state.overlay = Some(Overlay::Help),
@@ -105,7 +118,8 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "hnew" => cmd_hnew(state, args),
         "new" => cmd_vnew(state, args), // alias for vnew
 
-        "table" => cmd_table(state, args),
+        "open" => cmd_open(state, args),
+        "tables" => cmd_tables(state, args),
         "schema" => cmd_schema(state, args),
         "sql" | "query" => cmd_sql(state, args),
 
@@ -210,7 +224,7 @@ fn cmd_hnew(state: &mut AppState, args: &[&str]) {
     }
 }
 
-fn cmd_table(state: &mut AppState, args: &[&str]) {
+fn cmd_open(state: &mut AppState, args: &[&str]) {
     let Some(dash) = require_dashboard(state) else {
         state.cmdline.set_error("not in dashboard");
         return;
@@ -227,8 +241,19 @@ fn cmd_table(state: &mut AppState, args: &[&str]) {
                 dash.error = None;
             }
         } else {
-            state.cmdline.set_error(":table requires a table name");
+            state.cmdline.set_error(":open requires a table name");
         }
+    }
+}
+
+fn cmd_tables(state: &mut AppState, _args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    if let Some(pane) = dash.tree.active_mut() {
+        pane.reset_to_list();
     }
 }
 
@@ -238,13 +263,16 @@ fn cmd_schema(state: &mut AppState, args: &[&str]) {
         return;
     };
 
-    let table_name = args.first().map(|s| s.to_string());
+    // If an argument is provided, use it; otherwise fall back to the
+    // active pane's bound table (useful when already viewing a table).
+    let table_name = args.first().map(|s| s.to_string())
+        .or_else(|| dash.tree.active().and_then(|p| p.bound_table.clone()));
 
     if let Some(pane) = dash.tree.active_mut() {
         if let Some(name) = table_name {
             pane.set_schema_view(name);
         } else {
-            state.cmdline.set_error(":schema requires a table name");
+            state.cmdline.set_error(":schema requires a table name (no bound table)");
         }
     }
 }

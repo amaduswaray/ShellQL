@@ -1,4 +1,4 @@
-//! Pane layout tree — recursive splits with animated grow-in.
+//! Pane layout tree — recursive binary splits.
 //!
 //! Layout is a binary tree of splits:
 //!   - HSplit : left / right  (vim "vsplit")
@@ -218,14 +218,12 @@ impl Pane {
 pub enum LayoutNode {
     Leaf(PaneId),
     HSplit {
-        ratio: f32,        // current animated ratio (0.0..=1.0)
-        target_ratio: f32,
+        ratio: f32,        // 0.0..=1.0, fixed at 0.5
         left: Box<LayoutNode>,
         right: Box<LayoutNode>,
     },
     VSplit {
-        ratio: f32,        // current animated ratio (0.0..=1.0)
-        target_ratio: f32,
+        ratio: f32,        // 0.0..=1.0, fixed at 0.5
         top: Box<LayoutNode>,
         bottom: Box<LayoutNode>,
     },
@@ -238,8 +236,7 @@ impl LayoutNode {
 
     pub fn hsplit(left: LayoutNode, right: LayoutNode) -> Self {
         LayoutNode::HSplit {
-            ratio: 0.0,        // start collapsed, will animate to 0.5
-            target_ratio: 0.5,
+            ratio: 0.5,
             left: Box::new(left),
             right: Box::new(right),
         }
@@ -247,8 +244,7 @@ impl LayoutNode {
 
     pub fn vsplit(top: LayoutNode, bottom: LayoutNode) -> Self {
         LayoutNode::VSplit {
-            ratio: 0.0,        // start collapsed, will animate to 0.5
-            target_ratio: 0.5,
+            ratio: 0.5,
             top: Box::new(top),
             bottom: Box::new(bottom),
         }
@@ -269,50 +265,6 @@ impl LayoutNode {
             LayoutNode::Leaf(_) => false,
             LayoutNode::VSplit { .. } => true,
             LayoutNode::HSplit { left, right, .. } => left.has_vsplit() || right.has_vsplit(),
-        }
-    }
-
-    /// True if any ratio is still animating.
-    pub fn is_animating(&self) -> bool {
-        match self {
-            LayoutNode::Leaf(_) => false,
-            LayoutNode::HSplit { ratio, target_ratio, left, right } => {
-                (ratio - target_ratio).abs() > 0.001
-                    || left.is_animating()
-                    || right.is_animating()
-            }
-            LayoutNode::VSplit { ratio, target_ratio, top, bottom } => {
-                (ratio - target_ratio).abs() > 0.001
-                    || top.is_animating()
-                    || bottom.is_animating()
-            }
-        }
-    }
-
-    /// Advance all ratios toward their targets.
-    pub fn tick_animation(&mut self) {
-        match self {
-            LayoutNode::Leaf(_) => {}
-            LayoutNode::HSplit { ratio, target_ratio, left, right } => {
-                let delta = *target_ratio - *ratio;
-                if delta.abs() > 0.001 {
-                    *ratio += delta * 0.25; // ease-in
-                } else {
-                    *ratio = *target_ratio;
-                }
-                left.tick_animation();
-                right.tick_animation();
-            }
-            LayoutNode::VSplit { ratio, target_ratio, top, bottom } => {
-                let delta = *target_ratio - *ratio;
-                if delta.abs() > 0.001 {
-                    *ratio += delta * 0.25; // ease-in
-                } else {
-                    *ratio = *target_ratio;
-                }
-                top.tick_animation();
-                bottom.tick_animation();
-            }
         }
     }
 }
@@ -417,22 +369,20 @@ impl PaneTree {
                     LayoutNode::vsplit(LayoutNode::Leaf(id), LayoutNode::Leaf(new_id))
                 }
             }
-            LayoutNode::HSplit { ratio, target_ratio, left, right } => {
+            LayoutNode::HSplit { ratio, left, right } => {
                 let new_left = Self::replace_leaf_recursive(*left, target, is_hsplit, new_id);
                 let new_right = Self::replace_leaf_recursive(*right, target, is_hsplit, new_id);
                 LayoutNode::HSplit {
                     ratio,
-                    target_ratio,
                     left: Box::new(new_left),
                     right: Box::new(new_right),
                 }
             }
-            LayoutNode::VSplit { ratio, target_ratio, top, bottom } => {
+            LayoutNode::VSplit { ratio, top, bottom } => {
                 let new_top = Self::replace_leaf_recursive(*top, target, is_hsplit, new_id);
                 let new_bottom = Self::replace_leaf_recursive(*bottom, target, is_hsplit, new_id);
                 LayoutNode::VSplit {
                     ratio,
-                    target_ratio,
                     top: Box::new(new_top),
                     bottom: Box::new(new_bottom),
                 }
@@ -506,7 +456,6 @@ impl PaneTree {
             }
             LayoutNode::HSplit {
                 ratio,
-                target_ratio,
                 left,
                 right,
             } => {
@@ -526,7 +475,6 @@ impl PaneTree {
                 (
                     Some(LayoutNode::HSplit {
                         ratio,
-                        target_ratio,
                         left: Box::new(new_left.unwrap()),
                         right: Box::new(new_right.unwrap()),
                     }),
@@ -535,7 +483,6 @@ impl PaneTree {
             }
             LayoutNode::VSplit {
                 ratio,
-                target_ratio,
                 top,
                 bottom,
             } => {
@@ -555,7 +502,6 @@ impl PaneTree {
                 (
                     Some(LayoutNode::VSplit {
                         ratio,
-                        target_ratio,
                         top: Box::new(new_top.unwrap()),
                         bottom: Box::new(new_bottom.unwrap()),
                     }),

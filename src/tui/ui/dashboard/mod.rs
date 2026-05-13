@@ -1,4 +1,4 @@
-//! Dashboard — recursive pane-based layout with animated splits.
+//! Dashboard — recursive pane-based layout.
 pub mod panes;
 
 use ratatui::{
@@ -38,8 +38,6 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, state: &mut AppState) {
         render_pane(frame, pane_id, dash, is_active);
     }
 
-    // Tick animation — ratios ease toward their targets.
-    dash.tree.root.tick_animation();
 }
 
 // ── Scroll sync ───────────────────────────────────────────────────────────────

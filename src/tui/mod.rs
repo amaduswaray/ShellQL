@@ -8,7 +8,7 @@ pub use app::run_app;
 pub use state::{
     AppMode, AppState,
     AddConnectionForm, FieldId, FormInputMode, TextMode,
-    CommandLine, CommandLineMode, ConfirmAction, compute_completions, COMMANDS,
+    CommandLine, CommandLineMode, ConfirmAction, compute_completions, DASHBOARD_COMMANDS, HOME_COMMANDS,
     DashboardState, LoadedTable,
     Cell, Column, Row, SortDirection, SortState,
     EditorMode, QueryEditorState, QueryResult,

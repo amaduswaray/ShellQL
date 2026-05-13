@@ -2,32 +2,43 @@
 
 // ── Available commands ────────────────────────────────────────────────────────
 
-/// Every command the `:` prompt accepts, paired with a short description.
-/// This drives both execution and tab-completion.
-pub const COMMANDS: &[(&str, &str)] = &[
+/// Commands available on the **home** screen.
+pub const HOME_COMMANDS: &[(&str, &str)] = &[
+    ("exit",    "quit program"),
     ("q",       "quit"),
     ("quit",    "quit"),
-    ("q!",      "force quit"),
     ("h",       "help overlay"),
     ("help",    "help overlay"),
     ("add",     "add connection"),
     ("d",       "delete selected"),
     ("delete",  "delete selected"),
     ("connect", "open connection picker"),
+];
+
+/// Commands available on the **dashboard**.
+pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
+    ("exit",    "quit program"),
+    ("q",       "close pane"),
+    ("quit",    "close pane"),
+    ("h",       "help overlay"),
+    ("help",    "help overlay"),
     ("vnew",    "vertical split"),
     ("hnew",    "horizontal split"),
     ("new",     "vertical split"),
-    ("table",   "switch to table view"),
+    ("open",    "open table"),
+    ("tables",  "table list view"),
     ("schema",  "switch to schema view"),
     ("sql",     "switch to query editor"),
     ("query",   "switch to query editor"),
     ("close",   "close pane"),
 ];
 
-/// Return every entry in `COMMANDS` whose name starts with `input`.
-pub fn compute_completions(input: &str) -> Vec<(&'static str, &'static str)> {
-    COMMANDS
-        .iter()
+/// Return every entry in `list` whose name starts with `input`.
+pub fn compute_completions(
+    input: &str,
+    list: &'static [(&'static str, &'static str)],
+) -> Vec<(&'static str, &'static str)> {
+    list.iter()
         .filter(|(cmd, _)| cmd.starts_with(input))
         .copied()
         .collect()

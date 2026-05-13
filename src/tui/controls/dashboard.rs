@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::tui::{AppMode, AppState, state::TableMode, state::pane_layout::{PaneDirection, PaneType}};
+use crate::tui::{AppState, state::TableMode, state::pane_layout::{PaneDirection, PaneType}};
 
 pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
     let Some(ref mut dash) = state.dashboard else { return };
@@ -55,12 +55,6 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
             state.cmdline.open_input();
             state.pending_key = None;
             return;
-        }
-
-        // ── Quit back to home ──────────────────────────────────────────────────
-        KeyCode::Char('q') => {
-            state.mode = AppMode::Home;
-            state.dashboard = None;
         }
 
         // ── Mode switching ─────────────────────────────────────────────────────

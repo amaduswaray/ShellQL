@@ -10,7 +10,7 @@ pub mod session;
 pub mod table;
 
 pub use app::{AppMode, AppState};
-pub use cmdline::{CommandLine, CommandLineMode, ConfirmAction, compute_completions, COMMANDS};
+pub use cmdline::{CommandLine, CommandLineMode, ConfirmAction, compute_completions, DASHBOARD_COMMANDS, HOME_COMMANDS};
 pub use dashboard::{DashboardState, LoadedTable, Pane, PaneDirection};
 pub use form::{AddConnectionForm, FieldId, FormInputMode, TextMode};
 pub use data::{Cell, Column, Row, SortDirection, SortState};

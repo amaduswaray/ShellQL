@@ -28,34 +28,23 @@ pub async fn handle_key_event(
         return Ok(());
     }
 
-    // Command line has the highest priority when active.
+    // Dispatch to the appropriate handler (cmdline has highest priority).
     if state.cmdline.is_active() {
         handle_cmdline(event, state);
-        return Ok(());
-    }
-
-    // The add-connection form intercepts all keys while open.
-    if state.form.is_some() {
+    } else if state.form.is_some() {
         handle_form(event, state).await?;
-        return Ok(());
-    }
-
-    // Overlays intercept before mode handlers (overlay handler is async
-    // because ConnectionPicker::Enter needs to connect + fetch tables).
-    if state.overlay.is_some() {
+    } else if state.overlay.is_some() {
         handle_overlay(event, state).await?;
-        return Ok(());
-    }
-
-    // Route to the active mode handler.
-    match state.mode {
-        AppMode::Home => handle_home(event, state),
-        AppMode::Dashboard => handle_dashboard(event, state),
+    } else {
+        match state.mode {
+            AppMode::Home => handle_home(event, state),
+            AppMode::Dashboard => handle_dashboard(event, state),
+        }
     }
 
     // ── Async table load ──────────────────────────────────────────────────────
-    // `handle_dashboard` may have set `pending_load`; execute it here where
-    // we can safely await.
+    // Run after EVERY handler path so that commands like `:open` trigger the
+    // load immediately instead of waiting for the next key event.
     if let Some(ref mut dash) = state.dashboard {
         if let Some(table) = dash.pending_load.take() {
             let pool = dash.pool.clone();
