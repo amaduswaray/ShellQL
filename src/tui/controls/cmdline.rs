@@ -267,6 +267,8 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "where" => cmd_where(state, args),
         "order" => cmd_order(state, args),
 
+        "resize" | "res" => cmd_resize(state, args),
+
         // Destructive actions
         "d" | "delete" => {
             if let Some(db) = selected_connection(state) {
@@ -477,6 +479,36 @@ fn cmd_sql(state: &mut AppState, _args: &[&str]) {
 
     if let Some(pane) = dash.tree.active_mut() {
         pane.set_query_editor();
+    }
+}
+
+fn cmd_resize(state: &mut AppState, args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    if args.is_empty() {
+        state.cmdline.set_error(":resize requires +N or -N");
+        return;
+    }
+
+    let arg = args.join(" ");
+    let delta = match arg.parse::<i32>() {
+        Ok(v) if (-100..=100).contains(&v) => v,
+        Ok(_) => {
+            state.cmdline.set_error("resize value must be between -100 and 100");
+            return;
+        }
+        Err(_) => {
+            state.cmdline.set_error(format!("invalid resize value `{arg}`"));
+            return;
+        }
+    };
+
+    match dash.tree.resize_active(delta) {
+        Ok(_) => {}
+        Err(e) => state.cmdline.set_error(e),
     }
 }
 

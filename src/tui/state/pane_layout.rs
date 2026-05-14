@@ -319,6 +319,61 @@ impl LayoutNode {
             LayoutNode::HSplit { left, right, .. } => left.has_vsplit() || right.has_vsplit(),
         }
     }
+
+    /// True if this subtree contains the target leaf.
+    pub fn contains(&self, target: PaneId) -> bool {
+        match self {
+            LayoutNode::Leaf(id) => *id == target,
+            LayoutNode::HSplit { left, right, .. } => {
+                left.contains(target) || right.contains(target)
+            }
+            LayoutNode::VSplit { top, bottom, .. } => {
+                top.contains(target) || bottom.contains(target)
+            }
+        }
+    }
+
+    /// Find the innermost split that directly contains `target` as a leaf.
+    /// Returns `(is_hsplit, is_first_child, &mut ratio)`.
+    pub fn find_split_for(&mut self, target: PaneId) -> Option<(bool, bool, &mut f32)> {
+        match self {
+            LayoutNode::Leaf(_) => None,
+            LayoutNode::HSplit { ratio, left, right } => {
+                if left.contains(target) {
+                    if let LayoutNode::Leaf(_) = **left {
+                        Some((true, true, ratio))
+                    } else {
+                        left.find_split_for(target)
+                    }
+                } else if right.contains(target) {
+                    if let LayoutNode::Leaf(_) = **right {
+                        Some((true, false, ratio))
+                    } else {
+                        right.find_split_for(target)
+                    }
+                } else {
+                    None
+                }
+            }
+            LayoutNode::VSplit { ratio, top, bottom } => {
+                if top.contains(target) {
+                    if let LayoutNode::Leaf(_) = **top {
+                        Some((false, true, ratio))
+                    } else {
+                        top.find_split_for(target)
+                    }
+                } else if bottom.contains(target) {
+                    if let LayoutNode::Leaf(_) = **bottom {
+                        Some((false, false, ratio))
+                    } else {
+                        bottom.find_split_for(target)
+                    }
+                } else {
+                    None
+                }
+            }
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -373,6 +428,32 @@ impl PaneTree {
     /// Total number of panes.
     pub fn pane_count(&self) -> usize {
         self.panes.len()
+    }
+
+    // ── Resizing ─────────────────────────────────────────────────────────────
+
+    const MIN_RATIO: f32 = 0.1;
+    const MAX_RATIO: f32 = 0.9;
+
+    /// Resize the active pane by `delta` percentage points.
+    /// Positive delta grows the pane; negative shrinks it.
+    pub fn resize_active(&mut self, delta: i32) -> Result<(), &'static str> {
+        if self.pane_count() <= 1 {
+            return Err("cannot resize single pane");
+        }
+        let delta_f = delta as f32 / 100.0;
+        let target = self.active_pane;
+        match self.root.find_split_for(target) {
+            Some((_, is_first_child, ratio)) => {
+                if is_first_child {
+                    *ratio = (*ratio + delta_f).clamp(Self::MIN_RATIO, Self::MAX_RATIO);
+                } else {
+                    *ratio = (*ratio - delta_f).clamp(Self::MIN_RATIO, Self::MAX_RATIO);
+                }
+                Ok(())
+            }
+            None => Err("no split found for active pane"),
+        }
     }
 
     // ── Splitting ────────────────────────────────────────────────────────────
