@@ -141,5 +141,72 @@ pub async fn handle_key_event(
         }
     }
 
+    // ── Async query execution ─────────────────────────────────────────────────
+    if let Some(ref mut dash) = state.dashboard {
+        if let Some(sql) = dash.pending_query_exec.take() {
+            let pool = dash.pool.clone();
+            match crate::connection::execute_query(&pool, &sql).await {
+                Ok((headers, rows)) => {
+                    let result = crate::tui::state::dashboard::QueryResult {
+                        sql: sql.clone(),
+                        headers,
+                        rows,
+                        error: None,
+                    };
+                    dash.query_results = vec![result];
+                    dash.query_history.push(sql);
+                    // Find or create a QueryResults pane.
+                    populate_query_results(dash, false);
+                    dash.loading = false;
+                    state.cmdline.loading = Some(format!("Query executed: {} rows", dash.query_results[0].rows.len()));
+                }
+                Err(e) => {
+                    dash.query_results = vec![crate::tui::state::dashboard::QueryResult {
+                        sql,
+                        headers: vec![],
+                        rows: vec![],
+                        error: Some(e.to_string()),
+                    }];
+                    // On error, only update existing QueryResults panes, don't create new ones.
+                    populate_query_results(dash, true);
+                    dash.loading = false;
+                    state.cmdline.set_error(format!("Query failed: {e}"));
+                }
+            }
+        }
+    }
+
     Ok(())
+}
+
+/// Find an existing QueryResults pane or auto-create one via hnew.
+/// `error_only` = true means only update existing panes, don't create new ones.
+fn populate_query_results(dash: &mut crate::tui::state::DashboardState, error_only: bool) {
+    use crate::tui::state::pane_layout::{PaneType, PaneId};
+
+    // Look for an existing QueryResults pane.
+    let existing = dash.tree.panes.iter()
+        .find(|(_, p)| p.kind == PaneType::QueryResults)
+        .map(|(id, _)| *id);
+
+    if let Some(id) = existing {
+        if let Some(pane) = dash.tree.panes.get_mut(&id) {
+            pane.bound_query_idx = Some(0);
+            pane.query_result_count = dash.query_results.len();
+        }
+    } else if !error_only {
+        // Auto-create via hnew below the active pane.
+        let active = dash.tree.active_pane;
+        if dash.tree.pane_count() < 8 {
+            let new_id = PaneId::new();
+            let display_id = dash.tree.alloc_display_id();
+            dash.tree.panes.insert(new_id, crate::tui::state::pane_layout::Pane::new(new_id, PaneType::QueryResults, display_id));
+            if let Some(pane) = dash.tree.panes.get_mut(&new_id) {
+                pane.bound_query_idx = Some(0);
+                pane.query_result_count = dash.query_results.len();
+            }
+            dash.tree.replace_leaf_with_split(active, false, new_id);
+            dash.tree.active_pane = active; // keep focus on editor
+        }
+    }
 }

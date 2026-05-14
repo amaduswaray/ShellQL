@@ -259,6 +259,7 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "noh" => cmd_noh(state),
         "schema" => cmd_schema(state, args),
         "sql" | "query" => cmd_sql(state, args),
+        "queryresults" => cmd_query_results(state, args),
 
         "close" => cmd_close(state, args),
 
@@ -300,6 +301,9 @@ fn parse_pane_type(arg: Option<&&str>) -> crate::tui::state::PaneType {
         Some(s) if s.eq_ignore_ascii_case("sql") || s.eq_ignore_ascii_case("query") => {
             crate::tui::state::PaneType::QueryEditor
         }
+        Some(s) if s.eq_ignore_ascii_case("queryresults") => {
+            crate::tui::state::PaneType::QueryResults
+        }
         _ => crate::tui::state::PaneType::TableList,
     }
 }
@@ -312,6 +316,11 @@ fn cmd_vnew(state: &mut AppState, args: &[&str]) {
 
     let kind = parse_pane_type(args.first());
     let table_name = args.get(1).map(|s| s.to_string());
+
+    if kind == crate::tui::state::PaneType::QueryResults {
+        state.cmdline.set_error("cannot create empty query results pane; use :queryResults or Ctrl+Enter");
+        return;
+    }
 
     if let Some(ref name) = table_name {
         if !dash.tables.contains(name) {
@@ -358,6 +367,11 @@ fn cmd_hnew(state: &mut AppState, args: &[&str]) {
 
     let kind = parse_pane_type(args.first());
     let table_name = args.get(1).map(|s| s.to_string());
+
+    if kind == crate::tui::state::PaneType::QueryResults {
+        state.cmdline.set_error("cannot create empty query results pane; use :queryResults or Ctrl+Enter");
+        return;
+    }
 
     if let Some(ref name) = table_name {
         if !dash.tables.contains(name) {
@@ -479,6 +493,23 @@ fn cmd_sql(state: &mut AppState, _args: &[&str]) {
 
     if let Some(pane) = dash.tree.active_mut() {
         pane.set_query_editor();
+    }
+}
+
+fn cmd_query_results(state: &mut AppState, _args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    if dash.query_results.is_empty() {
+        state.cmdline.set_error("no query results available");
+        return;
+    }
+
+    if let Some(pane) = dash.tree.active_mut() {
+        pane.set_query_results(0);
+        pane.query_result_count = dash.query_results.len();
     }
 }
 
@@ -637,6 +668,19 @@ fn cmd_write(state: &mut AppState, _args: &[&str]) {
     let Some(pane) = dash.tree.panes.get(&active_id) else {
         return;
     };
+
+    // If active pane is a QueryEditor, :w executes the query.
+    if pane.kind == crate::tui::state::PaneType::QueryEditor {
+        let sql = pane.query_text.join("\n");
+        if sql.trim().is_empty() {
+            state.cmdline.set_error("query is empty");
+            return;
+        }
+        dash.pending_query_exec = Some(sql);
+        dash.loading = true;
+        dash.error = None;
+        return;
+    }
 
     if pane.pending_updates.is_empty() && pane.pending_deletes.is_empty() {
         state.cmdline.set_error("no pending changes");

@@ -37,6 +37,7 @@ pub enum PaneType {
     TableView,
     SchemaView,
     QueryEditor,
+    QueryResults,
 }
 
 impl std::fmt::Display for PaneType {
@@ -46,6 +47,7 @@ impl std::fmt::Display for PaneType {
             PaneType::TableView => write!(f, "table"),
             PaneType::SchemaView => write!(f, "schema"),
             PaneType::QueryEditor => write!(f, "query"),
+            PaneType::QueryResults => write!(f, "queryresults"),
         }
     }
 }
@@ -112,6 +114,18 @@ pub struct Pane {
     pub sort_col: Option<String>,
     pub sort_desc: bool,
 
+    // ── Query editor state (pane-local) ─────────────────────────────────────
+    /// Text lines for the QueryEditor pane.
+    pub query_text: Vec<String>,
+    /// Cursor position (row, col) for the QueryEditor pane.
+    pub query_cursor: (usize, usize),
+
+    // ── Query results state (pane-local) ────────────────────────────────────
+    /// Which result set this QueryResults pane is displaying.
+    pub bound_query_idx: Option<usize>,
+    /// Total number of result sets available (shown in title as "1/3").
+    pub query_result_count: usize,
+
     // ── Cached render area (updated every frame) ────────────────────────────
     pub area: Option<Rect>,
 }
@@ -137,6 +151,10 @@ impl Pane {
             filter: None,
             sort_col: None,
             sort_desc: false,
+            query_text: vec![String::new()],
+            query_cursor: (0, 0),
+            bound_query_idx: None,
+            query_result_count: 0,
             area: None,
         }
     }
@@ -184,6 +202,13 @@ impl Pane {
 
     pub fn set_query_editor(&mut self) {
         self.kind = PaneType::QueryEditor;
+        self.query_text = vec![String::new()];
+        self.query_cursor = (0, 0);
+    }
+
+    pub fn set_query_results(&mut self, idx: usize) {
+        self.kind = PaneType::QueryResults;
+        self.bound_query_idx = Some(idx);
     }
 
     // ── Row navigation ──────────────────────────────────────────────────────
@@ -405,7 +430,7 @@ impl PaneTree {
         }
     }
 
-    fn alloc_display_id(&mut self) -> usize {
+    pub fn alloc_display_id(&mut self) -> usize {
         if let Some(id) = self.recycled_ids.pop() {
             id
         } else {
@@ -484,7 +509,7 @@ impl PaneTree {
         Ok(new_id)
     }
 
-    fn replace_leaf_with_split(&mut self, target: PaneId, is_hsplit: bool, new_id: PaneId) {
+    pub fn replace_leaf_with_split(&mut self, target: PaneId, is_hsplit: bool, new_id: PaneId) {
         self.root = Self::replace_leaf_recursive(
             std::mem::replace(&mut self.root, LayoutNode::leaf(new_id)),
             target,

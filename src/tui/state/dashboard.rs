@@ -71,8 +71,25 @@ pub struct DashboardState {
     // ── Async-commit signal ───────────────────────────────────────────────────
     pub pending_commit: Option<PendingCommit>,
 
+    // ── Query execution results ───────────────────────────────────────────────
+    /// Results from the last executed query.
+    pub query_results: Vec<QueryResult>,
+    /// SQL to execute async.
+    pub pending_query_exec: Option<String>,
+    /// Per-connection query history.
+    pub query_history: Vec<String>,
+
     // ── Status ────────────────────────────────────────────────────────────────
     pub loading: bool,
+    pub error: Option<String>,
+}
+
+/// Result of an executed SQL query.
+#[derive(Debug, Clone)]
+pub struct QueryResult {
+    pub sql: String,
+    pub headers: Vec<String>,
+    pub rows: Vec<Vec<String>>,
     pub error: Option<String>,
 }
 
@@ -105,6 +122,9 @@ impl DashboardState {
             table_cache: HashMap::new(),
             pending_load: None,
             pending_commit: None,
+            query_results: Vec::new(),
+            pending_query_exec: None,
+            query_history: Vec::new(),
             loading: false,
             error: None,
         }

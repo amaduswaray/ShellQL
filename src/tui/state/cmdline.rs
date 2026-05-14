@@ -36,6 +36,8 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("order", "sort rows"),
     ("resize", "resize pane"),
     ("res", "resize pane"),
+    ("query", "open query editor"),
+    ("queryresults", "show query results"),
 ];
 
 /// Return every entry in `list` whose name starts with `input`.

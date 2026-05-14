@@ -473,6 +473,116 @@ pub async fn count_rows_filtered(
     }
 }
 
+/// Execute an arbitrary SQL query.
+/// For SELECT-like queries, returns `(column_names, rows)`.
+/// For DML queries (INSERT/UPDATE/DELETE), returns `(["Rows Affected"], [[count]])`.
+/// For SELECTs returning 0 rows, returns `(headers, [])`.
+pub async fn execute_query(
+    pool: &DbPool,
+    sql: &str,
+) -> color_eyre::eyre::Result<(Vec<String>, Vec<Vec<String>>)> {
+    let is_select = sql.trim().to_lowercase().starts_with("select");
+
+    match pool {
+        DbPool::Postgres(pg) => {
+            if is_select {
+                let rows = sqlx::query(sql).fetch_all(pg).await?;
+                if rows.is_empty() {
+                    // Can't get column names from empty result set, return empty.
+                    return Ok((vec![], vec![]));
+                }
+                use sqlx::Row;
+                let cols: Vec<String> = rows[0]
+                    .columns()
+                    .iter()
+                    .map(|c| c.name().to_string())
+                    .collect();
+                let data = rows
+                    .iter()
+                    .map(|r| {
+                        (0..cols.len())
+                            .map(|i| {
+                                r.try_get::<Option<String>, _>(i)
+                                    .map(|v| v.unwrap_or_else(|| "NULL".into()))
+                                    .unwrap_or_else(|_| "?".into())
+                            })
+                            .collect()
+                    })
+                    .collect();
+                Ok((cols, data))
+            } else {
+                let result = sqlx::query(sql).execute(pg).await?;
+                Ok((
+                    vec!["Rows Affected".to_string()],
+                    vec![vec![result.rows_affected().to_string()]],
+                ))
+            }
+        }
+        DbPool::Mysql(my) => {
+            if is_select {
+                let rows = sqlx::query(sql).fetch_all(my).await?;
+                if rows.is_empty() {
+                    return Ok((vec![], vec![]));
+                }
+                use sqlx::Row;
+                let cols: Vec<String> = rows[0]
+                    .columns()
+                    .iter()
+                    .map(|c| c.name().to_string())
+                    .collect();
+                let data = rows
+                    .iter()
+                    .map(|r| {
+                        (0..cols.len())
+                            .map(|i| {
+                                r.try_get::<Option<String>, _>(i)
+                                    .map(|v| v.unwrap_or_else(|| "NULL".into()))
+                                    .unwrap_or_else(|_| "?".into())
+                            })
+                            .collect()
+                    })
+                    .collect();
+                Ok((cols, data))
+            } else {
+                let result = sqlx::query(sql).execute(my).await?;
+                Ok((
+                    vec!["Rows Affected".to_string()],
+                    vec![vec![result.rows_affected().to_string()]],
+                ))
+            }
+        }
+        DbPool::Sqlite(sq) => {
+            if is_select {
+                let rows = sqlx::query(sql).fetch_all(sq).await?;
+                if rows.is_empty() {
+                    return Ok((vec![], vec![]));
+                }
+                use sqlx::Row;
+                let cols: Vec<String> = rows[0]
+                    .columns()
+                    .iter()
+                    .map(|c| c.name().to_string())
+                    .collect();
+                let data = rows
+                    .iter()
+                    .map(|r| {
+                        (0..cols.len())
+                            .map(|i| sqlite_cell(r, i))
+                            .collect()
+                    })
+                    .collect();
+                Ok((cols, data))
+            } else {
+                let result = sqlx::query(sql).execute(sq).await?;
+                Ok((
+                    vec!["Rows Affected".to_string()],
+                    vec![vec![result.rows_affected().to_string()]],
+                ))
+            }
+        }
+    }
+}
+
 use sqlx::Column;
 
 fn sqlite_cell(row: &sqlx::sqlite::SqliteRow, i: usize) -> String {

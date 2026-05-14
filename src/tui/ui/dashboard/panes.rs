@@ -8,6 +8,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
+use ratatui_textarea::TextArea;
 
 use crate::tui::state::{
     TableMode,
@@ -38,6 +39,7 @@ pub fn render_pane(
         PaneType::TableView => render_table_view(frame, area, pane, dash, focused),
         PaneType::SchemaView => render_schema_view(frame, area, pane, dash, focused),
         PaneType::QueryEditor => render_query_editor(frame, area, pane, focused),
+        PaneType::QueryResults => render_query_results(frame, area, pane, dash, focused),
     }
 }
 
@@ -73,7 +75,16 @@ fn make_title(pane: &Pane) -> String {
                 format!(" {}: Schema ", pane.display_id)
             }
         }
-        PaneType::QueryEditor => format!(" {}: Query ", pane.display_id),
+        PaneType::QueryEditor => {
+            format!(" {}: Query ", pane.display_id)
+        }
+        PaneType::QueryResults => {
+            if let Some(idx) = pane.bound_query_idx {
+                format!(" {}: Result {}/{} ", pane.display_id, idx + 1, pane.query_result_count.max(1))
+            } else {
+                format!(" {}: Result ", pane.display_id)
+            }
+        }
     }
 }
 
@@ -699,18 +710,114 @@ fn render_query_editor(
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let lines: Vec<Line> = vec![
-        Line::from(""),
-        Line::from(Span::styled(
-            "  SQL query editor coming soon...",
-            Style::default().fg(Color::DarkGray),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            "  Press i to enter insert mode",
-            Style::default().fg(Color::DarkGray),
-        )),
-    ];
+    // Add padding around the text area.
+    let pad = 1u16;
+    let padded = Rect {
+        x: inner.x + pad,
+        y: inner.y + pad,
+        width: inner.width.saturating_sub(pad * 2),
+        height: inner.height.saturating_sub(pad * 2),
+    };
 
-    frame.render_widget(Paragraph::new(lines), inner);
+    let mut textarea = TextArea::new(pane.query_text.clone());
+    restore_textarea_cursor(&mut textarea, pane.query_cursor);
+    textarea.set_block(Block::default().borders(Borders::NONE));
+    textarea.set_style(Style::default().fg(Color::White));
+
+    if focused && pane.mode == TableMode::Insert {
+        textarea.set_cursor_style(Style::default().bg(Color::Green).fg(Color::Black));
+    } else {
+        textarea.set_cursor_style(Style::default().fg(Color::DarkGray));
+    }
+    frame.render_widget(&textarea, padded);
+
+    let cursor = textarea.cursor();
+    let cursor_y = padded.y + cursor.0 as u16;
+    let cursor_x = padded.x + cursor.1 as u16;
+    frame.set_cursor_position((cursor_x, cursor_y));
+}
+
+/// Restore TextArea cursor position from stored (row, col).
+fn restore_textarea_cursor(textarea: &mut TextArea, (target_row, target_col): (usize, usize)) {
+    use ratatui_textarea::CursorMove;
+    // Move to top-left first.
+    textarea.move_cursor(CursorMove::Top);
+    textarea.move_cursor(CursorMove::Head);
+    // Move down to target row.
+    for _ in 0..target_row {
+        textarea.move_cursor(CursorMove::Down);
+    }
+    // Move right to target col.
+    for _ in 0..target_col {
+        textarea.move_cursor(CursorMove::Forward);
+    }
+}
+
+// ── QueryResults pane ─────────────────────────────────────────────────────────
+
+fn render_query_results(
+    frame: &mut Frame,
+    area: Rect,
+    pane: &Pane,
+    dash: &DashboardState,
+    focused: bool,
+) {
+    let title = make_title(pane);
+    let block = pane_block(&title, focused);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let Some(idx) = pane.bound_query_idx else {
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                " No query executed yet.",
+                Style::default().fg(Color::DarkGray),
+            )),
+            inner,
+        );
+        return;
+    };
+
+    let Some(result) = dash.query_results.get(idx) else {
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                " Result not available.",
+                Style::default().fg(Color::DarkGray),
+            )),
+            inner,
+        );
+        return;
+    };
+
+    if let Some(ref err) = result.error {
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                format!(" Error: {err}"),
+                Style::default().fg(Color::Red),
+            )),
+            inner,
+        );
+        return;
+    }
+
+    if result.headers.is_empty() {
+        frame.render_widget(
+            Paragraph::new(Span::styled(
+                " Query returned no columns.",
+                Style::default().fg(Color::DarkGray),
+            )),
+            inner,
+        );
+        return;
+    }
+
+    // Build a LoadedTable-like struct to reuse the table renderer.
+    let loaded = crate::tui::state::dashboard::LoadedTable {
+        name: format!("Result {}", idx + 1),
+        schema: vec![], // no schema for arbitrary queries
+        headers: result.headers.clone(),
+        rows: result.rows.clone(),
+    };
+
+    render_loaded_table(frame, inner, pane, &loaded, focused);
 }

@@ -26,6 +26,10 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 - [ ] Create trait that holds common functions for models(host, connection validator, connection builder, connection string extractor, etc)
 - [ ] Session manager - tmux lik sessionizer to change between connctions. Makes connections out of scope and harder to accidentaly change wrong dbs
+- [ ] Templates: Be able to save pane layouts for quick access of views you often use
+- [ ] Bounding all views to a singular table. can be changed from tableList, or the :open command. All panes are connected to the same table
+  - [ ] Idea/NOTE: a window should always be connected to a singular table. New table always opens a new window
+- [ ] Windows, sessions: Open new windows for multiple tabs of a singular connection, or have sessions with multiple connections
 
 
 
@@ -40,17 +44,17 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] sql queries and testing. Boot up docker compose file with seed script, and run tests on the data
 
 
-- [ ] resizing panes
+- [x] resizing panes
 - [x] :q when 1 pane left should exit
 - [x] :q in home view should exit
 
 - [x] Filter and sort logic
 - [x] Search logic when in files. vim like search
 - [x] Visual mode proper for row and column Visual mode proper for row and columnss
-- [ ] Windows, sessions
 - [x] :exit command to take user to homescreen
 - [x] fix new pane function when having 1 vertical split and trying to make a new vsplit
 
+- [ ] shift+k for hover feature. Puts the value in the cmd line so that its readable
 - [ ] Inline cell edits
 - [ ] Proper vim commands
   - [ ] o and O for newline over and under, to add a new row
@@ -61,3 +65,12 @@ Connect to your favourite provider and handle tables and schemas in your db
 #### SQL Query logic
 
 Should the sql editor be results and query? Should the results appear in a new pane? Should it replace an existing table view?
+
+| Feature             | Recommended crate(s)                      | Difficulty  |
+| ------------------- | ----------------------------------------- | ----------- |
+| Text editing        | `tui-textarea`                            | Easy        |
+| Syntax highlighting | `tui-syntax` or `syntect` + `syntect-tui` | Easy        |
+| SQL formatting      | `sqlformat`                               | Easy        |
+| SQL parsing         | `sqlparser-rs` or `syntaqlite`            | Medium      |
+| Autocomplete        | your own schema-aware layer               | Medium/Hard |
+
