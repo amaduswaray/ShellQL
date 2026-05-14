@@ -229,10 +229,15 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         // Quit
         "exit" => state.should_quit = true,
 
-        // On dashboard :q acts like :close; on home it does nothing useful.
         "q" | "quit" => {
-            if state.dashboard.is_some() {
-                cmd_close(state, args);
+            if let Some(ref dash) = state.dashboard {
+                if dash.tree.pane_count() <= 1 {
+                    state.should_quit = true;
+                } else {
+                    cmd_close(state, args);
+                }
+            } else {
+                state.should_quit = true;
             }
         }
 

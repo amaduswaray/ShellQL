@@ -35,15 +35,14 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [ ] All commands like, new session, switch session, delete session, add connection, etc
   - [ ] Tab completion for command line commands
 - [ ] Be able to Delete when in connection list
+- [ ] Auto complete for tables and commands
 - [x] For new table or shcema, if table dont exist, give error, dont create pane
-  - [ ] Auto complete on table rows
 - [x] sql queries and testing. Boot up docker compose file with seed script, and run tests on the data
 
 
-- [ ] Moving panes around
 - [ ] resizing panes
-- [ ] :q when 1 pane left should exit
-- [ ] :q in home view should exit
+- [x] :q when 1 pane left should exit
+- [x] :q in home view should exit
 
 - [x] Filter and sort logic
 - [x] Search logic when in files. vim like search
