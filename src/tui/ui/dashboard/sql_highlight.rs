@@ -67,6 +67,16 @@ static OPERATOR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[+\-*/=<>!]+|::|->|
 // Line tokenizer
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Check whether `pos` in `line` is preceded by a word boundary
+/// (start of line or a non-alphanumeric / non-underscore character).
+fn word_boundary_before(line: &str, pos: usize) -> bool {
+    if pos == 0 {
+        return true;
+    }
+    let prev = line[..pos].chars().last().unwrap();
+    !prev.is_alphanumeric() && prev != '_'
+}
+
 /// Tokenize a single line of SQL into colored spans.
 fn tokenize_line(line: &str) -> Vec<Span<'_>> {
     let mut spans = Vec::new();
@@ -95,14 +105,14 @@ fn tokenize_line(line: &str) -> Vec<Span<'_>> {
                 (0, TokenType::Default)
             }
         } else if let Some(caps) = KEYWORD_RE.captures(slice) {
-            if caps.get(0).unwrap().start() == 0 {
+            if caps.get(0).unwrap().start() == 0 && word_boundary_before(line, pos) {
                 let m = caps.get(1).unwrap();
                 (m.end(), TokenType::Keyword)
             } else {
                 (0, TokenType::Default)
             }
         } else if let Some(caps) = FUNCTION_RE.captures(slice) {
-            if caps.get(0).unwrap().start() == 0 {
+            if caps.get(0).unwrap().start() == 0 && word_boundary_before(line, pos) {
                 let m = caps.get(1).unwrap();
                 (m.end(), TokenType::Function)
             } else {
@@ -196,5 +206,35 @@ mod tests {
         let spans = &highlighted[0].spans;
         let string_color = Color::Rgb(158, 206, 106);
         assert!(spans.iter().any(|s| s.content == "'john'" && s.style.fg == Some(string_color)));
+    }
+
+    #[test]
+    fn test_no_highlight_inside_identifiers() {
+        // "count" is a function name but must NOT be highlighted inside "account"
+        let spans = tokenize_line("SELECT * FROM account");
+        let func_color = Color::Rgb(122, 162, 247);
+        assert!(
+            !spans.iter().any(|s| s.style.fg == Some(func_color) && s.content.to_lowercase() == "count"),
+            "count should not be highlighted inside account"
+        );
+        // "from" should still be highlighted as a keyword
+        let kw_color = Color::Rgb(187, 154, 247);
+        assert!(spans.iter().any(|s| s.content == "FROM" && s.style.fg == Some(kw_color)));
+    }
+
+    #[test]
+    fn test_function_standalone() {
+        // COUNT(*) should highlight COUNT as a function
+        let spans = tokenize_line("SELECT COUNT(*)");
+        let func_color = Color::Rgb(122, 162, 247);
+        assert!(spans.iter().any(|s| s.content == "COUNT" && s.style.fg == Some(func_color)));
+    }
+
+    #[test]
+    fn test_no_highlight_in_recount() {
+        // "count" inside "recount" should not be highlighted
+        let spans = tokenize_line("recount");
+        let func_color = Color::Rgb(122, 162, 247);
+        assert!(!spans.iter().any(|s| s.style.fg == Some(func_color)));
     }
 }

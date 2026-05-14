@@ -57,7 +57,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] :connect command to connect to a new db(session based)
 
 - [x] Proper SQL syntax that works like sqlit
-- [ ] Editor commands and working with proper syntax, ans not "" stuff
+- [x] Editor commands and working with proper syntax, ans not "" stuff
 - [x] Syntax highlighting and editor formatting
 
 - [ ] Complete the command line
