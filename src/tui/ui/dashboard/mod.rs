@@ -54,8 +54,10 @@ fn sync_pane_scroll(dash: &mut DashboardState, _area: Rect) {
                 let inner_h = pane_area.height.saturating_sub(2 + 3).max(1) as usize;
                 pane.sync_nav_offset(inner_h);
             }
-            crate::tui::state::PaneType::TableView => {
-                let viewport = pane_area.height.saturating_sub(2) as usize;
+            crate::tui::state::PaneType::TableView | crate::tui::state::PaneType::QueryResults => {
+                // Header takes 3 lines (top border pad + header text + header line),
+                // so data viewport is inner height minus 3.
+                let viewport = pane_area.height.saturating_sub(2).saturating_sub(3).max(1) as usize;
                 pane.sync_row_offset(viewport);
                 let col_viewport = (pane_area.width / 10).max(1) as usize;
                 pane.sync_col_offset(col_viewport);

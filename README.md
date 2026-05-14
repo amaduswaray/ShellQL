@@ -31,6 +31,9 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [ ] Idea/NOTE: a window should always be connected to a singular table. New table always opens a new window
 - [ ] Windows, sessions: Open new windows for multiple tabs of a singular connection, or have sessions with multiple connections
 
+- [ ] Run query from CLI
+  - [ ] Flags needed to pick from existing db, but can be powerful with shell pipes
+  - [ ] Should be able to pass in sql file path too
 
 
 ### TODOS TUI
@@ -42,6 +45,13 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] Auto complete for tables and commands
 - [x] For new table or shcema, if table dont exist, give error, dont create pane
 - [x] sql queries and testing. Boot up docker compose file with seed script, and run tests on the data
+- [ ] Alternating row background color to look more like excel
+- [ ] Proper SQL syntax that works like sqlit
+- [ ] Editor commands and workings
+- [ ] Syntax highlighting and editor formatting
+- [ ] Fuzzy find on search
+  - [ ] Live matching of results
+  - [ ] cmdline saying n/m results
 
 
 - [x] resizing panes

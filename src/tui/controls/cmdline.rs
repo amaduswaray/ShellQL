@@ -205,10 +205,54 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
                 current_idx,
             });
         }
+        crate::tui::state::PaneType::QueryResults => {
+            let Some(idx) = pane.bound_query_idx else {
+                state.cmdline.set_error("no result set bound");
+                return;
+            };
+            let Some(result) = dash.query_results.get(idx) else {
+                state.cmdline.set_error("result set not available");
+                return;
+            };
+
+            let matches: Vec<usize> = result
+                .rows
+                .iter()
+                .enumerate()
+                .filter(|(_, row)| {
+                    row.iter().any(|cell| cell.to_lowercase().contains(&query_lower))
+                })
+                .map(|(i, _)| i)
+                .collect();
+
+            if matches.is_empty() {
+                state
+                    .cmdline
+                    .set_error(format!("Pattern not found: {query}"));
+                return;
+            }
+
+            let current = pane.row_cursor;
+            let current_idx = match direction {
+                SearchDirection::Forward => matches.iter().position(|&m| m >= current).unwrap_or(0),
+                SearchDirection::Backward => matches
+                    .iter()
+                    .rposition(|&m| m <= current)
+                    .unwrap_or(matches.len() - 1),
+            };
+
+            pane.row_cursor = matches[current_idx];
+            pane.last_search = Some(crate::tui::SearchState {
+                query: query.to_string(),
+                direction,
+                matches,
+                current_idx,
+            });
+        }
         _ => {
             state
                 .cmdline
-                .set_error("Search only supported in table list and table view");
+                .set_error("Search only supported in table list, table view, and query results");
         }
     }
 }

@@ -486,9 +486,10 @@ pub async fn execute_query(
     match pool {
         DbPool::Postgres(pg) => {
             if is_select {
+                let clean = sql.trim().trim_end_matches(';');
+                // First pass: discover column names so we can cast everything to text.
                 let rows = sqlx::query(sql).fetch_all(pg).await?;
                 if rows.is_empty() {
-                    // Can't get column names from empty result set, return empty.
                     return Ok((vec![], vec![]));
                 }
                 use sqlx::Row;
@@ -497,6 +498,13 @@ pub async fn execute_query(
                     .iter()
                     .map(|c| c.name().to_string())
                     .collect();
+                let casts = cols
+                    .iter()
+                    .map(|c| format!("\"{}\"::text", c))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let casted = format!("SELECT {casts} FROM ({clean}) AS _subquery");
+                let rows = sqlx::query(&casted).fetch_all(pg).await?;
                 let data = rows
                     .iter()
                     .map(|r| {
@@ -520,6 +528,7 @@ pub async fn execute_query(
         }
         DbPool::Mysql(my) => {
             if is_select {
+                let clean = sql.trim().trim_end_matches(';');
                 let rows = sqlx::query(sql).fetch_all(my).await?;
                 if rows.is_empty() {
                     return Ok((vec![], vec![]));
@@ -530,6 +539,13 @@ pub async fn execute_query(
                     .iter()
                     .map(|c| c.name().to_string())
                     .collect();
+                let casts = cols
+                    .iter()
+                    .map(|c| format!("CONVERT(`{}`, CHAR)", c))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let casted = format!("SELECT {casts} FROM ({clean}) AS _subquery");
+                let rows = sqlx::query(&casted).fetch_all(my).await?;
                 let data = rows
                     .iter()
                     .map(|r| {

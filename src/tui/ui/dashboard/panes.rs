@@ -723,6 +723,7 @@ fn render_query_editor(
     restore_textarea_cursor(&mut textarea, pane.query_cursor);
     textarea.set_block(Block::default().borders(Borders::NONE));
     textarea.set_style(Style::default().fg(Color::White));
+    textarea.set_cursor_line_style(Style::default());
 
     if focused && pane.mode == TableMode::Insert {
         textarea.set_cursor_style(Style::default().bg(Color::Green).fg(Color::Black));
