@@ -56,9 +56,9 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] :Disconnect command
 - [x] :connect command to connect to a new db(session based)
 
-- [ ] Proper SQL syntax that works like sqlit
+- [x] Proper SQL syntax that works like sqlit
 - [ ] Editor commands and working with proper syntax, ans not "" stuff
-- [ ] Syntax highlighting and editor formatting
+- [x] Syntax highlighting and editor formatting
 
 - [ ] Complete the command line
   - [ ] All commands like, new session, switch session, delete session, add connection, etc
@@ -71,16 +71,4 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [ ] ciw to change in cell
   - [ ] rn to rename the cell value
   - [ ] i to enter insert mode and edit
-
-#### SQL Query logic
-
-Should the sql editor be results and query? Should the results appear in a new pane? Should it replace an existing table view?
-
-| Feature             | Recommended crate(s)                      | Difficulty  |
-| ------------------- | ----------------------------------------- | ----------- |
-| Text editing        | `tui-textarea`                            | Easy        |
-| Syntax highlighting | `tui-syntax` or `syntect` + `syntect-tui` | Easy        |
-| SQL formatting      | `sqlformat`                               | Easy        |
-| SQL parsing         | `sqlparser-rs` or `syntaqlite`            | Medium      |
-| Autocomplete        | your own schema-aware layer               | Medium/Hard |
 

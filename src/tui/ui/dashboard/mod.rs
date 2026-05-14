@@ -1,5 +1,6 @@
 //! Dashboard — recursive pane-based layout.
 pub mod panes;
+pub mod sql_highlight;
 
 use ratatui::{
     Frame,

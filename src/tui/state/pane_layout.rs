@@ -178,6 +178,12 @@ pub struct Pane {
     pub query_text: Vec<String>,
     /// Cursor position (row, col) for the QueryEditor pane.
     pub query_cursor: (usize, usize),
+    /// Index for cycling through table-name autocomplete matches.
+    pub autocomplete_idx: usize,
+    /// Current autocomplete candidates (shown in popup).
+    pub autocomplete_matches: Vec<String>,
+    /// Selected index in the autocomplete popup (None = closed).
+    pub autocomplete_selected: Option<usize>,
 
     // ── Query results state (pane-local) ────────────────────────────────────
     /// Which result set this QueryResults pane is displaying.
@@ -213,6 +219,9 @@ impl Pane {
             sort_desc: false,
             query_text: vec![String::new()],
             query_cursor: (0, 0),
+            autocomplete_idx: 0,
+            autocomplete_matches: Vec::new(),
+            autocomplete_selected: None,
             bound_query_idx: None,
             query_result_count: 0,
             area: None,
@@ -238,6 +247,8 @@ impl Pane {
         self.filter = None;
         self.sort_col = None;
         self.sort_desc = false;
+        self.autocomplete_matches.clear();
+        self.autocomplete_selected = None;
     }
 
     pub fn set_table_view(&mut self, table_name: String) {
@@ -267,6 +278,9 @@ impl Pane {
         self.kind = PaneType::QueryEditor;
         self.query_text = vec![String::new()];
         self.query_cursor = (0, 0);
+        self.autocomplete_matches.clear();
+        self.autocomplete_selected = None;
+        self.autocomplete_idx = 0;
     }
 
     pub fn set_query_results(&mut self, idx: usize) {

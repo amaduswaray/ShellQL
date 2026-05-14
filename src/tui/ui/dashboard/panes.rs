@@ -6,15 +6,14 @@ use ratatui::{
     prelude::Position,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
-use ratatui_textarea::TextArea;
-
 use crate::tui::state::{
     TableMode,
     dashboard::{DashboardState, LoadedTable},
     pane_layout::{Pane, PaneId, PaneType},
 };
+use crate::tui::ui::dashboard::sql_highlight;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -798,38 +797,78 @@ fn render_query_editor(
         height: inner.height.saturating_sub(pad * 2),
     };
 
-    let mut textarea = TextArea::new(pane.query_text.clone());
-    restore_textarea_cursor(&mut textarea, pane.query_cursor);
-    textarea.set_block(Block::default().borders(Borders::NONE));
-    textarea.set_style(Style::default().fg(Color::White));
-    textarea.set_cursor_line_style(Style::default());
+    // ── Cursor-line background (vim cursorline style) ────────────────────────
+    let (cursor_row, _cursor_col) = pane.query_cursor;
+    let cursor_y_in_pane = cursor_row as u16;
+    if cursor_y_in_pane < padded.height {
+        let cursor_line_bg = Rect {
+            x: padded.x,
+            y: padded.y + cursor_y_in_pane,
+            width: padded.width,
+            height: 1,
+        };
+        let bg_style = Style::default().bg(Color::Rgb(41, 46, 66));
+        frame.render_widget(
+            Paragraph::new("").style(bg_style),
+            cursor_line_bg,
+        );
+    }
 
-    if focused && pane.mode == TableMode::Insert {
-        textarea.set_cursor_style(Style::default().bg(Color::Green).fg(Color::Black));
+    // Syntax-highlighted SQL rendering.
+    let highlighted = sql_highlight::highlight_sql_lines(&pane.query_text);
+    let paragraph = Paragraph::new(highlighted);
+    frame.render_widget(paragraph, padded);
+
+    // Position terminal cursor manually.
+    let (cursor_row, cursor_col) = pane.query_cursor;
+    let cursor_y = padded.y + cursor_row as u16;
+    let cursor_x = if let Some(line) = pane.query_text.get(cursor_row) {
+        padded.x + sql_highlight::cursor_visual_x(line, cursor_col) as u16
     } else {
-        textarea.set_cursor_style(Style::default().fg(Color::DarkGray));
-    }
-    frame.render_widget(&textarea, padded);
-
-    let cursor = textarea.cursor();
-    let cursor_y = padded.y + cursor.0 as u16;
-    let cursor_x = padded.x + cursor.1 as u16;
+        padded.x
+    };
     frame.set_cursor_position((cursor_x, cursor_y));
-}
 
-/// Restore TextArea cursor position from stored (row, col).
-fn restore_textarea_cursor(textarea: &mut TextArea, (target_row, target_col): (usize, usize)) {
-    use ratatui_textarea::CursorMove;
-    // Move to top-left first.
-    textarea.move_cursor(CursorMove::Top);
-    textarea.move_cursor(CursorMove::Head);
-    // Move down to target row.
-    for _ in 0..target_row {
-        textarea.move_cursor(CursorMove::Down);
-    }
-    // Move right to target col.
-    for _ in 0..target_col {
-        textarea.move_cursor(CursorMove::Forward);
+    // ── Autocomplete popup ───────────────────────────────────────────────────
+    if let Some(selected) = pane.autocomplete_selected {
+        if !pane.autocomplete_matches.is_empty() {
+            let max_w = pane.autocomplete_matches.iter().map(|m| m.len()).max().unwrap_or(8);
+            let popup_w = (max_w + 4).min(inner.width.saturating_sub(4) as usize) as u16;
+            let popup_h = (pane.autocomplete_matches.len() as u16 + 2)
+                .min(inner.height.saturating_sub(2));
+
+            let popup = Rect {
+                x: cursor_x.min(inner.right().saturating_sub(popup_w)),
+                y: cursor_y + 1,
+                width: popup_w,
+                height: popup_h,
+            };
+
+            frame.render_widget(Clear, popup);
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(Color::White))
+                .style(Style::default().bg(Color::Reset));
+            let inner_popup = block.inner(popup);
+            frame.render_widget(block, popup);
+
+            let lines: Vec<Line> = pane
+                .autocomplete_matches
+                .iter()
+                .enumerate()
+                .map(|(i, m)| {
+                    let is_selected = i == selected;
+                    let style = if is_selected {
+                        Style::default().bg(Color::DarkGray).fg(Color::White).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
+                    Line::from(Span::styled(format!(" {} ", m), style))
+                })
+                .collect();
+            frame.render_widget(Paragraph::new(lines), inner_popup);
+        }
     }
 }
 

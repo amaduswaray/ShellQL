@@ -800,14 +800,26 @@ fn cmd_write(state: &mut AppState, _args: &[&str]) {
         return;
     };
 
-    // If active pane is a QueryEditor, :w executes the query.
+    // If active pane is a QueryEditor, :w formats then executes the query.
     if pane.kind == crate::tui::state::PaneType::QueryEditor {
-        let sql = pane.query_text.join("\n");
-        if sql.trim().is_empty() {
+        let raw_sql = pane.query_text.join("\n");
+        if raw_sql.trim().is_empty() {
             state.cmdline.set_error("query is empty");
             return;
         }
-        dash.pending_query_exec = Some(sql);
+        // Format SQL before execution.
+        let opts = sqlformat::FormatOptions {
+            indent: sqlformat::Indent::Spaces(2),
+            uppercase: Some(true),
+            ..Default::default()
+        };
+        let formatted = sqlformat::format(&raw_sql, &sqlformat::QueryParams::None, &opts);
+        // Update the editor text with the formatted query.
+        if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+            pane.query_text = formatted.lines().map(|s| s.to_string()).collect();
+            pane.query_cursor = (0, 0);
+        }
+        dash.pending_query_exec = Some(formatted);
         dash.loading = true;
         dash.error = None;
         return;

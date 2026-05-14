@@ -19,30 +19,175 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
     }
 
     // ── QueryEditor insert mode ───────────────────────────────────────────────
-    // When a QueryEditor is in Insert mode, all keys go to the textarea.
     {
         let active_id = dash.tree.active_pane;
-        if let Some(pane) = dash.tree.panes.get(&active_id) {
-            if pane.kind == PaneType::QueryEditor && pane.mode == TableMode::Insert {
-                if event.code == KeyCode::Esc {
-                    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
-                        pane.mode = TableMode::Normal;
-                    }
-                    return;
-                }
-                // Feed the key event into the textarea.
-                let mut textarea = TextArea::new(pane.query_text.clone());
-                // Restore cursor position.
-                restore_cursor(&mut textarea, pane.query_cursor);
-                textarea.input(Input::from(event));
-                let cursor = textarea.cursor();
-                let lines: Vec<String> = textarea.lines().iter().map(|s| s.to_string()).collect();
+        let is_insert = dash
+            .tree
+            .panes
+            .get(&active_id)
+            .map_or(false, |p| p.kind == PaneType::QueryEditor && p.mode == TableMode::Insert);
+
+        if is_insert {
+            if event.code == KeyCode::Esc {
                 if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
-                    pane.query_text = lines;
-                    pane.query_cursor = (cursor.0, cursor.1);
+                    pane.mode = TableMode::Normal;
+                    pane.autocomplete_selected = None;
+                    pane.autocomplete_matches.clear();
                 }
                 return;
             }
+
+            let tables: Vec<String> = dash.tables.clone();
+            let popup_open = dash
+                .tree
+                .panes
+                .get(&active_id)
+                .map_or(false, |p| p.autocomplete_selected.is_some());
+
+            if popup_open {
+                match event.code {
+                    KeyCode::Up => {
+                        if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+                            if let Some(sel) = pane.autocomplete_selected {
+                                pane.autocomplete_selected = Some(sel.saturating_sub(1));
+                            }
+                        }
+                        return;
+                    }
+                    KeyCode::Down => {
+                        if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+                            if let Some(sel) = pane.autocomplete_selected {
+                                let max = pane.autocomplete_matches.len().saturating_sub(1);
+                                pane.autocomplete_selected = Some((sel + 1).min(max));
+                            }
+                        }
+                        return;
+                    }
+                    KeyCode::Tab => {
+                        let shift = event.modifiers.contains(KeyModifiers::SHIFT);
+                        if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+                            if let Some(sel) = pane.autocomplete_selected {
+                                let len = pane.autocomplete_matches.len();
+                                if shift {
+                                    pane.autocomplete_selected = Some((sel + len - 1) % len);
+                                } else {
+                                    pane.autocomplete_selected = Some((sel + 1) % len);
+                                }
+                            }
+                        }
+                        return;
+                    }
+                    KeyCode::Enter => {
+                        if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+                            if let Some(sel) = pane.autocomplete_selected {
+                                if let Some(replacement) = pane.autocomplete_matches.get(sel).cloned() {
+                                    let (row, col) = pane.query_cursor;
+                                    if let Some(line) = pane.query_text.get_mut(row) {
+                                        let (start, _) = completion_prefix(line, col);
+                                        let byte_end = char_idx_to_byte_idx(line, col);
+                                        let quoted = if replacement.chars().any(|c| c.is_uppercase()) {
+                                            format!("\"{}\"", replacement)
+                                        } else {
+                                            replacement
+                                        };
+                                        line.replace_range(start..byte_end, &quoted);
+                                        pane.query_cursor = (row, start + quoted.chars().count());
+                                    }
+                                }
+                            }
+                            pane.autocomplete_selected = None;
+                            pane.autocomplete_matches.clear();
+                        }
+                        return;
+                    }
+                    KeyCode::Esc => {
+                        if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+                            pane.autocomplete_selected = None;
+                            pane.autocomplete_matches.clear();
+                        }
+                        return;
+                    }
+                    KeyCode::Char(' ') => {
+                        if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+                            pane.autocomplete_selected = None;
+                            pane.autocomplete_matches.clear();
+                        }
+                        // fall through to feed space to textarea
+                    }
+                    _ => {
+                        // Fall through to textarea input; popup stays open
+                        // and will be updated by the auto-trigger check below.
+                    }
+                }
+            } else if event.code == KeyCode::Tab {
+                if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+                    let (row, col) = pane.query_cursor;
+                    if let Some(line) = pane.query_text.get(row) {
+                        let (_, prefix) = completion_prefix(line, col);
+                        if !prefix.is_empty() {
+                            let matches: Vec<String> = tables
+                                .iter()
+                                .filter(|t| t.to_lowercase().starts_with(&prefix.to_lowercase()))
+                                .cloned()
+                                .collect();
+                            if !matches.is_empty() {
+                                pane.autocomplete_matches = matches;
+                                pane.autocomplete_selected = Some(0);
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+
+            // Close popup on any other key when it wasn't already handled above.
+            if !popup_open {
+                if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+                    pane.autocomplete_selected = None;
+                    pane.autocomplete_matches.clear();
+                }
+            }
+
+            // Feed the key event into the textarea.
+            let (query_text, query_cursor) = dash
+                .tree
+                .panes
+                .get(&active_id)
+                .map(|p| (p.query_text.clone(), p.query_cursor))
+                .unwrap_or_default();
+            let mut textarea = TextArea::new(query_text);
+            restore_cursor(&mut textarea, query_cursor);
+            textarea.input(Input::from(event));
+            let cursor = textarea.cursor();
+            let lines: Vec<String> = textarea.lines().iter().map(|s| s.to_string()).collect();
+
+            if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+                pane.query_text = lines;
+                pane.query_cursor = (cursor.0, cursor.1);
+
+                // Auto-trigger: show table completions after FROM / JOIN / INTO / UPDATE / TABLE.
+                let (row, col) = pane.query_cursor;
+                if let Some(line) = pane.query_text.get(row) {
+                    if let Some(prefix) = get_table_prefix(line, col) {
+                        let matches: Vec<String> = tables
+                            .iter()
+                            .filter(|t| t.to_lowercase().starts_with(&prefix.to_lowercase()))
+                            .cloned()
+                            .collect();
+                        if !matches.is_empty() {
+                            pane.autocomplete_matches = matches;
+                            pane.autocomplete_selected = Some(0);
+                        } else {
+                            pane.autocomplete_selected = None;
+                            pane.autocomplete_matches.clear();
+                        }
+                    } else {
+                        pane.autocomplete_selected = None;
+                        pane.autocomplete_matches.clear();
+                    }
+                }
+            }
+            return;
         }
     }
 
@@ -515,5 +660,143 @@ fn restore_cursor(textarea: &mut TextArea, (target_row, target_col): (usize, usi
     // Move right to target col.
     for _ in 0..target_col {
         textarea.move_cursor(CursorMove::Forward);
+    }
+}
+
+/// Convert a character (Unicode scalar) index into a byte index in `s`.
+/// If `char_idx` is larger than the number of chars, returns `s.len()`.
+fn char_idx_to_byte_idx(s: &str, char_idx: usize) -> usize {
+    let mut byte_idx = 0;
+    for (i, ch) in s.chars().enumerate() {
+        if i == char_idx {
+            return byte_idx;
+        }
+        byte_idx += ch.len_utf8();
+    }
+    byte_idx
+}
+
+/// Extract the current table-name prefix if the cursor is positioned after a
+/// trigger keyword (`FROM`, `JOIN`, `INTO`, `UPDATE`, `TABLE`).
+fn get_table_prefix(line: &str, col: usize) -> Option<String> {
+    let byte_col = char_idx_to_byte_idx(line, col);
+    let before = &line[..byte_col.min(line.len())];
+
+    // Find the last space before the cursor.
+    let last_space = before.rfind(' ')?;
+    let prefix = &before[last_space + 1..];
+
+    // Don't trigger on multiple consecutive spaces.
+    let before_prefix = &before[..last_space];
+    let trailing_spaces = before_prefix.len().saturating_sub(before_prefix.trim_end().len());
+    if trailing_spaces > 0 {
+        return None;
+    }
+
+    let words: Vec<&str> = before_prefix.split_whitespace().collect();
+    let prev_word = words.last().map(|w| w.to_lowercase())?;
+
+    let triggers = ["from", "join", "into", "update", "table"];
+    if triggers.contains(&prev_word.as_str()) {
+        Some(prefix.to_string())
+    } else {
+        None
+    }
+}
+
+/// Compute the replacement range for an autocomplete insertion.
+/// Returns `(start_col, prefix)` where `prefix` is the text to replace.
+fn completion_prefix(line: &str, col: usize) -> (usize, &str) {
+    let byte_col = char_idx_to_byte_idx(line, col);
+    let before = &line[..byte_col.min(line.len())];
+    let start = before.rfind(' ').map(|i| i + 1).unwrap_or(0);
+    (start, &before[start..])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_table_prefix_from_empty() {
+        assert_eq!(get_table_prefix("SELECT * FROM ", 14), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_get_table_prefix_from_partial() {
+        assert_eq!(get_table_prefix("SELECT * FROM u", 15), Some("u".to_string()));
+    }
+
+    #[test]
+    fn test_get_table_prefix_join() {
+        assert_eq!(get_table_prefix("SELECT * FROM users JOIN ", 25), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_get_table_prefix_update() {
+        assert_eq!(get_table_prefix("UPDATE us", 9), Some("us".to_string()));
+    }
+
+    #[test]
+    fn test_get_table_prefix_no_trigger() {
+        assert_eq!(get_table_prefix("SELECT * WHERE id = 1", 21), None);
+    }
+
+    #[test]
+    fn test_get_table_prefix_double_space_no_trigger() {
+        assert_eq!(get_table_prefix("SELECT * FROM  ", 15), None);
+    }
+
+    #[test]
+    fn test_get_table_prefix_after_table_name() {
+        // After "users " the prev_word is "users" which is not a trigger
+        assert_eq!(get_table_prefix("SELECT * FROM users ", 20), None);
+    }
+
+    #[test]
+    fn test_completion_prefix_after_space() {
+        // Cursor after "FROM " → prefix is empty, start at cursor
+        assert_eq!(completion_prefix("SELECT * FROM ", 14), (14, ""));
+    }
+
+    #[test]
+    fn test_completion_prefix_partial() {
+        // Cursor after "FROM u" → prefix is "u"
+        assert_eq!(completion_prefix("SELECT * FROM u", 15), (14, "u"));
+    }
+
+    #[test]
+    fn test_completion_prefix_start_of_line() {
+        // No space before cursor
+        assert_eq!(completion_prefix("users", 5), (0, "users"));
+    }
+
+    #[test]
+    fn test_char_idx_to_byte_idx_ascii() {
+        assert_eq!(char_idx_to_byte_idx("hello", 0), 0);
+        assert_eq!(char_idx_to_byte_idx("hello", 2), 2);
+        assert_eq!(char_idx_to_byte_idx("hello", 5), 5);
+    }
+
+    #[test]
+    fn test_char_idx_to_byte_idx_multibyte() {
+        // 'æ' is 2 bytes in UTF-8
+        assert_eq!(char_idx_to_byte_idx("æ", 0), 0);
+        assert_eq!(char_idx_to_byte_idx("æ", 1), 2);
+        assert_eq!(char_idx_to_byte_idx("æø", 1), 2);
+        assert_eq!(char_idx_to_byte_idx("æø", 2), 4);
+    }
+
+    #[test]
+    fn test_get_table_prefix_multibyte() {
+        // After multi-byte char before trigger: "æ FROM " → should still work
+        assert_eq!(get_table_prefix("æ FROM ", 7), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_completion_prefix_multibyte() {
+        // "æ FROM " = 8 bytes, 7 chars. Cursor at char 7 (past end).
+        // rfind(' ') finds space at byte 7, so start = 8.
+        assert_eq!(completion_prefix("æ FROM ", 7), (8, ""));
     }
 }
