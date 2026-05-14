@@ -482,6 +482,13 @@ fn render_loaded_table(
             })
         });
 
+        // Alternating row background — every odd row gets a subtle dark shade.
+        let alt_bg = if row_idx % 2 == 1 {
+            Color::Rgb(30, 32, 42)
+        } else {
+            Color::Reset
+        };
+
         let row_num_str = format!("{}", row_idx + 1);
         let row_num_style = if is_cursor_row && focused {
             Style::default().fg(Color::White).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
@@ -492,13 +499,26 @@ fn render_loaded_table(
         } else if is_selected_row {
             Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default().fg(Color::DarkGray).bg(alt_bg)
         };
         let row_num_span = Span::styled(
             format!("{:>width$}", row_num_str, width = row_num_width as usize),
             row_num_style,
         );
         buf.set_span(area.x + ROW_NUMBER_PADDING, y, &row_num_span, row_num_width);
+
+        // Fill the entire data area for this row with the alternating background.
+        let data_start = area.x + gutter_width;
+        let data_end = right_boundary;
+        if data_end > data_start {
+            let fill_w = (data_end - data_start) as usize;
+            buf.set_span(
+                data_start,
+                y,
+                &Span::styled(" ".repeat(fill_w), Style::default().bg(alt_bg)),
+                fill_w as u16,
+            );
+        }
 
         let mut x = area.x + gutter_width + EDGE_PADDING;
         for (col_idx, cell_text) in row.iter().enumerate().skip(col_offset) {
@@ -528,13 +548,13 @@ fn render_loaded_table(
             let style = if is_selected && focused {
                 Style::default().bg(Color::Rgb(28, 42, 74)).fg(Color::White).add_modifier(Modifier::BOLD)
             } else if is_selected {
-                Style::default().add_modifier(Modifier::BOLD)
+                Style::default().bg(alt_bg).add_modifier(Modifier::BOLD)
             } else if is_modified {
                 Style::default().fg(Color::Black).bg(Color::Yellow)
             } else if is_deleted_row {
-                Style::default().fg(Color::Red).add_modifier(Modifier::CROSSED_OUT)
+                Style::default().bg(alt_bg).fg(Color::Red).add_modifier(Modifier::CROSSED_OUT)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(Color::White).bg(alt_bg)
             };
 
             let display_text = staged_value.unwrap_or(cell_text.as_str());

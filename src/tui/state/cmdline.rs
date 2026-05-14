@@ -38,6 +38,7 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("res", "resize pane"),
     ("query", "open query editor"),
     ("queryresults", "show query results"),
+    ("disconnect", "disconnect and return home"),
 ];
 
 /// Return every entry in `list` whose name starts with `input`.

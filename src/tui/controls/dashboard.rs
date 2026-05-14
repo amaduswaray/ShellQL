@@ -233,6 +233,23 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
             }
         }
 
+        // ── Cell hover (Shift+K) ───────────────────────────────────────────────
+        KeyCode::Char('K') => {
+            if let Some(pane) = dash.tree.active_mut() {
+                if (pane.kind == PaneType::TableView || pane.kind == PaneType::QueryResults) && pane.mode == TableMode::Normal {
+                    let row = pane.row_cursor;
+                    let col = pane.cursor_col;
+                    if let Some((headers, rows, _schema)) = pane_data(&dash.table_cache, &dash.query_results, pane) {
+                        if row < rows.len() && col < headers.len() {
+                            let value = &rows[row][col];
+                            let col_name = &headers[col];
+                            state.cmdline.loading = Some(format!("{}: {}", col_name, value));
+                        }
+                    }
+                }
+            }
+        }
+
         // ── Mode switching ─────────────────────────────────────────────────────
         KeyCode::Char('v') if event.modifiers.contains(KeyModifiers::CONTROL) => {
             if let Some(pane) = dash.tree.active_mut() {

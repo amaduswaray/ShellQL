@@ -14,8 +14,13 @@ pub async fn handle_overlay(
     };
 
     match (overlay, event.code) {
-        // ── Help ──────────────────────────────────────────────────────────────
+        // ── Help (home screen) ────────────────────────────────────────────────
         (Overlay::Help, KeyCode::Char('q') | KeyCode::Char('?') | KeyCode::Esc) => {
+            state.overlay = None;
+        }
+
+        // ── DashboardHelp ─────────────────────────────────────────────────────
+        (Overlay::DashboardHelp, KeyCode::Char('q') | KeyCode::Esc) => {
             state.overlay = None;
         }
 

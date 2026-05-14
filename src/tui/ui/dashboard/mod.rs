@@ -10,6 +10,7 @@ use ratatui::{
 use crate::tui::{
     AppState,
     state::dashboard::DashboardState,
+    ui::home::overlays::render_overlay,
 };
 
 use self::panes::render_pane;
@@ -38,6 +39,10 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, state: &mut AppState) {
         render_pane(frame, pane_id, dash, is_active);
     }
 
+    // Render overlay on top of dashboard (help, connection picker, etc.).
+    if state.overlay.is_some() {
+        render_overlay(frame, area, state);
+    }
 }
 
 // ── Scroll sync ───────────────────────────────────────────────────────────────

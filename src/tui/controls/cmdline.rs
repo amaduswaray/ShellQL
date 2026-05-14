@@ -353,7 +353,14 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         }
 
         // Overlays
-        "h" | "help" => state.overlay = Some(Overlay::Help),
+        "h" | "help" => {
+            let overlay = if state.mode == AppMode::Dashboard {
+                Overlay::DashboardHelp
+            } else {
+                Overlay::Help
+            };
+            state.overlay = Some(overlay);
+        }
         "add" => {
             state.overlay = Some(Overlay::AddConnection);
             state.form = Some(AddConnectionForm::new());
@@ -371,6 +378,8 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "schema" => cmd_schema(state, args),
         "sql" | "query" => cmd_sql(state, args),
         "queryresults" => cmd_query_results(state, args),
+
+        "disconnect" => cmd_disconnect(state),
 
         "close" => cmd_close(state, args),
 
@@ -571,6 +580,16 @@ fn cmd_noh(state: &mut AppState) {
         pane.last_search = None;
         pane.live_search = None;
     }
+}
+
+fn cmd_disconnect(state: &mut AppState) {
+    if state.dashboard.is_none() {
+        state.cmdline.set_error("not connected");
+        return;
+    }
+    state.dashboard = None;
+    state.mode = AppMode::Home;
+    state.cmdline.reset();
 }
 
 fn cmd_schema(state: &mut AppState, args: &[&str]) {

@@ -20,7 +20,7 @@ use crate::tui::{
     AppState, Overlay,
     ui::home::overlays::{
         add_connection::render_add_connection, command_palette::render_command_palette,
-        connection_picker::render_connection_picker, help::render_help,
+        connection_picker::render_connection_picker, help::{render_help, render_dashboard_help},
     },
 };
 
@@ -28,6 +28,7 @@ pub fn render_overlay(frame: &mut Frame, area: Rect, state: &AppState) {
     let Some(overlay) = state.overlay else { return };
     match overlay {
         Overlay::Help => render_help(frame, area),
+        Overlay::DashboardHelp => render_dashboard_help(frame, area),
         Overlay::AddConnection => render_add_connection(frame, area, state),
         Overlay::CommandPalette => render_command_palette(frame, area),
         Overlay::ConnectionPicker => render_connection_picker(frame, area, state),

@@ -37,6 +37,7 @@ pub enum FloatingPane {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Overlay {
     Help,
+    DashboardHelp,
     AddConnection,
     CommandPalette,
     ConfirmDelete,

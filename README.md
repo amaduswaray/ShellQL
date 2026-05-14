@@ -51,11 +51,10 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] Fuzzy find on search
   - [x] Live matching of results
   - [x] cmdline saying n/m results
-
-- [ ] shift+k for hover feature. Puts the value in the cmd line so that its readable
-- [ ] Alternating row background color to look more like excel
-- [ ] :Disconnect command
-- [ ] :connect command to connect to a new db(session based)
+- [x] shift+k for hover feature. Puts the value in the cmd line so that its readable
+- [x] Alternating row background color to look more like excel
+- [x] :Disconnect command
+- [x] :connect command to connect to a new db(session based)
 
 - [ ] Proper SQL syntax that works like sqlit
 - [ ] Editor commands and working with proper syntax, ans not "" stuff
