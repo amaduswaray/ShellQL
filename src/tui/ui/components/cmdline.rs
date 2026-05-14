@@ -109,7 +109,7 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
     // Pad the right_text to push it to the right edge.
     let left_width: usize = spans.iter().map(|s| s.width()).sum();
     let right_width = right_text.chars().count();
-    let gap = area.width as usize - left_width - right_width;
+    let gap = (area.width as usize).saturating_sub(left_width).saturating_sub(right_width);
     if gap > 0 {
         spans.push(Span::styled(" ".repeat(gap), Style::default()));
     }

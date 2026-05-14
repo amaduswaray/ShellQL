@@ -183,7 +183,7 @@ fn render_table_list(
             // Pad the remainder of the line with spaces so the background colour
             // extends to the right edge on selected rows.
             let text_w: usize = name_spans.iter().map(|s| s.content.chars().count()).sum();
-            let pad = inner.width as usize - text_w;
+            let pad = (inner.width as usize).saturating_sub(text_w);
             let mut spans = name_spans;
             if pad > 0 {
                 spans.push(Span::styled(" ".repeat(pad), base_style));

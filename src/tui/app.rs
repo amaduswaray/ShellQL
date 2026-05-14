@@ -10,7 +10,7 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, prelude::CrosstermBackend};
-use std::{io::stdout, time::Duration};
+use std::{io::stdout, panic::AssertUnwindSafe, time::Duration};
 
 pub async fn run_app() -> color_eyre::Result<()> {
     let mut state = AppState::new();
@@ -28,7 +28,32 @@ async fn app(state: &mut AppState) -> color_eyre::Result<()> {
     terminal.clear()?;
 
     loop {
-        terminal.draw(|f| render(f, state))?;
+        // Render with a safety net: if the render thread panics (e.g. due to a
+        // dimension underflow), catch it, show an error, and keep the app alive.
+        if let Err(panic_info) = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            terminal.draw(|f| render(f, state)).ok();
+        })) {
+            let msg = if let Some(s) = panic_info.downcast_ref::<String>() {
+                format!("Render panic: {s}")
+            } else if let Some(s) = panic_info.downcast_ref::<&str>() {
+                format!("Render panic: {s}")
+            } else {
+                "Render panic: unknown".to_string()
+            };
+            state.cmdline.set_error(msg);
+            // Force a minimal redraw so the error bar is visible.
+            let _ = terminal.draw(|f| {
+                let area = f.area();
+                let line = ratatui::text::Line::from(ratatui::text::Span::styled(
+                    " Render error — check cmdline ",
+                    ratatui::style::Style::default().fg(ratatui::style::Color::Red),
+                ));
+                f.render_widget(
+                    ratatui::widgets::Paragraph::new(vec![line]),
+                    area,
+                );
+            });
+        }
 
         // Async connection with spinner
         if state.pending_connection.is_some() {
@@ -115,7 +140,9 @@ async fn handle_pending_connection(
                 let ch = SPINNER[spinner_frame % SPINNER.len()];
                 state.cmdline.set_loading(format!("{ch}  Connecting to {}...", db.name));
                 spinner_frame += 1;
-                terminal.draw(|f| render(f, state))?;
+                let _ = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    terminal.draw(|f| render(f, state)).ok();
+                }));
             }
         }
     }
