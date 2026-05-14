@@ -38,33 +38,34 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 ### TODOS TUI
 
-- [ ] Complete the command line
-  - [ ] All commands like, new session, switch session, delete session, add connection, etc
-  - [ ] Tab completion for command line commands
-- [ ] Be able to Delete when in connection list
-- [ ] Auto complete for tables and commands
 - [x] For new table or shcema, if table dont exist, give error, dont create pane
 - [x] sql queries and testing. Boot up docker compose file with seed script, and run tests on the data
-- [ ] Alternating row background color to look more like excel
-- [ ] Proper SQL syntax that works like sqlit
-- [ ] Editor commands and workings
-- [ ] Syntax highlighting and editor formatting
-- [ ] Fuzzy find on search
-  - [ ] Live matching of results
-  - [ ] cmdline saying n/m results
-
-
 - [x] resizing panes
 - [x] :q when 1 pane left should exit
 - [x] :q in home view should exit
-
 - [x] Filter and sort logic
 - [x] Search logic when in files. vim like search
 - [x] Visual mode proper for row and column Visual mode proper for row and columnss
 - [x] :exit command to take user to homescreen
 - [x] fix new pane function when having 1 vertical split and trying to make a new vsplit
+- [x] Fuzzy find on search
+  - [x] Live matching of results
+  - [x] cmdline saying n/m results
 
 - [ ] shift+k for hover feature. Puts the value in the cmd line so that its readable
+- [ ] Alternating row background color to look more like excel
+- [ ] :Disconnect command
+- [ ] :connect command to connect to a new db(session based)
+
+- [ ] Proper SQL syntax that works like sqlit
+- [ ] Editor commands and working with proper syntax, ans not "" stuff
+- [ ] Syntax highlighting and editor formatting
+
+- [ ] Complete the command line
+  - [ ] All commands like, new session, switch session, delete session, add connection, etc
+  - [ ] Tab completion for command line commands
+- [ ] Be able to Delete when in connection list
+- [ ] Auto complete for tables and commands
 - [ ] Inline cell edits
 - [ ] Proper vim commands
   - [ ] o and O for newline over and under, to add a new row

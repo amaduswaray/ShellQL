@@ -5,13 +5,25 @@ use crate::{
     tui::{
         AddConnectionForm, AppMode, AppState, CommandLineMode, ConfirmAction, DASHBOARD_COMMANDS,
         HOME_COMMANDS, Overlay, SearchDirection, compute_completions,
+        state::pane_layout::LiveSearchState,
         ui::home::{remove_selected, selected_connection},
     },
 };
 
 pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
     match event.code {
-        KeyCode::Esc => state.cmdline.reset(),
+        KeyCode::Esc => {
+            // Cancel live search: clear live_search from the active pane but
+            // leave last_search intact so previous committed search stays.
+            if let CommandLineMode::Search(_) = state.cmdline.mode {
+                if let Some(ref mut dash) = state.dashboard {
+                    if let Some(pane) = dash.tree.active_mut() {
+                        pane.live_search = None;
+                    }
+                }
+            }
+            state.cmdline.reset();
+        }
 
         KeyCode::Backspace => {
             if state.cmdline.input.is_empty() && !matches!(state.cmdline.mode, CommandLineMode::CellEdit { .. }) {
@@ -50,6 +62,10 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
             CommandLineMode::Input | CommandLineMode::Search(_) | CommandLineMode::CellEdit { .. } => {
                 state.cmdline.clear_completions();
                 state.cmdline.push(c);
+                // For search mode, recompute live fuzzy matches after every keystroke.
+                if let CommandLineMode::Search(direction) = state.cmdline.mode {
+                    compute_live_search(direction, state);
+                }
             }
             CommandLineMode::Confirm(_) => {
                 if state.cmdline.input.is_empty() && matches!(c, 'y' | 'Y' | 'n' | 'N') {
@@ -117,6 +133,64 @@ fn execute_cmdline(state: &mut AppState) {
     }
 }
 
+/// Compute live fuzzy matches while the user is typing in / or ?.
+/// Stores the result in `pane.live_search` without moving the cursor.
+fn compute_live_search(direction: SearchDirection, state: &mut AppState) {
+    let query = state.cmdline.input.trim().to_string();
+    let Some(dash) = state.dashboard.as_mut() else { return };
+    let Some(pane) = dash.tree.active_mut() else { return };
+
+    let query_lower = query.to_lowercase();
+    let matches = if query.is_empty() {
+        vec![]
+    } else {
+        match pane.kind {
+            crate::tui::state::PaneType::TableList => dash
+                .tables
+                .iter()
+                .enumerate()
+                .filter(|(_, name)| name.to_lowercase().contains(&query_lower))
+                .map(|(i, _)| i)
+                .collect(),
+            crate::tui::state::PaneType::TableView => {
+                let Some(ref table_name) = pane.bound_table else { return };
+                let Some(ref loaded) = dash.table_cache.get(table_name) else { return };
+                let col = pane.cursor_col;
+                loaded
+                    .rows
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, row)| {
+                        row.get(col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower))
+                    })
+                    .map(|(i, _)| i)
+                    .collect()
+            }
+            crate::tui::state::PaneType::QueryResults => {
+                let Some(idx) = pane.bound_query_idx else { return };
+                let Some(result) = dash.query_results.get(idx) else { return };
+                let col = pane.cursor_col;
+                result
+                    .rows
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, row)| {
+                        row.get(col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower))
+                    })
+                    .map(|(i, _)| i)
+                    .collect()
+            }
+            _ => vec![],
+        }
+    };
+
+    pane.live_search = Some(LiveSearchState {
+        query: query.clone(),
+        direction,
+        matches,
+    });
+}
+
 fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) {
     let Some(dash) = state.dashboard.as_mut() else {
         return;
@@ -124,6 +198,9 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
     let Some(pane) = dash.tree.active_mut() else {
         return;
     };
+
+    // Clear live search now that we're committing.
+    pane.live_search = None;
 
     let query_lower = query.to_lowercase();
 
@@ -138,9 +215,7 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
                 .collect();
 
             if matches.is_empty() {
-                state
-                    .cmdline
-                    .set_error(format!("Pattern not found: {query}"));
+                state.cmdline.set_error(format!("Pattern not found: {query}"));
                 return;
             }
 
@@ -171,20 +246,17 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
                 return;
             };
 
+            let col = pane.cursor_col;
             let matches: Vec<usize> = loaded
                 .rows
                 .iter()
                 .enumerate()
-                .filter(|(_, row)| {
-                    row.iter().any(|cell| cell.to_lowercase().contains(&query_lower))
-                })
+                .filter(|(_, row)| row.get(col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower)))
                 .map(|(i, _)| i)
                 .collect();
 
             if matches.is_empty() {
-                state
-                    .cmdline
-                    .set_error(format!("Pattern not found: {query}"));
+                state.cmdline.set_error(format!("Pattern not found: {query}"));
                 return;
             }
 
@@ -215,20 +287,17 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
                 return;
             };
 
+            let col = pane.cursor_col;
             let matches: Vec<usize> = result
                 .rows
                 .iter()
                 .enumerate()
-                .filter(|(_, row)| {
-                    row.iter().any(|cell| cell.to_lowercase().contains(&query_lower))
-                })
+                .filter(|(_, row)| row.get(col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower)))
                 .map(|(i, _)| i)
                 .collect();
 
             if matches.is_empty() {
-                state
-                    .cmdline
-                    .set_error(format!("Pattern not found: {query}"));
+                state.cmdline.set_error(format!("Pattern not found: {query}"));
                 return;
             }
 
@@ -250,9 +319,7 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
             });
         }
         _ => {
-            state
-                .cmdline
-                .set_error("Search only supported in table list, table view, and query results");
+            state.cmdline.set_error("Search only supported in table list, table view, and query results");
         }
     }
 }
@@ -502,6 +569,7 @@ fn cmd_noh(state: &mut AppState) {
 
     if let Some(pane) = dash.tree.active_mut() {
         pane.last_search = None;
+        pane.live_search = None;
     }
 }
 

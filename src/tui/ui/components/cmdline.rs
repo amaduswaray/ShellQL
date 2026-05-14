@@ -99,6 +99,15 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
                 ));
 
                 if let Some(pane) = active {
+                    // Show search match indicator when a committed search is active.
+                    if let Some(ref search) = pane.last_search {
+                        if !search.matches.is_empty() {
+                            right_text = format!(
+                                "[{}/{}]", search.current_idx + 1, search.matches.len()
+                            );
+                        }
+                    }
+
                     if let Some(ref table_name) = pane.bound_table {
                         spans.push(Span::styled(" ", Style::default()));
                         spans.push(Span::styled(
@@ -111,10 +120,15 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
                             let total_cols = loaded.headers.len();
                             let cur_row = pane.row_cursor + 1;
                             let cur_col = pane.cursor_col + 1;
-                            right_text = format!(
+                            let pos_text = format!(
                                 "Row {}/{}, Col {}/{}",
                                 cur_row, total_rows, cur_col, total_cols
                             );
+                            if right_text.is_empty() {
+                                right_text = pos_text;
+                            } else {
+                                right_text = format!("{}  {}", right_text, pos_text);
+                            }
                         }
                     }
                 }
@@ -204,9 +218,47 @@ fn render_search(frame: &mut Frame, area: Rect, state: &AppState, direction: Sea
     };
     let input = &state.cmdline.input;
 
+    // Show live match count if available.
+    let match_info = if let Some(ref dash) = state.dashboard {
+        let active_id = dash.tree.active_pane;
+        if let Some(pane) = dash.tree.panes.get(&active_id) {
+            if let Some(ref live) = pane.live_search {
+                if live.matches.is_empty() {
+                    String::new()
+                } else {
+                    // Determine which match the cursor would jump to.
+                    let current_pos = match pane.kind {
+                        crate::tui::state::PaneType::TableList => pane.nav_cursor,
+                        _ => pane.row_cursor,
+                    };
+                    let idx = match live.direction {
+                        SearchDirection::Forward => live
+                            .matches
+                            .iter()
+                            .position(|&m| m >= current_pos)
+                            .unwrap_or(0),
+                        SearchDirection::Backward => live
+                            .matches
+                            .iter()
+                            .rposition(|&m| m <= current_pos)
+                            .unwrap_or(live.matches.len() - 1),
+                    };
+                    format!(" [{}/{}]", idx + 1, live.matches.len())
+                }
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
     let line = Line::from(vec![
         Span::styled(prefix, Style::default().fg(Color::Yellow).bold()),
         Span::styled(input.clone(), Style::default().fg(Color::White)),
+        Span::styled(match_info, Style::default().fg(Color::DarkGray)),
     ]);
 
     frame.render_widget(Paragraph::new(vec![line]), area);

@@ -53,6 +53,56 @@ impl std::fmt::Display for PaneType {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Fuzzy matching helpers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Simple fuzzy match: query chars must appear in order (case-insensitive).
+pub fn fuzzy_match(text: &str, query: &str) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+    let text_lower = text.to_lowercase();
+    let query_lower = query.to_lowercase();
+    let mut text_chars = text_lower.chars();
+    for q in query_lower.chars() {
+        loop {
+            match text_chars.next() {
+                Some(c) if c == q => break,
+                Some(_) => continue,
+                None => return false,
+            }
+        }
+    }
+    true
+}
+
+/// Returns the indices of characters in `text` that match the fuzzy query.
+/// The returned indices are byte offsets into the original `text`.
+pub fn fuzzy_indices(text: &str, query: &str) -> Vec<usize> {
+    if query.is_empty() {
+        return vec![];
+    }
+    let lower_text: Vec<char> = text.to_lowercase().chars().collect();
+    let lower_query: Vec<char> = query.to_lowercase().chars().collect();
+    let text_chars: Vec<char> = text.chars().collect();
+    let mut indices = Vec::new();
+    let mut t = 0usize;
+    for &q in &lower_query {
+        while t < lower_text.len() && lower_text[t] != q {
+            t += 1;
+        }
+        if t >= lower_text.len() {
+            break;
+        }
+        // Compute byte offset of the t-th character in the original text.
+        let offset: usize = text_chars.iter().take(t).map(|c| c.len_utf8()).sum();
+        indices.push(offset);
+        t += 1;
+    }
+    indices
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Search state (pane-local)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -62,6 +112,14 @@ pub struct SearchState {
     pub direction: SearchDirection,
     pub matches: Vec<usize>,
     pub current_idx: usize,
+}
+
+/// Live search state — computed while the user is still typing in / or ?.
+#[derive(Debug, Clone)]
+pub struct LiveSearchState {
+    pub query: String,
+    pub direction: SearchDirection,
+    pub matches: Vec<usize>,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -95,6 +153,7 @@ pub struct Pane {
 
     // ── Search state (pane-local) ───────────────────────────────────────────
     pub last_search: Option<SearchState>,
+    pub live_search: Option<LiveSearchState>,
 
     // ── Visual selection anchor ─────────────────────────────────────────────
     /// When in VisualRow / VisualColumn, this is the row where the selection
@@ -145,6 +204,7 @@ impl Pane {
             col_offset: 0,
             mode: TableMode::Normal,
             last_search: None,
+            live_search: None,
             visual_anchor: None,
             pending_updates: Vec::new(),
             pending_deletes: Vec::new(),
@@ -171,6 +231,8 @@ impl Pane {
         self.cursor_col = 0;
         self.col_offset = 0;
         self.mode = TableMode::Normal;
+        self.last_search = None;
+        self.live_search = None;
         self.pending_updates.clear();
         self.pending_deletes.clear();
         self.filter = None;
@@ -187,6 +249,7 @@ impl Pane {
         self.col_offset = 0;
         self.mode = TableMode::Normal;
         self.last_search = None; // clear search highlight when leaving list
+        self.live_search = None;
         self.visual_anchor = None;
         self.pending_updates.clear();
         self.pending_deletes.clear();

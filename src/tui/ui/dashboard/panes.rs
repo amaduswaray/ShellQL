@@ -108,32 +108,45 @@ fn pane_block(title: &str, focused: bool) -> Block<'_> {
         .border_style(border_style)
 }
 
-// ── Match highlighting helper ─────────────────────────────────────────────────
+// ── Match highlighting helpers ────────────────────────────────────────────────
 
-/// Split `text` into spans where occurrences of `query` (case-insensitive) are
-/// rendered with `hl_style` and the rest with `base_style`.
-fn highlight_matches<'a>(text: &'a str, query: &str, base: Style, hl: Style) -> Vec<Span<'a>> {
+/// Highlight the first substring match of `query` in `text` with bold+yellow.
+/// Characters before and after the match keep `base` style.
+fn search_highlight_spans<'a>(text: &'a str, query: &str, base: Style) -> Vec<Span<'a>> {
     if query.is_empty() {
         return vec![Span::styled(text, base)];
     }
-    let lower_text = text.to_lowercase();
-    let lower_query = query.to_lowercase();
-    let mut spans = vec![];
-    let mut last = 0;
+    let lower_text: Vec<char> = text.to_lowercase().chars().collect();
+    let lower_query: Vec<char> = query.to_lowercase().chars().collect();
 
-    for (start, part) in lower_text.match_indices(&lower_query) {
-        if start > last {
-            spans.push(Span::styled(&text[last..start], base));
+    if lower_query.len() > lower_text.len() {
+        return vec![Span::styled(text, base)];
+    }
+
+    if let Some(start_char) = lower_text
+        .windows(lower_query.len())
+        .position(|w| w == lower_query.as_slice())
+    {
+        let chars: Vec<char> = text.chars().collect();
+        let start_byte: usize = chars[..start_char].iter().map(|c| c.len_utf8()).sum();
+        let end_byte: usize =
+            chars[..start_char + lower_query.len()].iter().map(|c| c.len_utf8()).sum();
+
+        let mut spans = vec![];
+        if start_byte > 0 {
+            spans.push(Span::styled(&text[0..start_byte], base));
         }
-        spans.push(Span::styled(&text[start..start + part.len()], hl));
-        last = start + part.len();
+        spans.push(Span::styled(
+            &text[start_byte..end_byte],
+            base.fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        ));
+        if end_byte < text.len() {
+            spans.push(Span::styled(&text[end_byte..], base));
+        }
+        spans
+    } else {
+        vec![Span::styled(text, base)]
     }
-
-    if last < text.len() {
-        spans.push(Span::styled(&text[last..], base));
-    }
-
-    spans
 }
 
 // ── TableList pane ────────────────────────────────────────────────────────────
@@ -171,7 +184,9 @@ fn render_table_list(
             Style::default().fg(Color::DarkGray),
         )));
     } else {
-        let search_query = pane.last_search.as_ref().map(|s| s.query.as_str());
+        // Prefer live_search for highlighting while typing, fall back to last_search.
+        let live_query = pane.live_search.as_ref().map(|s| s.query.as_str());
+        let committed_query = pane.last_search.as_ref().map(|s| s.query.as_str());
 
         for table_idx in start..end {
             let table = &dash.tables[table_idx];
@@ -190,16 +205,10 @@ fn render_table_list(
                 Style::default().fg(Color::DarkGray)
             };
 
-            let match_style = if selected && focused {
-                Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)
-            } else if selected {
-                Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
-            };
-
-            let name_spans = if let Some(query) = search_query {
-                highlight_matches(table, query, base_style, match_style)
+            let name_spans = if let Some(query) = live_query {
+                search_highlight_spans(table, query, base_style)
+            } else if let Some(query) = committed_query {
+                search_highlight_spans(table, query, base_style)
             } else {
                 vec![Span::styled(table.as_str(), base_style)]
             };
@@ -400,8 +409,30 @@ fn render_loaded_table(
             Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)
         };
 
-        let padded = format!("{:width$}", header.as_str(), width = effective_width as usize);
-        buf.set_span(x, y_header_text, &Span::styled(padded, style), effective_width);
+        let search_query = pane
+            .live_search
+            .as_ref()
+            .map(|s| s.query.as_str())
+            .or_else(|| pane.last_search.as_ref().map(|s| s.query.as_str()));
+        if search_query.is_some() && col_idx == cursor_col {
+            let hl_spans = search_highlight_spans(header, search_query.unwrap(), style);
+            let mut cell_x = x;
+            let max_x = x + effective_width;
+            for span in hl_spans {
+                let w = span.content.chars().count() as u16;
+                if cell_x >= max_x { break; }
+                let avail = (max_x - cell_x).min(w);
+                buf.set_span(cell_x, y_header_text, &span, avail);
+                cell_x += avail;
+            }
+            if cell_x < max_x {
+                let pad = " ".repeat((max_x - cell_x) as usize);
+                buf.set_span(cell_x, y_header_text, &Span::styled(pad, style), max_x - cell_x);
+            }
+        } else {
+            let padded = format!("{:width$}", header.as_str(), width = effective_width as usize);
+            buf.set_span(x, y_header_text, &Span::styled(padded, style), effective_width);
+        }
         x += width;
     }
 
@@ -508,8 +539,36 @@ fn render_loaded_table(
 
             let display_text = staged_value.unwrap_or(cell_text.as_str());
             let display = if display_text.is_empty() { " " } else { display_text };
-            let padded = format!("{:width$}", display, width = effective_width as usize);
-            buf.set_span(x, y, &Span::styled(padded, style), effective_width);
+
+            // Fuzzy highlight on the selected column when a search is active.
+            let search_query = pane
+                .live_search
+                .as_ref()
+                .map(|s| s.query.as_str())
+                .or_else(|| pane.last_search.as_ref().map(|s| s.query.as_str()));
+            let is_search_col = search_query.is_some() && col_idx == cursor_col;
+            if is_search_col {
+                let hl_spans = search_highlight_spans(display, search_query.unwrap(), style);
+                let mut cell_x = x;
+                let max_x = x + effective_width;
+                for span in hl_spans {
+                    let w = span.content.chars().count() as u16;
+                    if cell_x >= max_x {
+                        break;
+                    }
+                    let avail = (max_x - cell_x).min(w);
+                    buf.set_span(cell_x, y, &span, avail);
+                    cell_x += avail;
+                }
+                // Pad remainder with spaces.
+                if cell_x < max_x {
+                    let pad = " ".repeat((max_x - cell_x) as usize);
+                    buf.set_span(cell_x, y, &Span::styled(pad, style), max_x - cell_x);
+                }
+            } else {
+                let padded = format!("{:width$}", display, width = effective_width as usize);
+                buf.set_span(x, y, &Span::styled(padded, style), effective_width);
+            }
             x += width;
         }
 
