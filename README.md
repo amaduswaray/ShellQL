@@ -38,7 +38,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] Delete when in connection list
 - [ ] For new table or shcema, if table dont exist, give error, dont create pane
   - [ ] Auto complete on table rows
-- [ ] sql queries and testing. Boot up docker compose file with seed script, and run tests on the data
+- [x] sql queries and testing. Boot up docker compose file with seed script, and run tests on the data
 
 
 - [ ] Moving panes around
@@ -55,6 +55,14 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] Windows, sessions
 - [x] :exit command to take user to homescreen
 - [x] fix new pane function when having 1 vertical split and trying to make a new vsplit
+
+- [ ] :new table <name> should give error isntead of opening pane
+- [ ] Inline cell edits
+- [ ] Proper vim commands
+  - [ ] o and O for newline over and under, to add a new row
+  - [ ] ciw to change in cell
+  - [ ] rn to rename the cell value
+  - [ ] i to enter insert mode and edit
 
 #### SQL Query logic
 

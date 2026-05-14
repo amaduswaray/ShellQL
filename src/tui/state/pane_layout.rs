@@ -99,6 +99,14 @@ pub struct Pane {
     /// started. All rows between anchor and cursor are highlighted.
     pub visual_anchor: Option<usize>,
 
+    // ── Staged cell edits (pane-local) ──────────────────────────────────────
+    /// Each entry is (row_idx, col_idx, new_value).
+    pub pending_updates: Vec<(usize, usize, String)>,
+
+    // ── Staged row deletes (pane-local) ─────────────────────────────────────
+    /// PK values of rows marked for deletion.
+    pub pending_deletes: Vec<String>,
+
     // ── Cached render area (updated every frame) ────────────────────────────
     pub area: Option<Rect>,
 }
@@ -119,6 +127,8 @@ impl Pane {
             mode: TableMode::Normal,
             last_search: None,
             visual_anchor: None,
+            pending_updates: Vec::new(),
+            pending_deletes: Vec::new(),
             area: None,
         }
     }
@@ -135,6 +145,8 @@ impl Pane {
         self.cursor_col = 0;
         self.col_offset = 0;
         self.mode = TableMode::Normal;
+        self.pending_updates.clear();
+        self.pending_deletes.clear();
     }
 
     pub fn set_table_view(&mut self, table_name: String) {
@@ -147,6 +159,8 @@ impl Pane {
         self.mode = TableMode::Normal;
         self.last_search = None; // clear search highlight when leaving list
         self.visual_anchor = None;
+        self.pending_updates.clear();
+        self.pending_deletes.clear();
     }
 
     pub fn set_schema_view(&mut self, table_name: String) {

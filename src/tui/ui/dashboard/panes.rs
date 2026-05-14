@@ -48,7 +48,12 @@ fn make_title(pane: &Pane) -> String {
         PaneType::TableList => format!(" {} ", pane.display_id),
         PaneType::TableView => {
             if let Some(ref table) = pane.bound_table {
-                format!(" {}: {} ", pane.display_id, table)
+                let dirty = !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty();
+                if dirty {
+                    format!(" {}: {}* ", pane.display_id, table)
+                } else {
+                    format!(" {}: {} ", pane.display_id, table)
+                }
             } else {
                 format!(" {} ", pane.display_id)
             }
@@ -417,9 +422,17 @@ fn render_loaded_table(
         let is_selected_row = in_visual_row(row_idx);
         let is_cursor_row = row_idx == pane.row_cursor;
 
+        let is_deleted_row = pane.pending_deletes.iter().any(|pk| {
+            loaded.schema.iter().position(|c| c.is_primary_key).map_or(false, |pk_idx| {
+                row_idx < loaded.rows.len() && loaded.rows[row_idx].get(pk_idx) == Some(pk)
+            })
+        });
+
         let row_num_str = format!("{}", row_idx + 1);
         let row_num_style = if is_cursor_row && focused {
             Style::default().fg(Color::White).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+        } else if is_deleted_row {
+            Style::default().fg(Color::Red).add_modifier(Modifier::CROSSED_OUT)
         } else if is_selected_row && focused {
             Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
         } else if is_selected_row {
@@ -447,15 +460,31 @@ fn render_loaded_table(
                 TableMode::VisualColumn => col_idx == cursor_col,
             };
 
+            let staged_value = pane.pending_updates
+                .iter()
+                .find(|(r, c, _)| *r == row_idx && *c == col_idx)
+                .map(|(_, _, val)| val.as_str());
+            let is_modified = staged_value.is_some();
+            let is_deleted_row = pane.pending_deletes.iter().any(|pk| {
+                loaded.schema.iter().position(|c| c.is_primary_key).map_or(false, |pk_idx| {
+                    row_idx < loaded.rows.len() && loaded.rows[row_idx].get(pk_idx) == Some(pk)
+                })
+            });
+
             let style = if is_selected && focused {
                 Style::default().bg(Color::Rgb(28, 42, 74)).fg(Color::White).add_modifier(Modifier::BOLD)
             } else if is_selected {
                 Style::default().add_modifier(Modifier::BOLD)
+            } else if is_modified {
+                Style::default().fg(Color::Black).bg(Color::Yellow)
+            } else if is_deleted_row {
+                Style::default().fg(Color::Red).add_modifier(Modifier::CROSSED_OUT)
             } else {
                 Style::default().fg(Color::White)
             };
 
-            let display = if cell_text.is_empty() { " " } else { cell_text.as_str() };
+            let display_text = staged_value.unwrap_or(cell_text.as_str());
+            let display = if display_text.is_empty() { " " } else { display_text };
             let padded = format!("{:width$}", display, width = effective_width as usize);
             buf.set_span(x, y, &Span::styled(padded, style), effective_width);
             x += width;

@@ -30,6 +30,62 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                 dash.tree.navigate(PaneDirection::Right);
                 return;
             }
+            KeyCode::Char('u') => {
+                // Half-page scroll up
+                if let Some(pane) = dash.tree.active_mut() {
+                    if pane.kind == PaneType::TableView {
+                        let viewport = pane.area.map_or(10, |a| (a.height / 2).max(1) as usize);
+                        for _ in 0..viewport {
+                            pane.row_prev();
+                        }
+                    } else if pane.kind == PaneType::TableList {
+                        let viewport = pane.area.map_or(10, |a| (a.height / 2).max(1) as usize);
+                        for _ in 0..viewport {
+                            pane.nav_prev();
+                        }
+                    } else if pane.kind == PaneType::SchemaView {
+                        let viewport = pane.area.map_or(3, |a| (a.height / 6).max(1) as usize);
+                        for _ in 0..viewport {
+                            pane.nav_prev();
+                        }
+                    }
+                }
+                return;
+            }
+            KeyCode::Char('d') => {
+                // Half-page scroll down
+                if let Some(pane) = dash.tree.active_mut() {
+                    if pane.kind == PaneType::TableView {
+                        let bound = pane
+                            .bound_table
+                            .as_ref()
+                            .and_then(|name| dash.table_cache.get(name))
+                            .map(|lt| lt.rows.len())
+                            .unwrap_or(0);
+                        let viewport = pane.area.map_or(10, |a| (a.height / 2).max(1) as usize);
+                        for _ in 0..viewport {
+                            pane.row_next(bound);
+                        }
+                    } else if pane.kind == PaneType::TableList {
+                        let viewport = pane.area.map_or(10, |a| (a.height / 2).max(1) as usize);
+                        for _ in 0..viewport {
+                            pane.nav_next(dash.tables.len());
+                        }
+                    } else if pane.kind == PaneType::SchemaView {
+                        let bound = pane
+                            .bound_table
+                            .as_ref()
+                            .and_then(|name| dash.table_cache.get(name))
+                            .map(|lt| lt.schema.len())
+                            .unwrap_or(0);
+                        let viewport = pane.area.map_or(3, |a| (a.height / 6).max(1) as usize);
+                        for _ in 0..viewport {
+                            pane.nav_next(bound);
+                        }
+                    }
+                }
+                return;
+            }
             _ => {}
         }
     }
@@ -44,6 +100,31 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                     PaneType::TableView => pane.row_top(),
                     PaneType::SchemaView => pane.nav_top(),
                     _ => {}
+                }
+            }
+            return;
+        }
+    }
+
+    // Handle pending 'd' for 'dd' sequence first.
+    if let Some('d') = state.pending_key {
+        state.pending_key = None;
+        if event.code == KeyCode::Char('d') {
+            if let Some(pane) = dash.tree.active_mut() {
+                if pane.kind == PaneType::TableView && pane.mode == TableMode::Normal {
+                    if let Some(ref table_name) = pane.bound_table {
+                        if let Some(ref loaded) = dash.table_cache.get(table_name) {
+                            let row = pane.row_cursor;
+                            if row < loaded.rows.len() {
+                                if let Some(pk_idx) = loaded.schema.iter().position(|c| c.is_primary_key) {
+                                    let pk_val = loaded.rows[row][pk_idx].clone();
+                                    if !pane.pending_deletes.contains(&pk_val) {
+                                        pane.pending_deletes.push(pk_val);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             return;
@@ -144,8 +225,64 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
         KeyCode::Char('i') => {
             if let Some(pane) = dash.tree.active_mut() {
                 if pane.kind == PaneType::TableView {
-                    pane.mode = TableMode::Insert;
+                    if pane.mode == TableMode::Normal {
+                        // Open cell editor for the current cell.
+                        let row = pane.row_cursor;
+                        let col = pane.cursor_col;
+                        if let Some(ref table_name) = pane.bound_table {
+                            if let Some(ref loaded) = dash.table_cache.get(table_name) {
+                                if row < loaded.rows.len() && col < loaded.headers.len() {
+                                    let current = loaded.rows[row][col].clone();
+                                    let col_name = loaded.headers[col].clone();
+                                    state.cmdline.open_cell_edit(row, col, &col_name, &current);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        KeyCode::Char('u') => {
+            if let Some(pane) = dash.tree.active_mut() {
+                if pane.kind == PaneType::TableView && pane.mode == TableMode::Normal {
+                    if !pane.pending_updates.is_empty() {
+                        pane.pending_updates.pop();
+                    } else if !pane.pending_deletes.is_empty() {
+                        pane.pending_deletes.pop();
+                    } else {
+                        state.cmdline.set_error("already at oldest change");
+                    }
+                }
+            }
+        }
+        KeyCode::Char('d') => {
+            if let Some(pane) = dash.tree.active_mut() {
+                if pane.kind == PaneType::TableView && pane.mode == TableMode::VisualRow {
+                    if let Some(ref table_name) = pane.bound_table {
+                        if let Some(ref loaded) = dash.table_cache.get(table_name) {
+                            let anchor = pane.visual_anchor.unwrap_or(pane.row_cursor);
+                            let start = anchor.min(pane.row_cursor);
+                            let end = anchor.max(pane.row_cursor);
+                            // Find PK column index.
+                            let pk_idx = loaded.schema.iter().position(|c| c.is_primary_key);
+                            if let Some(pk_col) = pk_idx {
+                                for r in start..=end {
+                                    if r < loaded.rows.len() {
+                                        let pk_val = loaded.rows[r][pk_col].clone();
+                                        if !pane.pending_deletes.contains(&pk_val) {
+                                            pane.pending_deletes.push(pk_val);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    pane.mode = TableMode::Normal;
                     pane.visual_anchor = None;
+                } else if pane.kind == PaneType::TableView && pane.mode == TableMode::Normal {
+                    // Start 'dd' sequence.
+                    state.pending_key = Some('d');
                 }
             }
         }

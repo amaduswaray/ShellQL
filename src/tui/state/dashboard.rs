@@ -68,9 +68,21 @@ pub struct DashboardState {
     // ── Async-load signal ─────────────────────────────────────────────────────
     pub pending_load: Option<String>,
 
+    // ── Async-commit signal ───────────────────────────────────────────────────
+    pub pending_commit: Option<PendingCommit>,
+
     // ── Status ────────────────────────────────────────────────────────────────
     pub loading: bool,
     pub error: Option<String>,
+}
+
+/// Staged changes waiting to be written to the database.
+#[derive(Debug, Clone)]
+pub struct PendingCommit {
+    pub table: String,
+    pub pk_col: String,
+    pub updates: Vec<(String, String, String)>, // (pk_val, target_col, new_value)
+    pub deletes: Vec<String>,                   // pk_vals
 }
 
 impl DashboardState {
@@ -83,6 +95,7 @@ impl DashboardState {
             tables,
             table_cache: HashMap::new(),
             pending_load: None,
+            pending_commit: None,
             loading: false,
             error: None,
         }

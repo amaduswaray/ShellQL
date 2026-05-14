@@ -14,7 +14,7 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
         KeyCode::Esc => state.cmdline.reset(),
 
         KeyCode::Backspace => {
-            if state.cmdline.input.is_empty() {
+            if state.cmdline.input.is_empty() && !matches!(state.cmdline.mode, CommandLineMode::CellEdit { .. }) {
                 state.cmdline.reset();
             } else {
                 state.cmdline.clear_completions();
@@ -47,7 +47,7 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
         KeyCode::Enter => execute_cmdline(state),
 
         KeyCode::Char(c) => match &state.cmdline.mode {
-            CommandLineMode::Input | CommandLineMode::Search(_) => {
+            CommandLineMode::Input | CommandLineMode::Search(_) | CommandLineMode::CellEdit { .. } => {
                 state.cmdline.clear_completions();
                 state.cmdline.push(c);
             }
@@ -73,6 +73,14 @@ fn execute_cmdline(state: &mut AppState) {
             state.cmdline.reset();
         }
 
+        CommandLineMode::Confirm(ConfirmAction::CommitWrites { .. }) => {
+            if state.cmdline.input.to_lowercase() == "y" {
+                // Re-build and execute the commit from the pane's current pending state.
+                execute_pending_commit(state);
+            }
+            state.cmdline.reset();
+        }
+
         CommandLineMode::Input => {
             let cmd = state.cmdline.input.trim().to_string();
             state.cmdline.reset();
@@ -84,6 +92,24 @@ fn execute_cmdline(state: &mut AppState) {
             state.cmdline.reset();
             if !query.is_empty() {
                 commit_search(&query, direction, state);
+            }
+        }
+
+        CommandLineMode::CellEdit { row, col, .. } => {
+            let new_value = state.cmdline.input.trim().to_string();
+            state.cmdline.reset();
+            if let Some(ref mut dash) = state.dashboard {
+                if let Some(pane) = dash.tree.active_mut() {
+                    if let Some(ref table_name) = pane.bound_table {
+                        if let Some(ref loaded) = dash.table_cache.get(table_name) {
+                            if row < loaded.rows.len() && col < loaded.headers.len() {
+                                // Remove any existing pending update for this cell.
+                                pane.pending_updates.retain(|(r, c, _)| !(*r == row && *c == col));
+                                pane.pending_updates.push((row, col, new_value));
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -185,6 +211,8 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "sql" | "query" => cmd_sql(state, args),
 
         "close" => cmd_close(state, args),
+
+        "w" | "write" => cmd_write(state, args),
 
         // Destructive actions
         "d" | "delete" => {
@@ -367,6 +395,94 @@ fn cmd_sql(state: &mut AppState, _args: &[&str]) {
 
     if let Some(pane) = dash.tree.active_mut() {
         pane.set_query_editor();
+    }
+}
+
+fn cmd_write(state: &mut AppState, _args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    let active_id = dash.tree.active_pane;
+    let Some(pane) = dash.tree.panes.get(&active_id) else {
+        return;
+    };
+
+    if pane.pending_updates.is_empty() && pane.pending_deletes.is_empty() {
+        state.cmdline.set_error("no pending changes");
+        return;
+    }
+
+    let table_name = match pane.bound_table.clone() {
+        Some(t) => t,
+        None => {
+            state.cmdline.set_error("no table bound to active pane");
+            return;
+        }
+    };
+
+    let update_count = pane.pending_updates.len();
+    let delete_count = pane.pending_deletes.len();
+
+    // If there are deletes, ask for confirmation. Otherwise commit immediately.
+    if delete_count > 0 {
+        state.cmdline.open_confirm(ConfirmAction::CommitWrites {
+            table: table_name,
+            update_count,
+            delete_count,
+        });
+        return;
+    }
+
+    execute_pending_commit(state);
+}
+
+/// Build a PendingCommit from the active pane's staged changes and queue it.
+fn execute_pending_commit(state: &mut AppState) {
+    let Some(dash) = state.dashboard.as_mut() else { return };
+    let active_id = dash.tree.active_pane;
+    let Some(pane) = dash.tree.panes.get(&active_id) else { return };
+
+    if pane.pending_updates.is_empty() && pane.pending_deletes.is_empty() {
+        return;
+    }
+
+    let Some(ref table_name) = pane.bound_table else { return };
+    let Some(ref loaded) = dash.table_cache.get(table_name) else { return };
+
+    let pk_col = loaded.schema.iter().find(|c| c.is_primary_key);
+    let Some(pk_col) = pk_col else {
+        state.cmdline.set_error("no primary key found for table");
+        return;
+    };
+
+    let pk_idx = loaded.schema.iter().position(|c| c.is_primary_key).unwrap_or(0);
+
+    let mut updates = Vec::new();
+    for (row, col, new_val) in &pane.pending_updates {
+        if *row < loaded.rows.len() && *col < loaded.headers.len() {
+            let pk_val = loaded.rows[*row][pk_idx].clone();
+            let target_col = loaded.headers[*col].clone();
+            updates.push((pk_val, target_col, new_val.clone()));
+        }
+    }
+
+    let deletes = pane.pending_deletes.clone();
+
+    dash.pending_commit = Some(crate::tui::state::dashboard::PendingCommit {
+        table: table_name.clone(),
+        pk_col: pk_col.name.clone(),
+        updates,
+        deletes,
+    });
+    dash.loading = true;
+    dash.error = None;
+
+    // Clear pending state from the pane.
+    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+        pane.pending_updates.clear();
+        pane.pending_deletes.clear();
     }
 }
 
