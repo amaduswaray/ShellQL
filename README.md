@@ -24,10 +24,9 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] add `shql <string>` that lets you run shql and string and imediately go into a connection without saving it or persiting it. Simply to view db
   - [ ] Useful for piping strings or just running
 
-- [ ] Raw sql files for pre-made queries
 - [ ] Create trait that holds common functions for models(host, connection validator, connection builder, connection string extractor, etc)
-- [ ] Write TESTTS!!
 - [ ] Session manager - tmux lik sessionizer to change between connctions. Makes connections out of scope and harder to accidentaly change wrong dbs
+
 
 
 ### TODOS TUI
@@ -48,10 +47,15 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] :q in home view should exit
 
 - [ ] Filter and sort logic
-  - [ ] use queres
-  - [ ] How to filter with multiple columns? what is ergonomic
+  - [ ] / on a column filters based on that column
+  - [ ] :order by, should let you sort
+  - [ ] :where, should let you make where query
 - [x] Search logic when in files. vim like search
-- [ ] Visual mode proper for row and column Visual mode proper for row and columnss
+- [x] Visual mode proper for row and column Visual mode proper for row and columnss
 - [ ] Windows, sessions
 - [x] :exit command to take user to homescreen
-- [ ] fix new pane function when having 1 vertical split and trying to make a new vsplit
+- [x] fix new pane function when having 1 vertical split and trying to make a new vsplit
+
+#### SQL Query logic
+
+Should the sql editor be results and query? Should the results appear in a new pane? Should it replace an existing table view?

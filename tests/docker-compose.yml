@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: shellql-postgres-test
+    environment:
+      POSTGRES_USER: shellql
+      POSTGRES_PASSWORD: shellql
+      POSTGRES_DB: shellql_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shellql -d shellql_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mysql:
+    image: mysql:8
+    container_name: shellql-mysql-test
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_USER: shellql
+      MYSQL_PASSWORD: shellql
+      MYSQL_DATABASE: shellql_test
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "shellql", "-pshellql"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  sqlite:
+    image: alpine:latest
+    container_name: shellql-sqlite-test
+    volumes:
+      - ./docker/sqlite:/data
+    command: |
+      sh -c "apk add --no-cache sqlite && sqlite3 /data/seed.db < /data/seed.sql && tail -f /dev/null"
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /data/seed.db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

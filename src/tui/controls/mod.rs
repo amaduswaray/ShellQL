@@ -50,7 +50,7 @@ pub async fn handle_key_event(
             let pool = dash.pool.clone();
             match tokio::try_join!(
                 crate::connection::table_schema(&pool, &table),
-                crate::connection::table_rows(&pool, &table, 200),
+                crate::connection::table_rows(&pool, &table, 200, 0),
             ) {
                 Ok((schema, (headers, rows))) => {
                     use crate::tui::state::dashboard::LoadedTable;
