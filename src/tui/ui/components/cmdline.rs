@@ -30,9 +30,7 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
     if let Some(ref loading) = state.cmdline.loading {
         let line = Line::from(Span::styled(
             loading.as_str(),
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Yellow),
         ));
         frame.render_widget(Paragraph::new(vec![line]), area);
         return;

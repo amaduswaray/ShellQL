@@ -33,10 +33,9 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 - [ ] Complete the command line
   - [ ] All commands like, new session, switch session, delete session, add connection, etc
-  - [ ] When an error is there, enter should take you out of the command line mode
   - [ ] Tab completion for command line commands
-- [ ] Delete when in connection list
-- [ ] For new table or shcema, if table dont exist, give error, dont create pane
+- [ ] Be able to Delete when in connection list
+- [x] For new table or shcema, if table dont exist, give error, dont create pane
   - [ ] Auto complete on table rows
 - [x] sql queries and testing. Boot up docker compose file with seed script, and run tests on the data
 
@@ -46,17 +45,13 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] :q when 1 pane left should exit
 - [ ] :q in home view should exit
 
-- [ ] Filter and sort logic
-  - [ ] / on a column filters based on that column
-  - [ ] :order by, should let you sort
-  - [ ] :where, should let you make where query
+- [x] Filter and sort logic
 - [x] Search logic when in files. vim like search
 - [x] Visual mode proper for row and column Visual mode proper for row and columnss
 - [ ] Windows, sessions
 - [x] :exit command to take user to homescreen
 - [x] fix new pane function when having 1 vertical split and trying to make a new vsplit
 
-- [ ] :new table <name> should give error isntead of opening pane
 - [ ] Inline cell edits
 - [ ] Proper vim commands
   - [ ] o and O for newline over and under, to add a new row

@@ -125,9 +125,10 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
         return;
     };
 
+    let query_lower = query.to_lowercase();
+
     match pane.kind {
         crate::tui::state::PaneType::TableList => {
-            let query_lower = query.to_lowercase();
             let matches: Vec<usize> = dash
                 .tables
                 .iter()
@@ -160,10 +161,54 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
                 current_idx,
             });
         }
+        crate::tui::state::PaneType::TableView => {
+            let Some(ref table_name) = pane.bound_table else {
+                state.cmdline.set_error("no table bound");
+                return;
+            };
+            let Some(ref loaded) = dash.table_cache.get(table_name) else {
+                state.cmdline.set_error("table not loaded");
+                return;
+            };
+
+            let matches: Vec<usize> = loaded
+                .rows
+                .iter()
+                .enumerate()
+                .filter(|(_, row)| {
+                    row.iter().any(|cell| cell.to_lowercase().contains(&query_lower))
+                })
+                .map(|(i, _)| i)
+                .collect();
+
+            if matches.is_empty() {
+                state
+                    .cmdline
+                    .set_error(format!("Pattern not found: {query}"));
+                return;
+            }
+
+            let current = pane.row_cursor;
+            let current_idx = match direction {
+                SearchDirection::Forward => matches.iter().position(|&m| m >= current).unwrap_or(0),
+                SearchDirection::Backward => matches
+                    .iter()
+                    .rposition(|&m| m <= current)
+                    .unwrap_or(matches.len() - 1),
+            };
+
+            pane.row_cursor = matches[current_idx];
+            pane.last_search = Some(crate::tui::SearchState {
+                query: query.to_string(),
+                direction,
+                matches,
+                current_idx,
+            });
+        }
         _ => {
             state
                 .cmdline
-                .set_error("Search only supported in table list for now");
+                .set_error("Search only supported in table list and table view");
         }
     }
 }
@@ -214,6 +259,9 @@ fn execute_command(cmd: &str, state: &mut AppState) {
 
         "w" | "write" => cmd_write(state, args),
 
+        "where" => cmd_where(state, args),
+        "order" => cmd_order(state, args),
+
         // Destructive actions
         "d" | "delete" => {
             if let Some(db) = selected_connection(state) {
@@ -258,6 +306,13 @@ fn cmd_vnew(state: &mut AppState, args: &[&str]) {
     let kind = parse_pane_type(args.first());
     let table_name = args.get(1).map(|s| s.to_string());
 
+    if let Some(ref name) = table_name {
+        if !dash.tables.contains(name) {
+            state.cmdline.set_error(format!("table `{name}` not found"));
+            return;
+        }
+    }
+
     match dash.tree.split_active_v(kind) {
         Ok(id) => {
             if let Some(table) = table_name {
@@ -266,7 +321,12 @@ fn cmd_vnew(state: &mut AppState, args: &[&str]) {
                         crate::tui::state::PaneType::TableView => {
                             pane.set_table_view(table.clone());
                             if !dash.table_cache.contains_key(&table) {
-                                dash.pending_load = Some(table);
+                                dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+                                    table,
+                                    filter: None,
+                                    sort_col: None,
+                                    sort_desc: false,
+                                });
                                 dash.loading = true;
                                 dash.error = None;
                             }
@@ -292,6 +352,13 @@ fn cmd_hnew(state: &mut AppState, args: &[&str]) {
     let kind = parse_pane_type(args.first());
     let table_name = args.get(1).map(|s| s.to_string());
 
+    if let Some(ref name) = table_name {
+        if !dash.tables.contains(name) {
+            state.cmdline.set_error(format!("table `{name}` not found"));
+            return;
+        }
+    }
+
     match dash.tree.split_active_h(kind) {
         Ok(id) => {
             if let Some(table) = table_name {
@@ -300,7 +367,12 @@ fn cmd_hnew(state: &mut AppState, args: &[&str]) {
                         crate::tui::state::PaneType::TableView => {
                             pane.set_table_view(table.clone());
                             if !dash.table_cache.contains_key(&table) {
-                                dash.pending_load = Some(table);
+                                dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+                                    table,
+                                    filter: None,
+                                    sort_col: None,
+                                    sort_desc: false,
+                                });
                                 dash.loading = true;
                                 dash.error = None;
                             }
@@ -330,7 +402,12 @@ fn cmd_open(state: &mut AppState, args: &[&str]) {
             pane.set_table_view(name.clone());
             pane.last_search = None; // clear search highlight
             if !dash.table_cache.contains_key(&name) {
-                dash.pending_load = Some(name);
+                dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+                    table: name,
+                    filter: None,
+                    sort_col: None,
+                    sort_desc: false,
+                });
                 dash.loading = true;
                 dash.error = None;
             }
@@ -395,6 +472,121 @@ fn cmd_sql(state: &mut AppState, _args: &[&str]) {
 
     if let Some(pane) = dash.tree.active_mut() {
         pane.set_query_editor();
+    }
+}
+
+fn cmd_where(state: &mut AppState, args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    let active_id = dash.tree.active_pane;
+    let Some(pane) = dash.tree.panes.get(&active_id) else {
+        return;
+    };
+
+    if pane.kind != crate::tui::state::PaneType::TableView {
+        state.cmdline.set_error(":where only works in table view");
+        return;
+    }
+
+    if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
+        state.cmdline.set_error("cannot filter with pending changes; :w or u to clear");
+        return;
+    }
+
+    let table_name = match pane.bound_table.clone() {
+        Some(t) => t,
+        None => {
+            state.cmdline.set_error("no table bound to active pane");
+            return;
+        }
+    };
+
+    let filter = if args.is_empty() {
+        None
+    } else {
+        Some(args.join(" "))
+    };
+
+    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+        pane.filter = filter.clone();
+    }
+
+    dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+        table: table_name,
+        filter,
+        sort_col: dash.tree.panes.get(&active_id).and_then(|p| p.sort_col.clone()),
+        sort_desc: dash.tree.panes.get(&active_id).map_or(false, |p| p.sort_desc),
+    });
+    dash.loading = true;
+    dash.error = None;
+
+    if args.is_empty() {
+        state.cmdline.set_loading("Filter cleared");
+    }
+}
+
+fn cmd_order(state: &mut AppState, args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    let active_id = dash.tree.active_pane;
+    let Some(pane) = dash.tree.panes.get(&active_id) else {
+        return;
+    };
+
+    if pane.kind != crate::tui::state::PaneType::TableView {
+        state.cmdline.set_error(":order only works in table view");
+        return;
+    }
+
+    if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
+        state.cmdline.set_error("cannot sort with pending changes; :w or u to clear");
+        return;
+    }
+
+    let table_name = match pane.bound_table.clone() {
+        Some(t) => t,
+        None => {
+            state.cmdline.set_error("no table bound to active pane");
+            return;
+        }
+    };
+
+    let (sort_col, sort_desc) = if args.is_empty() {
+        (None, false)
+    } else {
+        let joined = args.join(" ");
+        let parts: Vec<&str> = joined.split_whitespace().collect();
+        let desc = parts.len() > 1 && parts.last().map_or(false, |s| s.eq_ignore_ascii_case("desc"));
+        let col = if desc {
+            parts[..parts.len() - 1].join(" ")
+        } else {
+            joined
+        };
+        (Some(col), desc)
+    };
+
+    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+        pane.sort_col = sort_col.clone();
+        pane.sort_desc = sort_desc;
+    }
+
+    dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+        table: table_name,
+        filter: dash.tree.panes.get(&active_id).and_then(|p| p.filter.clone()),
+        sort_col,
+        sort_desc,
+    });
+    dash.loading = true;
+    dash.error = None;
+
+    if args.is_empty() {
+        state.cmdline.set_loading("Sort cleared");
     }
 }
 

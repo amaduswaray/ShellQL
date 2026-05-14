@@ -289,6 +289,190 @@ pub async fn filter_rows(
     }
 }
 
+/// Fetch rows from `table` with optional `filter` (raw WHERE clause) and
+/// optional `sort` (`col_name` + `desc`).
+/// Returns `(column_names, rows)`.
+pub async fn query_rows(
+    pool: &DbPool,
+    table: &str,
+    filter: Option<&str>,
+    sort_col: Option<&str>,
+    sort_desc: bool,
+    limit: u32,
+    offset: u32,
+) -> color_eyre::eyre::Result<(Vec<String>, Vec<Vec<String>>)> {
+    let order_by = sort_col.map(|col| {
+        let dir = if sort_desc { "DESC" } else { "ASC" };
+        format!("ORDER BY \"{}\" {dir}", col)
+    });
+
+    match pool {
+        DbPool::Postgres(pg) => {
+            let col_rows: Vec<(String,)> = sqlx::query_as(
+                "SELECT column_name
+                 FROM information_schema.columns
+                 WHERE table_schema = 'public' AND table_name = $1
+                 ORDER BY ordinal_position",
+            )
+            .bind(table)
+            .fetch_all(pg)
+            .await?;
+
+            let cols: Vec<String> = col_rows.into_iter().map(|(n,)| n).collect();
+            if cols.is_empty() {
+                return Ok((vec![], vec![]));
+            }
+
+            let casts = cols
+                .iter()
+                .map(|c| format!("\"{}\"::text", c))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let mut query = format!("SELECT {casts} FROM \"{table}\"");
+            if let Some(f) = filter {
+                query.push_str(&format!(" WHERE {f}"));
+            }
+            if let Some(o) = order_by {
+                query.push_str(&format!(" {o}"));
+            }
+            query.push_str(&format!(" LIMIT {limit} OFFSET {offset}"));
+
+            let rows = sqlx::query(&query).fetch_all(pg).await?;
+
+            use sqlx::Row;
+            let data = rows
+                .iter()
+                .map(|r| {
+                    (0..cols.len())
+                        .map(|i| {
+                            r.try_get::<Option<String>, _>(i)
+                                .map(|v| v.unwrap_or_else(|| "NULL".into()))
+                                .unwrap_or_else(|_| "?".into())
+                        })
+                        .collect()
+                })
+                .collect();
+
+            Ok((cols, data))
+        }
+
+        DbPool::Mysql(my) => {
+            let col_rows: Vec<(String,)> = sqlx::query_as(
+                "SELECT column_name
+                 FROM information_schema.columns
+                 WHERE table_schema = DATABASE() AND table_name = ?
+                 ORDER BY ordinal_position",
+            )
+            .bind(table)
+            .fetch_all(my)
+            .await?;
+
+            let cols: Vec<String> = col_rows.into_iter().map(|(n,)| n).collect();
+            if cols.is_empty() {
+                return Ok((vec![], vec![]));
+            }
+
+            let casts = cols
+                .iter()
+                .map(|c| format!("CONVERT(`{}`, CHAR)", c))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let mut query = format!("SELECT {casts} FROM `{table}`");
+            if let Some(f) = filter {
+                query.push_str(&format!(" WHERE {f}"));
+            }
+            if let Some(o) = order_by {
+                query.push_str(&format!(" {o}"));
+            }
+            query.push_str(&format!(" LIMIT {limit} OFFSET {offset}"));
+
+            let rows = sqlx::query(&query).fetch_all(my).await?;
+
+            use sqlx::Row;
+            let data = rows
+                .iter()
+                .map(|r| {
+                    (0..cols.len())
+                        .map(|i| {
+                            r.try_get::<Option<String>, _>(i)
+                                .map(|v| v.unwrap_or_else(|| "NULL".into()))
+                                .unwrap_or_else(|_| "?".into())
+                        })
+                        .collect()
+                })
+                .collect();
+
+            Ok((cols, data))
+        }
+
+        DbPool::Sqlite(sq) => {
+            let mut query = format!("SELECT * FROM \"{table}\"");
+            if let Some(f) = filter {
+                query.push_str(&format!(" WHERE {f}"));
+            }
+            if let Some(o) = order_by {
+                query.push_str(&format!(" {o}"));
+            }
+            query.push_str(&format!(" LIMIT {limit} OFFSET {offset}"));
+
+            let rows = sqlx::query(&query).fetch_all(sq).await?;
+
+            use sqlx::Row;
+            let cols: Vec<String> = rows
+                .first()
+                .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
+                .unwrap_or_default();
+
+            let data = rows
+                .iter()
+                .map(|r| {
+                    (0..cols.len())
+                        .map(|i| sqlite_cell(r, i))
+                        .collect()
+                })
+                .collect();
+
+            Ok((cols, data))
+        }
+    }
+}
+
+/// Return the row count for `table` with optional `filter`.
+pub async fn count_rows_filtered(
+    pool: &DbPool,
+    table: &str,
+    filter: Option<&str>,
+) -> color_eyre::eyre::Result<i64> {
+    match pool {
+        DbPool::Postgres(pg) => {
+            let mut query = format!("SELECT COUNT(*) FROM \"{table}\"");
+            if let Some(f) = filter {
+                query.push_str(&format!(" WHERE {f}"));
+            }
+            let (count,): (i64,) = sqlx::query_as(&query).fetch_one(pg).await?;
+            Ok(count)
+        }
+        DbPool::Mysql(my) => {
+            let mut query = format!("SELECT COUNT(*) FROM `{table}`");
+            if let Some(f) = filter {
+                query.push_str(&format!(" WHERE {f}"));
+            }
+            let (count,): (i64,) = sqlx::query_as(&query).fetch_one(my).await?;
+            Ok(count)
+        }
+        DbPool::Sqlite(sq) => {
+            let mut query = format!("SELECT COUNT(*) FROM \"{table}\"");
+            if let Some(f) = filter {
+                query.push_str(&format!(" WHERE {f}"));
+            }
+            let (count,): (i64,) = sqlx::query_as(&query).fetch_one(sq).await?;
+            Ok(count)
+        }
+    }
+}
+
 use sqlx::Column;
 
 fn sqlite_cell(row: &sqlx::sqlite::SqliteRow, i: usize) -> String {

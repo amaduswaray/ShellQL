@@ -66,7 +66,7 @@ pub struct DashboardState {
     pub table_cache: HashMap<String, LoadedTable>,
 
     // ── Async-load signal ─────────────────────────────────────────────────────
-    pub pending_load: Option<String>,
+    pub pending_load: Option<PendingQuery>,
 
     // ── Async-commit signal ───────────────────────────────────────────────────
     pub pending_commit: Option<PendingCommit>,
@@ -74,6 +74,15 @@ pub struct DashboardState {
     // ── Status ────────────────────────────────────────────────────────────────
     pub loading: bool,
     pub error: Option<String>,
+}
+
+/// Async query parameters for loading/filtered/sorted table data.
+#[derive(Debug, Clone)]
+pub struct PendingQuery {
+    pub table: String,
+    pub filter: Option<String>,
+    pub sort_col: Option<String>,
+    pub sort_desc: bool,
 }
 
 /// Staged changes waiting to be written to the database.
@@ -107,7 +116,12 @@ impl DashboardState {
         if let Some(pane) = self.tree.active() {
             if pane.kind == PaneType::TableList {
                 if let Some(name) = self.tables.get(pane.nav_cursor) {
-                    self.pending_load = Some(name.clone());
+                    self.pending_load = Some(PendingQuery {
+                        table: name.clone(),
+                        filter: None,
+                        sort_col: None,
+                        sort_desc: false,
+                    });
                     self.loading = true;
                     self.error = None;
                 }

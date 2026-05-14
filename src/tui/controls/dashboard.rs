@@ -11,6 +11,12 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
         return;
     };
 
+    // Any keypress dismisses transient cmdline messages when idle.
+    if !state.cmdline.is_active() {
+        state.cmdline.loading = None;
+        state.cmdline.error = None;
+    }
+
     // Ctrl+hjkl / Ctrl+Arrows — pane navigation
     if event.modifiers.contains(KeyModifiers::CONTROL) {
         match event.code {
@@ -171,7 +177,11 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                                     % search.matches.len();
                             }
                         }
-                        pane.nav_cursor = search.matches[search.current_idx];
+                        match pane.kind {
+                            PaneType::TableList => pane.nav_cursor = search.matches[search.current_idx],
+                            PaneType::TableView => pane.row_cursor = search.matches[search.current_idx],
+                            _ => {}
+                        }
                     }
                 }
             }
@@ -191,7 +201,11 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                                     (search.current_idx + 1) % search.matches.len();
                             }
                         }
-                        pane.nav_cursor = search.matches[search.current_idx];
+                        match pane.kind {
+                            PaneType::TableList => pane.nav_cursor = search.matches[search.current_idx],
+                            PaneType::TableView => pane.row_cursor = search.matches[search.current_idx],
+                            _ => {}
+                        }
                     }
                 }
             }
@@ -414,7 +428,12 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                         pane.last_search = None; // clear search highlight
                         // If not cached, trigger an async load.
                         if !dash.table_cache.contains_key(&name) {
-                            dash.pending_load = Some(name);
+                            dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+                                table: name,
+                                filter: None,
+                                sort_col: None,
+                                sort_desc: false,
+                            });
                             dash.loading = true;
                             dash.error = None;
                         }

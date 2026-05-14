@@ -32,6 +32,8 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("sql", "switch to query editor"),
     ("query", "switch to query editor"),
     ("close", "close pane"),
+    ("where", "filter rows"),
+    ("order", "sort rows"),
 ];
 
 /// Return every entry in `list` whose name starts with `input`.
@@ -150,10 +152,11 @@ impl CommandLine {
     }
 
     /// Return to idle and clear all transient state.
-    /// Any pending error is preserved so the render pass can show it once.
     pub fn reset(&mut self) {
         self.mode = CommandLineMode::Idle;
         self.input.clear();
+        self.error = None;
+        self.loading = None;
         self.clear_completions();
     }
 

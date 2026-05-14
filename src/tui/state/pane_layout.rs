@@ -107,6 +107,11 @@ pub struct Pane {
     /// PK values of rows marked for deletion.
     pub pending_deletes: Vec<String>,
 
+    // ── Filter / sort (pane-local) ──────────────────────────────────────────
+    pub filter: Option<String>,
+    pub sort_col: Option<String>,
+    pub sort_desc: bool,
+
     // ── Cached render area (updated every frame) ────────────────────────────
     pub area: Option<Rect>,
 }
@@ -129,6 +134,9 @@ impl Pane {
             visual_anchor: None,
             pending_updates: Vec::new(),
             pending_deletes: Vec::new(),
+            filter: None,
+            sort_col: None,
+            sort_desc: false,
             area: None,
         }
     }
@@ -147,6 +155,9 @@ impl Pane {
         self.mode = TableMode::Normal;
         self.pending_updates.clear();
         self.pending_deletes.clear();
+        self.filter = None;
+        self.sort_col = None;
+        self.sort_desc = false;
     }
 
     pub fn set_table_view(&mut self, table_name: String) {
@@ -161,6 +172,9 @@ impl Pane {
         self.visual_anchor = None;
         self.pending_updates.clear();
         self.pending_deletes.clear();
+        self.filter = None;
+        self.sort_col = None;
+        self.sort_desc = false;
     }
 
     pub fn set_schema_view(&mut self, table_name: String) {

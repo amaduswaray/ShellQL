@@ -46,16 +46,32 @@ pub async fn handle_key_event(
     // Run after EVERY handler path so that commands like `:open` trigger the
     // load immediately instead of waiting for the next key event.
     if let Some(ref mut dash) = state.dashboard {
-        if let Some(table) = dash.pending_load.take() {
+        if let Some(query) = dash.pending_load.take() {
             let pool = dash.pool.clone();
-            match tokio::try_join!(
-                crate::connection::table_schema(&pool, &table),
-                crate::connection::table_rows(&pool, &table, 200, 0),
-            ) {
+            let table = query.table.clone();
+            let result = if query.filter.is_some() || query.sort_col.is_some() {
+                tokio::try_join!(
+                    crate::connection::table_schema(&pool, &table),
+                    crate::connection::query_rows(
+                        &pool, &table,
+                        query.filter.as_deref(),
+                        query.sort_col.as_deref(),
+                        query.sort_desc,
+                        200, 0,
+                    ),
+                )
+            } else {
+                tokio::try_join!(
+                    crate::connection::table_schema(&pool, &table),
+                    crate::connection::table_rows(&pool, &table, 200, 0),
+                )
+            };
+            match result {
                 Ok((schema, (headers, rows))) => {
                     use crate::tui::state::dashboard::LoadedTable;
                     dash.table_cache.insert(table.clone(), LoadedTable::new(table, schema, headers, rows));
                     dash.loading = false;
+                    state.cmdline.loading = None;
                 }
                 Err(e) => {
                     dash.error = Some(e.to_string());

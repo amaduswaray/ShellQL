@@ -49,11 +49,19 @@ fn make_title(pane: &Pane) -> String {
         PaneType::TableView => {
             if let Some(ref table) = pane.bound_table {
                 let dirty = !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty();
-                if dirty {
-                    format!(" {}: {}* ", pane.display_id, table)
-                } else {
-                    format!(" {}: {} ", pane.display_id, table)
+                let filtered = pane.filter.is_some();
+                let sorted = pane.sort_col.is_some();
+                let mut tags = String::new();
+                if filtered {
+                    tags.push_str(" [filtered]");
                 }
+                if sorted {
+                    tags.push_str(" [sorted]");
+                }
+                if dirty {
+                    tags.push('*');
+                }
+                format!(" {}: {}{} ", pane.display_id, table, tags)
             } else {
                 format!(" {} ", pane.display_id)
             }
@@ -214,7 +222,11 @@ fn render_table_view(
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    if dash.loading && pane.bound_table.as_ref() == dash.pending_load.as_ref() {
+    let loading_this = dash.pending_load.as_ref().map_or(false, |q| {
+        pane.bound_table.as_ref() == Some(&q.table)
+    });
+
+    if dash.loading && loading_this {
         frame.render_widget(
             Paragraph::new(Span::styled(" Loading…", Style::default().fg(Color::DarkGray))),
             inner,
@@ -223,7 +235,7 @@ fn render_table_view(
     }
 
     if let Some(ref err) = dash.error {
-        if pane.bound_table.as_ref() == dash.pending_load.as_ref() {
+        if loading_this {
             frame.render_widget(
                 Paragraph::new(Span::styled(format!(" {err}"), Style::default().fg(Color::Red))),
                 inner,
