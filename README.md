@@ -60,11 +60,22 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] Editor commands and working with proper syntax, ans not "" stuff
 - [x] Syntax highlighting and editor formatting
 
+- [ ] Ensure that absolute paths for sqlite works. ensure sqlite and mysql works
+- [ ] When writing :! you should be able to write one liners sql queruers, limited to 1 select that can be displayed/ one query. 
+- [ ] Hide pane logic
+
+- [ ] Tab logic, as sessions/picker they need to swap between. No visual tabs
+  - [ ] One tab per table? Hard to decide due to custom queries
+  - [ ] How to handle multiple sessions
+
+
 - [ ] Complete the command line
   - [ ] All commands like, new session, switch session, delete session, add connection, etc
   - [ ] Tab completion for command line commands
 - [ ] Be able to Delete when in connection list
 - [ ] Auto complete for tables and commands
+
+
 - [ ] Inline cell edits
 - [ ] Proper vim commands
   - [ ] o and O for newline over and under, to add a new row
