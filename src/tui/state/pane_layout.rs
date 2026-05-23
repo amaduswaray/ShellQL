@@ -575,6 +575,8 @@ pub struct PaneTree {
     next_display_id: usize,
     /// IDs that were freed when panes were closed and can be reused.
     recycled_ids: Vec<usize>,
+    /// When set, this pane fills the entire dashboard area (tmux zoom).
+    pub fullscreen_pane: Option<PaneId>,
 }
 
 impl PaneTree {
@@ -588,7 +590,31 @@ impl PaneTree {
             active_pane: id,
             next_display_id: 2,
             recycled_ids: Vec::new(),
+            fullscreen_pane: None,
         }
+    }
+
+    // ── Fullscreen helpers ──────────────────────────────────────────────────
+
+    /// Toggle fullscreen on the active pane. If already fullscreen, exit it.
+    pub fn toggle_fullscreen(&mut self) {
+        if let Some(fs) = self.fullscreen_pane {
+            if fs == self.active_pane {
+                self.fullscreen_pane = None;
+                return;
+            }
+        }
+        self.fullscreen_pane = Some(self.active_pane);
+    }
+
+    /// Exit fullscreen mode unconditionally.
+    pub fn exit_fullscreen(&mut self) {
+        self.fullscreen_pane = None;
+    }
+
+    /// True if a pane is currently fullscreen.
+    pub fn is_fullscreen(&self) -> bool {
+        self.fullscreen_pane.is_some()
     }
 
     pub fn alloc_display_id(&mut self) -> usize {
@@ -649,6 +675,7 @@ impl PaneTree {
         if self.pane_count() >= 8 {
             return Err("maximum pane count (8) reached");
         }
+        self.exit_fullscreen();
         let new_id = PaneId::new();
         let display_id = self.alloc_display_id();
         self.panes.insert(new_id, Pane::new(new_id, new_kind, display_id));
@@ -662,6 +689,7 @@ impl PaneTree {
         if self.pane_count() >= 8 {
             return Err("maximum pane count (8) reached");
         }
+        self.exit_fullscreen();
         let new_id = PaneId::new();
         let display_id = self.alloc_display_id();
         self.panes.insert(new_id, Pane::new(new_id, new_kind, display_id));
@@ -716,10 +744,14 @@ impl PaneTree {
     pub fn close_active(&mut self) -> bool {
         if self.pane_count() <= 1 {
             self.panes.clear();
+            self.fullscreen_pane = None;
             return true;
         }
 
         let target = self.active_pane;
+        if self.fullscreen_pane == Some(target) {
+            self.fullscreen_pane = None;
+        }
         if let Some(pane) = self.panes.remove(&target) {
             self.recycled_ids.push(pane.display_id);
         }
@@ -744,9 +776,13 @@ impl PaneTree {
 
         if self.pane_count() <= 1 {
             self.panes.clear();
+            self.fullscreen_pane = None;
             return true;
         }
 
+        if self.fullscreen_pane == Some(target) {
+            self.fullscreen_pane = None;
+        }
         if let Some(pane) = self.panes.remove(&target) {
             self.recycled_ids.push(pane.display_id);
         }

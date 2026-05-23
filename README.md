@@ -72,13 +72,13 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] line number column does not need alternating lines
 - [ ] proper cmdline design
 
-- [ ] Full screen pane logic - like tmux <leader>z, makes a pane fullscreen. effect reverted when toggling or attempting to change pane
-  - [ ] If possible, full screen should be applied to parent pane, so splitting within full screen is possible as long as you have not reached max panes. Separate between :full and :full parent
+- [x] Full screen pane logic - like tmux <leader>z, makes a pane fullscreen. effect reverted when toggling or attempting to change pane
 
 - [ ] Query view when wrong command shows result view
 - [x] :select command that reduces the rows that are shown
-- [ ] :select, :where and :order should work in sequence. So all changes are persintant
+- [x] :select, :where and :order should work in sequence. So all changes are persintant
 
+- [ ] do a find buffer picker like vim
 - [ ] Tab logic, as sessions/picker they need to swap between. No visual tabs
   - [ ] One tab per table? Hard to decide due to custom queries
   - [ ] How to handle multiple sessions
@@ -87,9 +87,9 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] Complete the command line
   - [ ] All commands like, new session, switch session, delete session, add connection, etc
   - [ ] Tab completion for command line commands
-- [ ] Scrollable completions
+- [ ] Scrollable cmdline completions
 - [ ] Be able to Delete when in connection list
-- [ ] Auto complete for tables and commands
+- [x] Auto complete for tables and commands
 - [x] Better navigation ergonomics: Using - to go back between views, or what not
 
 - [ ] Inline cell edits. Only for tableView. the queryresults is read only, and can only use / and ?
@@ -99,4 +99,5 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [ ] rn to rename the cell value
   - [ ] i to enter insert mode and edit
 
-- [ ] Shell completions
+- [ ] zsh Shell completions for the cli commands
+- [ ] add more posix compliant 

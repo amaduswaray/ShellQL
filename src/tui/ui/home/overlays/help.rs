@@ -120,6 +120,7 @@ pub fn render_dashboard_help(frame: &mut Frame, area: Rect) {
         binding_line("  :order <col> [desc]", "sort rows", key_style, desc_style),
         binding_line("  :select <cols>", "show only named columns", key_style, desc_style),
         binding_line("  :reset", "clear filter/sort/columns", key_style, desc_style),
+        binding_line("  :full", "toggle pane fullscreen", key_style, desc_style),
         Line::from(""),
         Line::from(Span::styled("  Misc", nav_header)),
         Line::from(Span::styled("  ────", sep_style)),

@@ -196,18 +196,22 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
         match event.code {
             KeyCode::Char('h') | KeyCode::Left => {
                 dash.tree.navigate(PaneDirection::Left);
+                dash.tree.exit_fullscreen();
                 return;
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 dash.tree.navigate(PaneDirection::Down);
+                dash.tree.exit_fullscreen();
                 return;
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 dash.tree.navigate(PaneDirection::Up);
+                dash.tree.exit_fullscreen();
                 return;
             }
             KeyCode::Char('l') | KeyCode::Right => {
                 dash.tree.navigate(PaneDirection::Right);
+                dash.tree.exit_fullscreen();
                 return;
             }
             KeyCode::Char('u') => {

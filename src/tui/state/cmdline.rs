@@ -37,6 +37,7 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("select", "select columns"),
     ("resize", "resize pane"),
     ("reset", "clear filter/sort/columns"),
+    ("full", "toggle pane fullscreen"),
     ("!", "execute SQL directly"),
     ("back", "go back in pane history"),
     ("forward", "go forward in pane history"),

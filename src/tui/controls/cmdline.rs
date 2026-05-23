@@ -393,6 +393,7 @@ fn execute_command(cmd: &str, state: &mut AppState) {
 
         "resize" => cmd_resize(state, args),
         "reset" => cmd_reset(state),
+        "full" => cmd_fullscreen(state),
 
         // Destructive actions
         "d" | "delete" => {
@@ -770,6 +771,21 @@ fn cmd_resize(state: &mut AppState, args: &[&str]) {
         Ok(_) => {}
         Err(e) => state.cmdline.set_error(e),
     }
+}
+
+/// Toggle fullscreen (zoom) on the active pane. Like tmux `<prefix>z`.
+fn cmd_fullscreen(state: &mut AppState) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    if dash.tree.pane_count() <= 1 {
+        state.cmdline.set_error("only one pane — nothing to fullscreen");
+        return;
+    }
+
+    dash.tree.toggle_fullscreen();
 }
 
 fn cmd_where(state: &mut AppState, args: &[&str]) {

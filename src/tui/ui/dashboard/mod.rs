@@ -27,6 +27,19 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, state: &mut AppState) {
         return;
     };
 
+    // Fullscreen mode: only the zoomed pane fills the whole dashboard area.
+    if let Some(fs_id) = dash.tree.fullscreen_pane {
+        if let Some(pane) = dash.tree.panes.get_mut(&fs_id) {
+            pane.area = Some(area);
+        }
+        sync_pane_scroll(dash, area);
+        render_pane(frame, fs_id, dash, true);
+        if state.overlay.is_some() {
+            render_overlay(frame, area, state);
+        }
+        return;
+    }
+
     // Compute pane areas from the layout tree.
     dash.tree.compute_areas(area);
 
