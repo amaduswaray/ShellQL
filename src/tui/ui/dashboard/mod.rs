@@ -2,16 +2,9 @@
 pub mod panes;
 pub mod sql_highlight;
 
-use ratatui::{
-    Frame,
-    layout::Rect,
-    widgets::Paragraph,
-};
+use ratatui::{Frame, layout::Rect, widgets::Paragraph};
 
-use crate::tui::{
-    AppState,
-    ui::home::overlays::render_overlay,
-};
+use crate::tui::{AppState, ui::home::overlays::render_overlay};
 
 use self::panes::render_pane;
 
@@ -23,10 +16,7 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, state: &mut AppState) {
     let leaves: Vec<crate::tui::state::pane_layout::PaneId>;
     {
         let Some(tab) = state.active_tab_mut() else {
-            frame.render_widget(
-                Paragraph::new("No active connection."),
-                area,
-            );
+            frame.render_widget(Paragraph::new("No active connection."), area);
             return;
         };
 

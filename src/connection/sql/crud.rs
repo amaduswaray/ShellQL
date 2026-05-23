@@ -14,9 +14,8 @@ pub async fn update_cell(
 ) -> color_eyre::eyre::Result<u64> {
     match pool {
         DbPool::Postgres(pg) => {
-            let query = format!(
-                "UPDATE \"{table}\" SET \"{target_col}\" = $1 WHERE \"{pk_col}\" = $2"
-            );
+            let query =
+                format!("UPDATE \"{table}\" SET \"{target_col}\" = $1 WHERE \"{pk_col}\" = $2");
             let result = sqlx::query(&query)
                 .bind(new_value)
                 .bind(pk_val)
@@ -25,9 +24,7 @@ pub async fn update_cell(
             Ok(result.rows_affected())
         }
         DbPool::Mysql(my) => {
-            let query = format!(
-                "UPDATE `{table}` SET `{target_col}` = ? WHERE `{pk_col}` = ?"
-            );
+            let query = format!("UPDATE `{table}` SET `{target_col}` = ? WHERE `{pk_col}` = ?");
             let result = sqlx::query(&query)
                 .bind(new_value)
                 .bind(pk_val)
@@ -36,9 +33,8 @@ pub async fn update_cell(
             Ok(result.rows_affected())
         }
         DbPool::Sqlite(sq) => {
-            let query = format!(
-                "UPDATE \"{table}\" SET \"{target_col}\" = ? WHERE \"{pk_col}\" = ?"
-            );
+            let query =
+                format!("UPDATE \"{table}\" SET \"{target_col}\" = ? WHERE \"{pk_col}\" = ?");
             let result = sqlx::query(&query)
                 .bind(new_value)
                 .bind(pk_val)
@@ -61,15 +57,17 @@ pub async fn insert_row(
 ) -> color_eyre::eyre::Result<u64> {
     assert_eq!(cols.len(), vals.len(), "columns and values must match");
 
-    let col_list = cols.iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(", ");
+    let col_list = cols
+        .iter()
+        .map(|c| format!("\"{c}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
     let placeholders: Vec<String> = (1..=cols.len()).map(|i| format!("${i}")).collect();
     let placeholder_list = placeholders.join(", ");
 
     match pool {
         DbPool::Postgres(pg) => {
-            let query = format!(
-                "INSERT INTO \"{table}\" ({col_list}) VALUES ({placeholder_list})"
-            );
+            let query = format!("INSERT INTO \"{table}\" ({col_list}) VALUES ({placeholder_list})");
             let mut q = sqlx::query(&query);
             for v in vals {
                 q = q.bind(v);
@@ -80,9 +78,7 @@ pub async fn insert_row(
         DbPool::Mysql(my) => {
             let placeholders: Vec<String> = (1..=cols.len()).map(|_| "?".to_string()).collect();
             let placeholder_list = placeholders.join(", ");
-            let query = format!(
-                "INSERT INTO `{table}` ({col_list}) VALUES ({placeholder_list})"
-            );
+            let query = format!("INSERT INTO `{table}` ({col_list}) VALUES ({placeholder_list})");
             let mut q = sqlx::query(&query);
             for v in vals {
                 q = q.bind(v);
@@ -93,9 +89,7 @@ pub async fn insert_row(
         DbPool::Sqlite(sq) => {
             let placeholders: Vec<String> = (1..=cols.len()).map(|_| "?".to_string()).collect();
             let placeholder_list = placeholders.join(", ");
-            let query = format!(
-                "INSERT INTO \"{table}\" ({col_list}) VALUES ({placeholder_list})"
-            );
+            let query = format!("INSERT INTO \"{table}\" ({col_list}) VALUES ({placeholder_list})");
             let mut q = sqlx::query(&query);
             for v in vals {
                 q = q.bind(v);
@@ -122,11 +116,10 @@ pub async fn delete_rows(
 
     match pool {
         DbPool::Postgres(pg) => {
-            let placeholders: Vec<String> =
-                (1..=pk_vals.len()).map(|i| format!("${i}")).collect();
+            let placeholders: Vec<String> = (1..=pk_vals.len()).map(|i| format!("${i}")).collect();
             let query = format!(
-                "DELETE FROM \"{table}\" WHERE \"{pk_col}\" IN ({})"
-                , placeholders.join(", ")
+                "DELETE FROM \"{table}\" WHERE \"{pk_col}\" IN ({})",
+                placeholders.join(", ")
             );
             let mut q = sqlx::query(&query);
             for v in pk_vals {
@@ -136,8 +129,7 @@ pub async fn delete_rows(
             Ok(result.rows_affected())
         }
         DbPool::Mysql(my) => {
-            let placeholders: Vec<String> =
-                (1..=pk_vals.len()).map(|_| "?".to_string()).collect();
+            let placeholders: Vec<String> = (1..=pk_vals.len()).map(|_| "?".to_string()).collect();
             let query = format!(
                 "DELETE FROM `{table}` WHERE `{pk_col}` IN ({})",
                 placeholders.join(", ")
@@ -150,8 +142,7 @@ pub async fn delete_rows(
             Ok(result.rows_affected())
         }
         DbPool::Sqlite(sq) => {
-            let placeholders: Vec<String> =
-                (1..=pk_vals.len()).map(|_| "?".to_string()).collect();
+            let placeholders: Vec<String> = (1..=pk_vals.len()).map(|_| "?".to_string()).collect();
             let query = format!(
                 "DELETE FROM \"{table}\" WHERE \"{pk_col}\" IN ({})",
                 placeholders.join(", ")

@@ -456,12 +456,12 @@ impl Pane {
 pub enum LayoutNode {
     Leaf(PaneId),
     HSplit {
-        ratio: f32,        // 0.0..=1.0, fixed at 0.5
+        ratio: f32, // 0.0..=1.0, fixed at 0.5
         left: Box<LayoutNode>,
         right: Box<LayoutNode>,
     },
     VSplit {
-        ratio: f32,        // 0.0..=1.0, fixed at 0.5
+        ratio: f32, // 0.0..=1.0, fixed at 0.5
         top: Box<LayoutNode>,
         bottom: Box<LayoutNode>,
     },
@@ -678,7 +678,8 @@ impl PaneTree {
         self.exit_fullscreen();
         let new_id = PaneId::new();
         let display_id = self.alloc_display_id();
-        self.panes.insert(new_id, Pane::new(new_id, new_kind, display_id));
+        self.panes
+            .insert(new_id, Pane::new(new_id, new_kind, display_id));
         self.replace_leaf_with_split(self.active_pane, true, new_id);
         self.active_pane = new_id;
         Ok(new_id)
@@ -692,7 +693,8 @@ impl PaneTree {
         self.exit_fullscreen();
         let new_id = PaneId::new();
         let display_id = self.alloc_display_id();
-        self.panes.insert(new_id, Pane::new(new_id, new_kind, display_id));
+        self.panes
+            .insert(new_id, Pane::new(new_id, new_kind, display_id));
         self.replace_leaf_with_split(self.active_pane, false, new_id);
         self.active_pane = new_id;
         Ok(new_id)
@@ -707,7 +709,12 @@ impl PaneTree {
         );
     }
 
-    fn replace_leaf_recursive(node: LayoutNode, target: PaneId, is_hsplit: bool, new_id: PaneId) -> LayoutNode {
+    fn replace_leaf_recursive(
+        node: LayoutNode,
+        target: PaneId,
+        is_hsplit: bool,
+        new_id: PaneId,
+    ) -> LayoutNode {
         match node {
             LayoutNode::Leaf(id) if id == target => {
                 if is_hsplit {
@@ -768,7 +775,9 @@ impl PaneTree {
 
     /// Close a pane by its display ID.
     pub fn close_by_display_id(&mut self, display_id: usize) -> bool {
-        let target = self.panes.iter()
+        let target = self
+            .panes
+            .iter()
             .find(|(_, p)| p.display_id == display_id)
             .map(|(id, _)| *id);
 
@@ -803,17 +812,9 @@ impl PaneTree {
         target: PaneId,
     ) -> (Option<LayoutNode>, Option<PaneId>) {
         match node {
-            LayoutNode::Leaf(id) if id == target => {
-                (None, None)
-            }
-            leaf @ LayoutNode::Leaf(_) => {
-                (Some(leaf), None)
-            }
-            LayoutNode::HSplit {
-                ratio,
-                left,
-                right,
-            } => {
+            LayoutNode::Leaf(id) if id == target => (None, None),
+            leaf @ LayoutNode::Leaf(_) => (Some(leaf), None),
+            LayoutNode::HSplit { ratio, left, right } => {
                 let right_sibling = first_leaf_id(&right);
                 let left_sibling = first_leaf_id(&left);
 
@@ -836,11 +837,7 @@ impl PaneTree {
                     s1.or(s2),
                 )
             }
-            LayoutNode::VSplit {
-                ratio,
-                top,
-                bottom,
-            } => {
+            LayoutNode::VSplit { ratio, top, bottom } => {
                 let bottom_sibling = first_leaf_id(&bottom);
                 let top_sibling = first_leaf_id(&top);
 
@@ -871,7 +868,9 @@ impl PaneTree {
     /// Move focus to the pane in the given direction.
     pub fn navigate(&mut self, direction: PaneDirection) {
         let Some(active) = self.active() else { return };
-        let Some(active_area) = active.area else { return };
+        let Some(active_area) = active.area else {
+            return;
+        };
 
         let mut best: Option<(PaneId, u16)> = None;
 
@@ -887,7 +886,8 @@ impl PaneTree {
                     let active_left = active_area.x;
                     if other_right <= active_left {
                         let overlap_top = area.y.max(active_area.y);
-                        let overlap_bottom = (area.y + area.height).min(active_area.y + active_area.height);
+                        let overlap_bottom =
+                            (area.y + area.height).min(active_area.y + active_area.height);
                         if overlap_bottom > overlap_top {
                             (true, active_left - other_right)
                         } else {
@@ -902,7 +902,8 @@ impl PaneTree {
                     let active_right = active_area.x.saturating_add(active_area.width);
                     if other_left >= active_right {
                         let overlap_top = area.y.max(active_area.y);
-                        let overlap_bottom = (area.y + area.height).min(active_area.y + active_area.height);
+                        let overlap_bottom =
+                            (area.y + area.height).min(active_area.y + active_area.height);
                         if overlap_bottom > overlap_top {
                             (true, other_left - active_right)
                         } else {
@@ -917,7 +918,8 @@ impl PaneTree {
                     let active_top = active_area.y;
                     if other_bottom <= active_top {
                         let overlap_left = area.x.max(active_area.x);
-                        let overlap_right = (area.x + area.width).min(active_area.x + active_area.width);
+                        let overlap_right =
+                            (area.x + area.width).min(active_area.x + active_area.width);
                         if overlap_right > overlap_left {
                             (true, active_top - other_bottom)
                         } else {
@@ -932,7 +934,8 @@ impl PaneTree {
                     let active_bottom = active_area.y.saturating_add(active_area.height);
                     if other_top >= active_bottom {
                         let overlap_left = area.x.max(active_area.x);
-                        let overlap_right = (area.x + area.width).min(active_area.x + active_area.width);
+                        let overlap_right =
+                            (area.x + area.width).min(active_area.x + active_area.width);
                         if overlap_right > overlap_left {
                             (true, other_top - active_bottom)
                         } else {
@@ -989,7 +992,9 @@ impl PaneTree {
                     pane.area = Some(area);
                 }
             }
-            LayoutNode::HSplit { ratio, left, right, .. } => {
+            LayoutNode::HSplit {
+                ratio, left, right, ..
+            } => {
                 let split_x = area.x + (area.width as f32 * ratio.max(0.01).min(0.99)) as u16;
                 let left_area = Rect {
                     x: area.x,
@@ -1006,7 +1011,9 @@ impl PaneTree {
                 Self::compute_areas_recursive(left, left_area, panes);
                 Self::compute_areas_recursive(right, right_area, panes);
             }
-            LayoutNode::VSplit { ratio, top, bottom, .. } => {
+            LayoutNode::VSplit {
+                ratio, top, bottom, ..
+            } => {
                 let split_y = area.y + (area.height as f32 * ratio.max(0.01).min(0.99)) as u16;
                 let top_area = Rect {
                     x: area.x,

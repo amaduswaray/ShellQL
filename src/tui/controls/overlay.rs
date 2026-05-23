@@ -5,10 +5,7 @@ use crate::tui::{
     ui::home::{goto_bottom, goto_top, select_next, select_prev, selected_connection},
 };
 
-pub async fn handle_overlay(
-    event: KeyEvent,
-    state: &mut AppState,
-) -> color_eyre::Result<()> {
+pub async fn handle_overlay(event: KeyEvent, state: &mut AppState) -> color_eyre::Result<()> {
     let Some(overlay) = state.overlay else {
         return Ok(());
     };
@@ -85,5 +82,3 @@ pub async fn handle_overlay(
 
     Ok(())
 }
-
-

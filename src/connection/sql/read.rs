@@ -33,9 +33,7 @@ pub async fn table_rows(
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let query = format!(
-                "SELECT {casts} FROM \"{table}\" LIMIT {limit} OFFSET {offset}"
-            );
+            let query = format!("SELECT {casts} FROM \"{table}\" LIMIT {limit} OFFSET {offset}");
             let rows = sqlx::query(&query).fetch_all(pg).await?;
 
             use sqlx::Row;
@@ -77,9 +75,7 @@ pub async fn table_rows(
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let query = format!(
-                "SELECT {casts} FROM `{table}` LIMIT {limit} OFFSET {offset}"
-            );
+            let query = format!("SELECT {casts} FROM `{table}` LIMIT {limit} OFFSET {offset}");
             let rows = sqlx::query(&query).fetch_all(my).await?;
 
             use sqlx::Row;
@@ -100,9 +96,7 @@ pub async fn table_rows(
         }
 
         DbPool::Sqlite(sq) => {
-            let query = format!(
-                "SELECT * FROM \"{table}\" LIMIT {limit} OFFSET {offset}"
-            );
+            let query = format!("SELECT * FROM \"{table}\" LIMIT {limit} OFFSET {offset}");
             let rows = sqlx::query(&query).fetch_all(sq).await?;
 
             use sqlx::Row;
@@ -113,11 +107,7 @@ pub async fn table_rows(
 
             let data = rows
                 .iter()
-                .map(|r| {
-                    (0..cols.len())
-                        .map(|i| sqlite_cell(r, i))
-                        .collect()
-                })
+                .map(|r| (0..cols.len()).map(|i| sqlite_cell(r, i)).collect())
                 .collect();
 
             Ok((cols, data))
@@ -126,33 +116,24 @@ pub async fn table_rows(
 }
 
 /// Return the total row count for `table`.
-pub async fn count_rows(
-    pool: &DbPool,
-    table: &str,
-) -> color_eyre::eyre::Result<i64> {
+pub async fn count_rows(pool: &DbPool, table: &str) -> color_eyre::eyre::Result<i64> {
     match pool {
         DbPool::Postgres(pg) => {
-            let (count,): (i64,) = sqlx::query_as(&format!(
-                "SELECT COUNT(*) FROM \"{table}\""
-            ))
-            .fetch_one(pg)
-            .await?;
+            let (count,): (i64,) = sqlx::query_as(&format!("SELECT COUNT(*) FROM \"{table}\""))
+                .fetch_one(pg)
+                .await?;
             Ok(count)
         }
         DbPool::Mysql(my) => {
-            let (count,): (i64,) = sqlx::query_as(&format!(
-                "SELECT COUNT(*) FROM `{table}`"
-            ))
-            .fetch_one(my)
-            .await?;
+            let (count,): (i64,) = sqlx::query_as(&format!("SELECT COUNT(*) FROM `{table}`"))
+                .fetch_one(my)
+                .await?;
             Ok(count)
         }
         DbPool::Sqlite(sq) => {
-            let (count,): (i64,) = sqlx::query_as(&format!(
-                "SELECT COUNT(*) FROM \"{table}\""
-            ))
-            .fetch_one(sq)
-            .await?;
+            let (count,): (i64,) = sqlx::query_as(&format!("SELECT COUNT(*) FROM \"{table}\""))
+                .fetch_one(sq)
+                .await?;
             Ok(count)
         }
     }
@@ -277,11 +258,7 @@ pub async fn filter_rows(
 
             let data = rows
                 .iter()
-                .map(|r| {
-                    (0..cols.len())
-                        .map(|i| sqlite_cell(r, i))
-                        .collect()
-                })
+                .map(|r| (0..cols.len()).map(|i| sqlite_cell(r, i)).collect())
                 .collect();
 
             Ok((cols, data))
@@ -427,7 +404,11 @@ pub async fn query_rows(
             let mut query = if cols.is_empty() {
                 format!("SELECT * FROM \"{table}\"")
             } else {
-                let col_list = cols.iter().map(|c| format!("\"{}\"", c)).collect::<Vec<_>>().join(", ");
+                let col_list = cols
+                    .iter()
+                    .map(|c| format!("\"{}\"", c))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 format!("SELECT {col_list} FROM \"{table}\"")
             };
             if let Some(f) = filter {
@@ -605,11 +586,7 @@ pub async fn execute_query(
                     .collect();
                 let data = rows
                     .iter()
-                    .map(|r| {
-                        (0..cols.len())
-                            .map(|i| sqlite_cell(r, i))
-                            .collect()
-                    })
+                    .map(|r| (0..cols.len()).map(|i| sqlite_cell(r, i)).collect())
                     .collect();
                 Ok((cols, data))
             } else {

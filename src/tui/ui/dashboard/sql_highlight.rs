@@ -61,7 +61,8 @@ static FUNCTION_RE: Lazy<Regex> = Lazy::new(|| {
     ).unwrap()
 });
 
-static OPERATOR_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[+\-*/=<>!]+|::|->|->>|#>>|#>").unwrap());
+static OPERATOR_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[+\-*/=<>!]+|::|->|->>|#>>|#>").unwrap());
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Line tokenizer
@@ -189,14 +190,26 @@ mod tests {
         let keyword_color = Color::Rgb(187, 154, 247);
         let op_color = Color::Rgb(137, 221, 255);
         // SELECT should be a keyword span (soft purple, no bold)
-        assert!(spans.iter().any(|s| s.content == "SELECT" && s.style.fg == Some(keyword_color)),
-            "SELECT should be highlighted as keyword");
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "SELECT" && s.style.fg == Some(keyword_color)),
+            "SELECT should be highlighted as keyword"
+        );
         // FROM should be a keyword span
-        assert!(spans.iter().any(|s| s.content == "FROM" && s.style.fg == Some(keyword_color)),
-            "FROM should be highlighted as keyword");
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "FROM" && s.style.fg == Some(keyword_color)),
+            "FROM should be highlighted as keyword"
+        );
         // * should be an operator span (light cyan)
-        assert!(spans.iter().any(|s| s.content == "*" && s.style.fg == Some(op_color)),
-            "* should be highlighted as operator");
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "*" && s.style.fg == Some(op_color)),
+            "* should be highlighted as operator"
+        );
     }
 
     #[test]
@@ -205,7 +218,11 @@ mod tests {
         let highlighted = highlight_sql_lines(&lines);
         let spans = &highlighted[0].spans;
         let string_color = Color::Rgb(158, 206, 106);
-        assert!(spans.iter().any(|s| s.content == "'john'" && s.style.fg == Some(string_color)));
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "'john'" && s.style.fg == Some(string_color))
+        );
     }
 
     #[test]
@@ -214,12 +231,18 @@ mod tests {
         let spans = tokenize_line("SELECT * FROM account");
         let func_color = Color::Rgb(122, 162, 247);
         assert!(
-            !spans.iter().any(|s| s.style.fg == Some(func_color) && s.content.to_lowercase() == "count"),
+            !spans
+                .iter()
+                .any(|s| s.style.fg == Some(func_color) && s.content.to_lowercase() == "count"),
             "count should not be highlighted inside account"
         );
         // "from" should still be highlighted as a keyword
         let kw_color = Color::Rgb(187, 154, 247);
-        assert!(spans.iter().any(|s| s.content == "FROM" && s.style.fg == Some(kw_color)));
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "FROM" && s.style.fg == Some(kw_color))
+        );
     }
 
     #[test]
@@ -227,7 +250,11 @@ mod tests {
         // COUNT(*) should highlight COUNT as a function
         let spans = tokenize_line("SELECT COUNT(*)");
         let func_color = Color::Rgb(122, 162, 247);
-        assert!(spans.iter().any(|s| s.content == "COUNT" && s.style.fg == Some(func_color)));
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "COUNT" && s.style.fg == Some(func_color))
+        );
     }
 
     #[test]

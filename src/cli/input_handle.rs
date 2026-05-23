@@ -9,8 +9,7 @@ use crate::{
         prompt::{prompt_engine, read_line},
     },
     connection::{
-        add_connection, delete_connection, Engine, print_connections,
-        validate_connection_string,
+        Engine, add_connection, delete_connection, print_connections, validate_connection_string,
     },
 };
 
@@ -47,8 +46,8 @@ pub async fn handle_connect(
 
     // For SQLite, accept raw file paths and normalise them before validation.
     let url_to_validate = if matches!(engine, Engine::Sqlite) {
-        let abs = crate::connection::normalize_sqlite_path(&raw_url)
-            .wrap_err("Invalid SQLite path")?;
+        let abs =
+            crate::connection::normalize_sqlite_path(&raw_url).wrap_err("Invalid SQLite path")?;
         crate::connection::build_sqlite_url(&abs)
     } else {
         raw_url

@@ -4,9 +4,8 @@ pub mod connection_picker;
 pub mod help;
 
 pub use add_connection::{
-    goto_bottom, goto_top, remove_selected, render_connection_list,
-    render_empty_connections, select_next, select_prev, selected_connection,
-    visible_text,
+    goto_bottom, goto_top, remove_selected, render_connection_list, render_empty_connections,
+    select_next, select_prev, selected_connection, visible_text,
 };
 use ratatui::{
     Frame,
@@ -19,8 +18,10 @@ use ratatui::{
 use crate::tui::{
     AppState, Overlay,
     ui::home::overlays::{
-        add_connection::render_add_connection, command_palette::render_command_palette,
-        connection_picker::render_connection_picker, help::{render_help, render_dashboard_help},
+        add_connection::render_add_connection,
+        command_palette::render_command_palette,
+        connection_picker::render_connection_picker,
+        help::{render_dashboard_help, render_help},
     },
 };
 
@@ -58,7 +59,12 @@ pub fn render_dismiss_hint(frame: &mut Frame, area: Rect, hint: &str) {
 }
 
 /// Build a two-column key → description line for the help overlay.
-pub fn binding_line<'a>(key: &'a str, desc: &'a str, key_style: Style, desc_style: Style) -> Line<'a> {
+pub fn binding_line<'a>(
+    key: &'a str,
+    desc: &'a str,
+    key_style: Style,
+    desc_style: Style,
+) -> Line<'a> {
     Line::from(vec![
         Span::styled(format!("{key:<14}"), key_style),
         Span::styled(desc, desc_style),

@@ -25,7 +25,7 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("vnew", "vertical split"),
     ("hnew", "horizontal split"),
     ("new", "vertical split"),
-    ("open", "open table"),
+    ("show", "show table"),
     ("tables", "table list view"),
     ("noh", "clear search highlight"),
     ("schema", "switch to schema view"),

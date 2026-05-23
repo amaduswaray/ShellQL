@@ -1,9 +1,4 @@
-use crate::tui::{
-    AppState,
-    controls::handle_key_event,
-    render::render,
-    state::AppMode,
-};
+use crate::tui::{AppState, controls::handle_key_event, render::render, state::AppMode};
 use crossterm::{
     event::{self, Event},
     execute,
@@ -48,10 +43,7 @@ async fn app(state: &mut AppState) -> color_eyre::Result<()> {
                     " Render error — check cmdline ",
                     ratatui::style::Style::default().fg(ratatui::style::Color::Red),
                 ));
-                f.render_widget(
-                    ratatui::widgets::Paragraph::new(vec![line]),
-                    area,
-                );
+                f.render_widget(ratatui::widgets::Paragraph::new(vec![line]), area);
             });
         }
 

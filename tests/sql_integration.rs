@@ -1,13 +1,12 @@
-use sqlx::{MySqlPool, PgPool, SqlitePool};
 use std::env;
 
+use shellql::connection::connect_db;
+use shellql::connection::models::ConnectionSource;
+use shellql::connection::models::DatabaseString;
 use shellql::connection::{
     count_rows, delete_rows, filter_rows, insert_row, list_tables, table_rows, table_schema,
     update_cell,
 };
-use shellql::connection::connect_db;
-use shellql::connection::models::ConnectionSource;
-use shellql::connection::models::DatabaseString;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -50,21 +49,30 @@ async fn sqlite_pool() -> shellql::connection::models::DbPool {
 async fn test_list_tables_postgres() {
     let pool = pg_pool().await;
     let tables = list_tables(&pool).await.expect("list_tables should work");
-    assert!(tables.contains(&"employees".to_string()), "expected employees table in Postgres");
+    assert!(
+        tables.contains(&"employees".to_string()),
+        "expected employees table in Postgres"
+    );
 }
 
 #[tokio::test]
 async fn test_list_tables_mysql() {
     let pool = mysql_pool().await;
     let tables = list_tables(&pool).await.expect("list_tables should work");
-    assert!(tables.contains(&"employees".to_string()), "expected employees table in MySQL");
+    assert!(
+        tables.contains(&"employees".to_string()),
+        "expected employees table in MySQL"
+    );
 }
 
 #[tokio::test]
 async fn test_list_tables_sqlite() {
     let pool = sqlite_pool().await;
     let tables = list_tables(&pool).await.expect("list_tables should work");
-    assert!(tables.contains(&"employees".to_string()), "expected employees table in SQLite");
+    assert!(
+        tables.contains(&"employees".to_string()),
+        "expected employees table in SQLite"
+    );
 }
 
 // ── table_schema ──────────────────────────────────────────────────────────────
@@ -72,7 +80,9 @@ async fn test_list_tables_sqlite() {
 #[tokio::test]
 async fn test_table_schema_postgres() {
     let pool = pg_pool().await;
-    let schema = table_schema(&pool, "employees").await.expect("schema should work");
+    let schema = table_schema(&pool, "employees")
+        .await
+        .expect("schema should work");
     let cols: Vec<String> = schema.iter().map(|c| c.name.clone()).collect();
     assert!(cols.contains(&"emp_no".to_string()));
     assert!(cols.contains(&"first_name".to_string()));
@@ -85,7 +95,9 @@ async fn test_table_schema_postgres() {
 #[tokio::test]
 async fn test_table_schema_mysql() {
     let pool = mysql_pool().await;
-    let schema = table_schema(&pool, "employees").await.expect("schema should work");
+    let schema = table_schema(&pool, "employees")
+        .await
+        .expect("schema should work");
     let cols: Vec<String> = schema.iter().map(|c| c.name.clone()).collect();
     assert!(cols.contains(&"emp_no".to_string()));
 
@@ -96,7 +108,9 @@ async fn test_table_schema_mysql() {
 #[tokio::test]
 async fn test_table_schema_sqlite() {
     let pool = sqlite_pool().await;
-    let schema = table_schema(&pool, "employees").await.expect("schema should work");
+    let schema = table_schema(&pool, "employees")
+        .await
+        .expect("schema should work");
     let cols: Vec<String> = schema.iter().map(|c| c.name.clone()).collect();
     assert!(cols.contains(&"emp_no".to_string()));
 
@@ -148,21 +162,27 @@ async fn test_table_rows_paginated_sqlite() {
 #[tokio::test]
 async fn test_count_rows_postgres() {
     let pool = pg_pool().await;
-    let count = count_rows(&pool, "employees").await.expect("count_rows should work");
+    let count = count_rows(&pool, "employees")
+        .await
+        .expect("count_rows should work");
     assert_eq!(count, 100);
 }
 
 #[tokio::test]
 async fn test_count_rows_mysql() {
     let pool = mysql_pool().await;
-    let count = count_rows(&pool, "employees").await.expect("count_rows should work");
+    let count = count_rows(&pool, "employees")
+        .await
+        .expect("count_rows should work");
     assert_eq!(count, 100);
 }
 
 #[tokio::test]
 async fn test_count_rows_sqlite() {
     let pool = sqlite_pool().await;
-    let count = count_rows(&pool, "employees").await.expect("count_rows should work");
+    let count = count_rows(&pool, "employees")
+        .await
+        .expect("count_rows should work");
     assert_eq!(count, 50); // SQLite seed has 50 rows
 }
 
@@ -202,9 +222,16 @@ async fn test_filter_rows_sqlite() {
 #[tokio::test]
 async fn test_update_cell_postgres() {
     let pool = pg_pool().await;
-    let affected = update_cell(&pool, "employees", "emp_no", "10001", "email", "updated@example.com")
-        .await
-        .expect("update_cell should work");
+    let affected = update_cell(
+        &pool,
+        "employees",
+        "emp_no",
+        "10001",
+        "email",
+        "updated@example.com",
+    )
+    .await
+    .expect("update_cell should work");
     assert_eq!(affected, 1);
 
     // Verify
@@ -213,37 +240,72 @@ async fn test_update_cell_postgres() {
     assert_eq!(rows[0][email_idx], "updated@example.com");
 
     // Restore
-    update_cell(&pool, "employees", "emp_no", "10001", "email", "georgi.facello@example.com")
-        .await
-        .unwrap();
+    update_cell(
+        &pool,
+        "employees",
+        "emp_no",
+        "10001",
+        "email",
+        "georgi.facello@example.com",
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
 async fn test_update_cell_mysql() {
     let pool = mysql_pool().await;
-    let affected = update_cell(&pool, "employees", "emp_no", "10001", "email", "updated@example.com")
-        .await
-        .expect("update_cell should work");
+    let affected = update_cell(
+        &pool,
+        "employees",
+        "emp_no",
+        "10001",
+        "email",
+        "updated@example.com",
+    )
+    .await
+    .expect("update_cell should work");
     assert_eq!(affected, 1);
 
     // Restore
-    update_cell(&pool, "employees", "emp_no", "10001", "email", "georgi.facello@example.com")
-        .await
-        .unwrap();
+    update_cell(
+        &pool,
+        "employees",
+        "emp_no",
+        "10001",
+        "email",
+        "georgi.facello@example.com",
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
 async fn test_update_cell_sqlite() {
     let pool = sqlite_pool().await;
-    let affected = update_cell(&pool, "employees", "emp_no", "10001", "email", "updated@example.com")
-        .await
-        .expect("update_cell should work");
+    let affected = update_cell(
+        &pool,
+        "employees",
+        "emp_no",
+        "10001",
+        "email",
+        "updated@example.com",
+    )
+    .await
+    .expect("update_cell should work");
     assert_eq!(affected, 1);
 
     // Restore
-    update_cell(&pool, "employees", "emp_no", "10001", "email", "georgi.facello@example.com")
-        .await
-        .unwrap();
+    update_cell(
+        &pool,
+        "employees",
+        "emp_no",
+        "10001",
+        "email",
+        "georgi.facello@example.com",
+    )
+    .await
+    .unwrap();
 }
 
 // ── insert_row ────────────────────────────────────────────────────────────────

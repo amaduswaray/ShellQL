@@ -58,10 +58,7 @@ pub async fn list_tables(pool: &DbPool) -> color_eyre::eyre::Result<Vec<String>>
 // ── Schema ────────────────────────────────────────────────────────────────────
 
 /// Return the ordered column definitions for `table`.
-pub async fn table_schema(
-    pool: &DbPool,
-    table: &str,
-) -> color_eyre::eyre::Result<Vec<ColumnInfo>> {
+pub async fn table_schema(pool: &DbPool, table: &str) -> color_eyre::eyre::Result<Vec<ColumnInfo>> {
     match pool {
         DbPool::Postgres(pg) => {
             let rows: Vec<(String, String, String, Option<String>)> = sqlx::query_as(
