@@ -13,9 +13,6 @@ pub enum AppMode {
     Dashboard,
 }
 
-/// Nerd Font icons used as tab indicators.
-const TAB_ICONS: [char; 10] = ['󰎢', '󰎥', '󰎨', '󰎫', '󰎲', '󰎯', '󰎴', '󰎷', '󰎺', '󰎽'];
-
 pub struct AppState {
     pub mode: AppMode,
     pub overlay: Option<Overlay>,
@@ -79,14 +76,5 @@ impl AppState {
     /// Reference to the active tab, if any.
     pub fn active_tab(&self) -> Option<&Tab> {
         self.tabs.get(self.active_tab)
-    }
-
-    /// Return the icon for the active tab.
-    pub fn active_tab_icon(&self) -> char {
-        if self.tabs.is_empty() {
-            TAB_ICONS[0]
-        } else {
-            TAB_ICONS[self.active_tab % TAB_ICONS.len()]
-        }
     }
 }

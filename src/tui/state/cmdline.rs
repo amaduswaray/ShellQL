@@ -79,7 +79,11 @@ pub enum CommandLineMode {
     /// The `/` or `?` search prompt is open.
     Search(SearchDirection),
     /// Editing a table cell value (opened by `i` in TableView).
-    CellEdit { row: usize, col: usize, col_name: String },
+    CellEdit {
+        row: usize,
+        col: usize,
+        col_name: String,
+    },
     /// Awaiting a `y` / `n` answer before executing a destructive action.
     Confirm(ConfirmAction),
 }
@@ -150,7 +154,11 @@ impl CommandLine {
 
     /// Open the cell editor for `row`/`col` with `current_value` pre-filled.
     pub fn open_cell_edit(&mut self, row: usize, col: usize, col_name: &str, current_value: &str) {
-        self.mode = CommandLineMode::CellEdit { row, col, col_name: col_name.to_string() };
+        self.mode = CommandLineMode::CellEdit {
+            row,
+            col,
+            col_name: col_name.to_string(),
+        };
         self.input = current_value.to_string();
         self.error = None;
         self.clear_completions();

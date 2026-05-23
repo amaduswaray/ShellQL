@@ -27,9 +27,6 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] Create trait that holds common functions for models(host, connection validator, connection builder, connection string extractor, etc)
 - [ ] Session manager - tmux lik sessionizer to change between connctions. Makes connections out of scope and harder to accidentaly change wrong dbs
 - [ ] Templates: Be able to save pane layouts for quick access of views you often use
-- [ ] Bounding all views to a singular table. can be changed from tableList, or the :open command. All panes are connected to the same table
-  - [ ] Idea/NOTE: a window should always be connected to a singular table. New table always opens a new window
-- [ ] Windows, sessions: Open new windows for multiple tabs of a singular connection, or have sessions with multiple connections
 
 - [ ] Run query from CLI
   - [ ] Flags needed to pick from existing db, but can be powerful with shell pipes
@@ -82,8 +79,6 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] do a find buffer picker like vim
 - [ ] :q when multiple tabs should not quit when pane in tab is 1. it should close the tab
 - [ ] Tab logic, as sessions/picker they need to swap between. No visual tabs
-  - [ ] One tab per table? Hard to decide due to custom queries
-  - [ ] How to handle multiple sessions
 
 
 - [ ] Complete the command line
