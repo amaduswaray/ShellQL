@@ -289,8 +289,9 @@ pub async fn filter_rows(
     }
 }
 
-/// Fetch rows from `table` with optional `filter` (raw WHERE clause) and
-/// optional `sort` (`col_name` + `desc`).
+/// Fetch rows from `table` with optional `filter` (raw WHERE clause),
+/// optional `sort` (`col_name` + `desc`), and optional `selected_cols`.
+/// When `selected_cols` is provided, only those columns are fetched.
 /// Returns `(column_names, rows)`.
 pub async fn query_rows(
     pool: &DbPool,
@@ -298,6 +299,7 @@ pub async fn query_rows(
     filter: Option<&str>,
     sort_col: Option<&str>,
     sort_desc: bool,
+    selected_cols: Option<&[String]>,
     limit: u32,
     offset: u32,
 ) -> color_eyre::eyre::Result<(Vec<String>, Vec<Vec<String>>)> {
@@ -308,17 +310,21 @@ pub async fn query_rows(
 
     match pool {
         DbPool::Postgres(pg) => {
-            let col_rows: Vec<(String,)> = sqlx::query_as(
-                "SELECT column_name
-                 FROM information_schema.columns
-                 WHERE table_schema = 'public' AND table_name = $1
-                 ORDER BY ordinal_position",
-            )
-            .bind(table)
-            .fetch_all(pg)
-            .await?;
+            let cols: Vec<String> = if let Some(cols) = selected_cols {
+                cols.to_vec()
+            } else {
+                let col_rows: Vec<(String,)> = sqlx::query_as(
+                    "SELECT column_name
+                     FROM information_schema.columns
+                     WHERE table_schema = 'public' AND table_name = $1
+                     ORDER BY ordinal_position",
+                )
+                .bind(table)
+                .fetch_all(pg)
+                .await?;
+                col_rows.into_iter().map(|(n,)| n).collect()
+            };
 
-            let cols: Vec<String> = col_rows.into_iter().map(|(n,)| n).collect();
             if cols.is_empty() {
                 return Ok((vec![], vec![]));
             }
@@ -333,7 +339,7 @@ pub async fn query_rows(
             if let Some(f) = filter {
                 query.push_str(&format!(" WHERE {f}"));
             }
-            if let Some(o) = order_by {
+            if let Some(o) = &order_by {
                 query.push_str(&format!(" {o}"));
             }
             query.push_str(&format!(" LIMIT {limit} OFFSET {offset}"));
@@ -358,17 +364,21 @@ pub async fn query_rows(
         }
 
         DbPool::Mysql(my) => {
-            let col_rows: Vec<(String,)> = sqlx::query_as(
-                "SELECT column_name
-                 FROM information_schema.columns
-                 WHERE table_schema = DATABASE() AND table_name = ?
-                 ORDER BY ordinal_position",
-            )
-            .bind(table)
-            .fetch_all(my)
-            .await?;
+            let cols: Vec<String> = if let Some(cols) = selected_cols {
+                cols.to_vec()
+            } else {
+                let col_rows: Vec<(String,)> = sqlx::query_as(
+                    "SELECT column_name
+                     FROM information_schema.columns
+                     WHERE table_schema = DATABASE() AND table_name = ?
+                     ORDER BY ordinal_position",
+                )
+                .bind(table)
+                .fetch_all(my)
+                .await?;
+                col_rows.into_iter().map(|(n,)| n).collect()
+            };
 
-            let cols: Vec<String> = col_rows.into_iter().map(|(n,)| n).collect();
             if cols.is_empty() {
                 return Ok((vec![], vec![]));
             }
@@ -383,7 +393,7 @@ pub async fn query_rows(
             if let Some(f) = filter {
                 query.push_str(&format!(" WHERE {f}"));
             }
-            if let Some(o) = order_by {
+            if let Some(o) = &order_by {
                 query.push_str(&format!(" {o}"));
             }
             query.push_str(&format!(" LIMIT {limit} OFFSET {offset}"));
@@ -408,11 +418,22 @@ pub async fn query_rows(
         }
 
         DbPool::Sqlite(sq) => {
-            let mut query = format!("SELECT * FROM \"{table}\"");
+            let cols: Vec<String> = if let Some(cols) = selected_cols {
+                cols.to_vec()
+            } else {
+                vec![]
+            };
+
+            let mut query = if cols.is_empty() {
+                format!("SELECT * FROM \"{table}\"")
+            } else {
+                let col_list = cols.iter().map(|c| format!("\"{}\"", c)).collect::<Vec<_>>().join(", ");
+                format!("SELECT {col_list} FROM \"{table}\"")
+            };
             if let Some(f) = filter {
                 query.push_str(&format!(" WHERE {f}"));
             }
-            if let Some(o) = order_by {
+            if let Some(o) = &order_by {
                 query.push_str(&format!(" {o}"));
             }
             query.push_str(&format!(" LIMIT {limit} OFFSET {offset}"));
@@ -420,21 +441,24 @@ pub async fn query_rows(
             let rows = sqlx::query(&query).fetch_all(sq).await?;
 
             use sqlx::Row;
-            let cols: Vec<String> = rows
-                .first()
-                .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
-                .unwrap_or_default();
+            let returned_cols: Vec<String> = if cols.is_empty() {
+                rows.first()
+                    .map(|r| r.columns().iter().map(|c| c.name().to_string()).collect())
+                    .unwrap_or_default()
+            } else {
+                cols.clone()
+            };
 
             let data = rows
                 .iter()
                 .map(|r| {
-                    (0..cols.len())
+                    (0..returned_cols.len())
                         .map(|i| sqlite_cell(r, i))
                         .collect()
                 })
                 .collect();
 
-            Ok((cols, data))
+            Ok((returned_cols, data))
         }
     }
 }

@@ -100,6 +100,7 @@ pub struct PendingQuery {
     pub filter: Option<String>,
     pub sort_col: Option<String>,
     pub sort_desc: bool,
+    pub selected_cols: Option<Vec<String>>,
 }
 
 /// Staged changes waiting to be written to the database.
@@ -141,6 +142,7 @@ impl DashboardState {
                         filter: None,
                         sort_col: None,
                         sort_desc: false,
+                        selected_cols: None,
                     });
                     self.loading = true;
                     self.error = None;

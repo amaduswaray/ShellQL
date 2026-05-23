@@ -597,6 +597,7 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                                     filter: None,
                                     sort_col: None,
                                     sort_desc: false,
+                                    selected_cols: None,
                                 });
                                 dash.loading = true;
                                 dash.error = None;
@@ -619,6 +620,7 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                                     filter: None,
                                     sort_col: None,
                                     sort_desc: false,
+                                    selected_cols: None,
                                 });
                                 dash.loading = true;
                                 dash.error = None;
@@ -646,6 +648,7 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
                                 filter: None,
                                 sort_col: None,
                                 sort_desc: false,
+                                selected_cols: None,
                             });
                             dash.loading = true;
                             dash.error = None;

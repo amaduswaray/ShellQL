@@ -49,7 +49,7 @@ pub async fn handle_key_event(
         if let Some(query) = dash.pending_load.take() {
             let pool = dash.pool.clone();
             let table = query.table.clone();
-            let result = if query.filter.is_some() || query.sort_col.is_some() {
+            let result = if query.filter.is_some() || query.sort_col.is_some() || query.selected_cols.is_some() {
                 tokio::try_join!(
                     crate::connection::table_schema(&pool, &table),
                     crate::connection::query_rows(
@@ -57,6 +57,7 @@ pub async fn handle_key_event(
                         query.filter.as_deref(),
                         query.sort_col.as_deref(),
                         query.sort_desc,
+                        query.selected_cols.as_deref(),
                         200, 0,
                     ),
                 )

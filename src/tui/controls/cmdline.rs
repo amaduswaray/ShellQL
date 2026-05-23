@@ -389,6 +389,7 @@ fn execute_command(cmd: &str, state: &mut AppState) {
 
         "where" => cmd_where(state, args),
         "order" => cmd_order(state, args),
+        "select" => cmd_select(state, args),
 
         "resize" | "res" => cmd_resize(state, args),
 
@@ -469,6 +470,7 @@ fn cmd_vnew(state: &mut AppState, args: &[&str]) {
                                     filter: None,
                                     sort_col: None,
                                     sort_desc: false,
+                                    selected_cols: None,
                                 });
                                 dash.loading = true;
                                 dash.error = None;
@@ -520,6 +522,7 @@ fn cmd_hnew(state: &mut AppState, args: &[&str]) {
                                     filter: None,
                                     sort_col: None,
                                     sort_desc: false,
+                                    selected_cols: None,
                                 });
                                 dash.loading = true;
                                 dash.error = None;
@@ -555,6 +558,7 @@ fn cmd_open(state: &mut AppState, args: &[&str]) {
                     filter: None,
                     sort_col: None,
                     sort_desc: false,
+                    selected_cols: None,
                 });
                 dash.loading = true;
                 dash.error = None;
@@ -668,6 +672,7 @@ fn cmd_back(state: &mut AppState) {
                             filter: None,
                             sort_col: None,
                             sort_desc: false,
+                            selected_cols: None,
                         });
                         dash.loading = true;
                         dash.error = None;
@@ -697,6 +702,7 @@ fn cmd_forward(state: &mut AppState) {
                             filter: None,
                             sort_col: None,
                             sort_desc: false,
+                            selected_cols: None,
                         });
                         dash.loading = true;
                         dash.error = None;
@@ -802,13 +808,18 @@ fn cmd_where(state: &mut AppState, args: &[&str]) {
 
     if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
         pane.filter = filter.clone();
+        // :where is mutually exclusive with :order and :select.
+        pane.sort_col = None;
+        pane.sort_desc = false;
+        pane.selected_cols = None;
     }
 
     dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
         table: table_name,
         filter,
-        sort_col: dash.tree.panes.get(&active_id).and_then(|p| p.sort_col.clone()),
-        sort_desc: dash.tree.panes.get(&active_id).map_or(false, |p| p.sort_desc),
+        sort_col: None,
+        sort_desc: false,
+        selected_cols: None,
     });
     dash.loading = true;
     dash.error = None;
@@ -864,19 +875,93 @@ fn cmd_order(state: &mut AppState, args: &[&str]) {
     if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
         pane.sort_col = sort_col.clone();
         pane.sort_desc = sort_desc;
+        // :order is mutually exclusive with :where and :select.
+        pane.filter = None;
+        pane.selected_cols = None;
     }
 
     dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
         table: table_name,
-        filter: dash.tree.panes.get(&active_id).and_then(|p| p.filter.clone()),
+        filter: None,
         sort_col,
         sort_desc,
+        selected_cols: None,
     });
     dash.loading = true;
     dash.error = None;
 
     if args.is_empty() {
         state.cmdline.set_loading("Sort cleared");
+    }
+}
+
+fn cmd_select(state: &mut AppState, args: &[&str]) {
+    let Some(dash) = require_dashboard(state) else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    let active_id = dash.tree.active_pane;
+    let Some(pane) = dash.tree.panes.get(&active_id) else {
+        return;
+    };
+
+    if pane.kind != crate::tui::state::PaneType::TableView {
+        state.cmdline.set_error(":select only works in table view");
+        return;
+    }
+
+    if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
+        state.cmdline.set_error("cannot select columns with pending changes; :w or u to clear");
+        return;
+    }
+
+    let table_name = match pane.bound_table.clone() {
+        Some(t) => t,
+        None => {
+            state.cmdline.set_error("no table bound to active pane");
+            return;
+        }
+    };
+
+    let selected_cols = if args.is_empty() {
+        None
+    } else {
+        let cols: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+        // Validate column names against cached schema.
+        if let Some(loaded) = dash.table_cache.get(&table_name) {
+            let valid_cols: std::collections::HashSet<String> =
+                loaded.headers.iter().cloned().collect();
+            for col in &cols {
+                if !valid_cols.contains(col) {
+                    state.cmdline.set_error(format!("column '{col}' not found in '{table_name}'"));
+                    return;
+                }
+            }
+        }
+        Some(cols)
+    };
+
+    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+        pane.selected_cols = selected_cols.clone();
+        // :select is mutually exclusive with :where and :order.
+        pane.filter = None;
+        pane.sort_col = None;
+        pane.sort_desc = false;
+    }
+
+    dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+        table: table_name,
+        filter: None,
+        sort_col: None,
+        sort_desc: false,
+        selected_cols,
+    });
+    dash.loading = true;
+    dash.error = None;
+
+    if args.is_empty() {
+        state.cmdline.set_loading("Column selection cleared");
     }
 }
 

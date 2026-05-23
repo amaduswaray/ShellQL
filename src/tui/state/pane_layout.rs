@@ -186,6 +186,10 @@ pub struct Pane {
     pub sort_col: Option<String>,
     pub sort_desc: bool,
 
+    // ── Selected columns (pane-local) ───────────────────────────────────────
+    /// Which columns to display in TableView. None = show all.
+    pub selected_cols: Option<Vec<String>>,
+
     // ── Query editor state (pane-local) ─────────────────────────────────────
     /// Text lines for the QueryEditor pane.
     pub query_text: Vec<String>,
@@ -234,6 +238,7 @@ impl Pane {
             filter: None,
             sort_col: None,
             sort_desc: false,
+            selected_cols: None,
             query_text: vec![String::new()],
             query_cursor: (0, 0),
             autocomplete_idx: 0,

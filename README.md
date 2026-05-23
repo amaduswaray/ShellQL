@@ -66,11 +66,16 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] query history popup pane
 - [ ] for border overflows and showing(add connection)
 - [ ] change from :open to :show
+
 - [ ] When i visual mode, the alternating lites get removed to have a better highlight
+- [ ] Selection highlight different color
 - [ ] line number column does not need alternating lines
+- [ ] proper cmdline design
+
 - [ ] Full screen pane logic - like tmux <leader>z, makes a pane fullscreen. effect reverted when toggling or attempting to change pane
+  - [ ] If possible, full screen should be applied to parent pane, so splitting within full screen is possible as long as you have not reached max panes. Separate between :full and :full parent
 - [ ] Query view when wrong command shows result view
-- [ ] :select command that reduces the rows that are shown
+- [x] :select command that reduces the rows that are shown
 
 - [ ] Tab logic, as sessions/picker they need to swap between. No visual tabs
   - [ ] One tab per table? Hard to decide due to custom queries

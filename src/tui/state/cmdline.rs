@@ -34,6 +34,7 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("close", "close pane"),
     ("where", "filter rows"),
     ("order", "sort rows"),
+    ("select", "select columns"),
     ("resize", "resize pane"),
     ("res", "resize pane"),
     ("query", "open query editor"),
