@@ -9,7 +9,7 @@ pub use models::{
     ConnectionSource, Database, DatabaseConnection, DatabaseStore, DatabaseString, DbPool,
     Engine, MysqlConnection, PostgresConnection, SqliteConnection, SslOptions, SslVerifyMode,
 };
-pub use pool::connect_db;
+pub use pool::{build_sqlite_url, connect_db, normalize_sqlite_path};
 pub use sql::{ColumnInfo, list_tables, table_schema, table_rows, count_rows, filter_rows, query_rows, count_rows_filtered, execute_query, update_cell, insert_row, delete_rows};
 pub use store::{
     add_connection, delete_connection, extract_host, get_config_path, list_connections,

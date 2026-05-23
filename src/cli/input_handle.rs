@@ -45,7 +45,16 @@ pub async fn handle_connect(
         .wrap_err("Failed to read connection URL")?,
     };
 
-    let validated_url = validate_connection_string(&raw_url)
+    // For SQLite, accept raw file paths and normalise them before validation.
+    let url_to_validate = if matches!(engine, Engine::Sqlite) {
+        let abs = crate::connection::normalize_sqlite_path(&raw_url)
+            .wrap_err("Invalid SQLite path")?;
+        crate::connection::build_sqlite_url(&abs)
+    } else {
+        raw_url
+    };
+
+    let validated_url = validate_connection_string(&url_to_validate)
         .wrap_err("Invalid connection string")
         .suggestion(format!(
             "Connection strings must look like: {}://user:pass@host/dbname",
@@ -71,6 +80,13 @@ pub async fn handle_db(command: DbCommands) -> color_eyre::eyre::Result<()> {
         DbCommands::List => print_connections(),
 
         DbCommands::Add { name, engine, url } => {
+            let url = if matches!(engine, Engine::Sqlite) {
+                let abs = crate::connection::normalize_sqlite_path(&url)
+                    .wrap_err("Invalid SQLite path")?;
+                crate::connection::build_sqlite_url(&abs)
+            } else {
+                url
+            };
             let connection = engine.clone().to_source(url);
             match add_connection(name, connection, engine).await {
                 Ok(_) => print_connections(),

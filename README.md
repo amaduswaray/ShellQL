@@ -60,7 +60,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] Editor commands and working with proper syntax, ans not "" stuff
 - [x] Syntax highlighting and editor formatting
 
-- [ ] Ensure that absolute paths for sqlite works. ensure sqlite and mysql works
+- [x] Ensure that absolute paths for sqlite works. ensure sqlite and mysql works
 - [ ] When writing :! you should be able to write one liners sql queruers, limited to 1 select that can be displayed/ one query. 
 - [ ] Hide pane logic
 
@@ -76,6 +76,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] Auto complete for tables and commands
 
 
+- [ ] Better navigation ergonomics: Using - to go back between views, or what not
 - [ ] Inline cell edits
 - [ ] Proper vim commands
   - [ ] o and O for newline over and under, to add a new row
@@ -83,3 +84,4 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [ ] rn to rename the cell value
   - [ ] i to enter insert mode and edit
 
+- [ ] Shell completions

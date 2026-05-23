@@ -489,7 +489,11 @@ impl AddConnectionForm {
                     }
                     Engine::Mysql => ConnectionSource::Url(DatabaseString::Mysql(self.url.clone())),
                     Engine::Sqlite => {
-                        ConnectionSource::Url(DatabaseString::Sqlite(self.url.clone()))
+                        let abs = crate::connection::normalize_sqlite_path(&self.url)
+                            .map_err(|e| e.to_string())?;
+                        ConnectionSource::Url(DatabaseString::Sqlite(
+                            crate::connection::build_sqlite_url(&abs),
+                        ))
                     }
                 })
             }
@@ -549,9 +553,11 @@ impl AddConnectionForm {
                         if self.sqlite_path.trim().is_empty() {
                             return Err("Path is required".to_string());
                         }
+                        let abs = crate::connection::normalize_sqlite_path(&self.sqlite_path)
+                            .map_err(|e| e.to_string())?;
                         Ok(ConnectionSource::Config(DatabaseConnection::Sqlite(
                             SqliteConnection {
-                                path: self.sqlite_path.clone(),
+                                path: abs,
                                 stack_trace: false,
                                 pool_size: pool,
                                 create_if_missing: self.create_if_missing,

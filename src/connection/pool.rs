@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::connection::models::ConnectionSource;
 use crate::connection::models::{
     DatabaseConnection, DatabaseString, DbPool, MysqlConnection, PostgresConnection,
@@ -5,6 +7,67 @@ use crate::connection::models::{
 };
 
 static MAX_CONNECTIONS: u32 = 5;
+
+/// Normalize a raw SQLite path into an absolute path string suitable for a
+/// `sqlite://` URL.
+///
+/// * Strips an existing `sqlite://` prefix and any query params.
+/// * Expands `~` to the user's home directory.
+/// * Resolves relative paths against the current working directory.
+/// * Normalises `.` and `..` components.
+/// * Converts backslashes to forward slashes (Windows → URL-safe).
+pub fn normalize_sqlite_path(input: &str) -> color_eyre::eyre::Result<String> {
+    let mut path = input.trim();
+
+    // Strip sqlite:// prefix if present (and any query params that may follow)
+    if path.starts_with("sqlite://") {
+        path = &path["sqlite://".len()..];
+        if let Some(i) = path.find('?') {
+            path = &path[..i];
+        }
+    }
+
+    // Expand ~ to home directory
+    let expanded = if let Some(rest) = path.strip_prefix("~/") {
+        let home = dirs::home_dir()
+            .ok_or_else(|| color_eyre::eyre::eyre!("Could not determine home directory"))?;
+        home.join(rest).to_string_lossy().to_string()
+    } else if path == "~" {
+        let home = dirs::home_dir()
+            .ok_or_else(|| color_eyre::eyre::eyre!("Could not determine home directory"))?;
+        home.to_string_lossy().to_string()
+    } else {
+        path.to_string()
+    };
+
+    // Resolve to absolute path
+    let path_buf = PathBuf::from(expanded);
+    let absolute = if path_buf.is_absolute() {
+        path_buf
+    } else {
+        let cwd = std::env::current_dir()
+            .map_err(|e| color_eyre::eyre::eyre!("Failed to get current directory: {e}"))?;
+        cwd.join(path_buf)
+    };
+
+    // Normalize . and .. components
+    let normalized = absolute.components().collect::<PathBuf>();
+
+    // Convert separators for cross-platform URL safety
+    let cleaned = normalized.to_string_lossy().replace('\\', "/");
+
+    Ok(cleaned)
+}
+
+/// Build a fully-qualified `sqlite://` URL from a normalized absolute path.
+pub fn build_sqlite_url(abs_path: &str) -> String {
+    if abs_path.starts_with('/') {
+        format!("sqlite://{}", abs_path)
+    } else {
+        // Windows absolute path like C:/Users/... needs an extra leading /
+        format!("sqlite:///{}", abs_path)
+    }
+}
 
 // TODO: Perhaps extrax the add connection - Two different operantions
 pub async fn connect_db(connection: ConnectionSource) -> color_eyre::eyre::Result<DbPool> {
@@ -32,11 +95,11 @@ pub async fn connect_db(connection: ConnectionSource) -> color_eyre::eyre::Resul
         }
 
         ConnectionSource::Url(DatabaseString::Sqlite(url)) => {
+            let abs = normalize_sqlite_path(url)?;
             let pool = SqlitePoolOptions::new()
                 .max_connections(MAX_CONNECTIONS)
-                .connect(url)
+                .connect(&build_sqlite_url(&abs))
                 .await?;
-            // add_connection(name, connection.clone(), Engine::Sqlite).await?;
             DbPool::Sqlite(pool)
         }
 
@@ -61,12 +124,13 @@ pub async fn connect_db(connection: ConnectionSource) -> color_eyre::eyre::Resul
         }
 
         ConnectionSource::Config(DatabaseConnection::Sqlite(sq)) => {
-            let url = sqlite_url(sq);
+            let mut sq = sq.clone();
+            sq.path = normalize_sqlite_path(&sq.path)?;
+            let url = sqlite_url(&sq);
             let pool = SqlitePoolOptions::new()
                 .max_connections(sq.pool_size as u32)
                 .connect(&url)
                 .await?;
-            // add_connection("sqlite".to_string(), connection.clone(), Engine::Sqlite).await?;
             DbPool::Sqlite(pool)
         }
     };
@@ -136,7 +200,7 @@ fn sqlite_url(sq: &SqliteConnection) -> String {
         params.push("immutable=0".to_string());
     }
 
-    build_url(format!("sqlite://{}", sq.path), params)
+    build_url(build_sqlite_url(&sq.path), params)
 }
 
 fn build_url(base: String, params: Vec<String>) -> String {
