@@ -404,6 +404,9 @@ fn execute_command(cmd: &str, state: &mut AppState) {
             }
         }
 
+        "back" => cmd_back(state),
+        "forward" => cmd_forward(state),
+
         "!" => cmd_bang(state, args),
 
         other => state
@@ -645,6 +648,64 @@ fn cmd_query_results(state: &mut AppState, _args: &[&str]) {
     if let Some(pane) = dash.tree.active_mut() {
         pane.set_query_results(0);
         pane.query_result_count = dash.query_results.len();
+    }
+}
+
+/// Navigate back in the active pane's view history.
+fn cmd_back(state: &mut AppState) {
+    let Some(dash) = state.dashboard.as_mut() else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    if let Some(pane) = dash.tree.active_mut() {
+        if pane.go_back() {
+            if pane.kind == crate::tui::state::PaneType::TableView {
+                if let Some(name) = pane.bound_table.clone() {
+                    if !dash.table_cache.contains_key(&name) {
+                        dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+                            table: name,
+                            filter: None,
+                            sort_col: None,
+                            sort_desc: false,
+                        });
+                        dash.loading = true;
+                        dash.error = None;
+                    }
+                }
+            }
+        } else {
+            state.cmdline.set_error("no previous view");
+        }
+    }
+}
+
+/// Navigate forward in the active pane's view history.
+fn cmd_forward(state: &mut AppState) {
+    let Some(dash) = state.dashboard.as_mut() else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    if let Some(pane) = dash.tree.active_mut() {
+        if pane.go_forward() {
+            if pane.kind == crate::tui::state::PaneType::TableView {
+                if let Some(name) = pane.bound_table.clone() {
+                    if !dash.table_cache.contains_key(&name) {
+                        dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+                            table: name,
+                            filter: None,
+                            sort_col: None,
+                            sort_desc: false,
+                        });
+                        dash.loading = true;
+                        dash.error = None;
+                    }
+                }
+            }
+        } else {
+            state.cmdline.set_error("no next view");
+        }
     }
 }
 

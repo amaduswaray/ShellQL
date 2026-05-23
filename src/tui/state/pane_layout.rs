@@ -53,6 +53,19 @@ impl std::fmt::Display for PaneType {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Navigation history entry
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// A snapshot of the minimal state needed to restore a pane's view.
+/// Stored per-pane in a linear back/forward list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryEntry {
+    pub kind: PaneType,
+    pub bound_table: Option<String>,
+    pub bound_query_idx: Option<usize>,
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Fuzzy matching helpers
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -193,13 +206,17 @@ pub struct Pane {
 
     // ── Cached render area (updated every frame) ────────────────────────────
     pub area: Option<Rect>,
+
+    // ── Navigation history (pane-local back/forward) ──────────────────────
+    pub history: Vec<HistoryEntry>,
+    pub history_pos: usize,
 }
 
 impl Pane {
     pub fn new(id: PaneId, kind: PaneType, display_id: usize) -> Self {
         Self {
             id,
-            kind,
+            kind: kind.clone(),
             display_id,
             bound_table: None,
             nav_cursor: 0,
@@ -225,10 +242,67 @@ impl Pane {
             bound_query_idx: None,
             query_result_count: 0,
             area: None,
+            history: vec![HistoryEntry {
+                kind,
+                bound_table: None,
+                bound_query_idx: None,
+            }],
+            history_pos: 0,
         }
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────
+    // ── History helpers ───────────────────────────────────────────────────
+
+    /// Capture the current view state and append it to the history list,
+    /// truncating any "future" entries first.  `history_pos` is updated to
+    /// point at the newly-pushed entry.
+    fn push_history(&mut self) {
+        let entry = HistoryEntry {
+            kind: self.kind.clone(),
+            bound_table: self.bound_table.clone(),
+            bound_query_idx: self.bound_query_idx,
+        };
+        // Truncate forward history (everything after the current position).
+        if self.history_pos + 1 < self.history.len() {
+            self.history.truncate(self.history_pos + 1);
+        }
+        // Don't push duplicates.
+        if self.history.last() != Some(&entry) {
+            self.history.push(entry);
+            self.history_pos = self.history.len() - 1;
+        }
+    }
+
+    /// Restore fields from the history entry at the current `history_pos`.
+    fn restore_from_history(&mut self) {
+        if let Some(entry) = self.history.get(self.history_pos) {
+            self.kind = entry.kind.clone();
+            self.bound_table = entry.bound_table.clone();
+            self.bound_query_idx = entry.bound_query_idx;
+        }
+    }
+
+    /// Go back one step in history. Returns `true` if we moved.
+    pub fn go_back(&mut self) -> bool {
+        if self.history_pos == 0 {
+            return false;
+        }
+        self.history_pos -= 1;
+        self.restore_from_history();
+        true
+    }
+
+    /// Go forward one step in history. Returns `true` if we moved.
+    pub fn go_forward(&mut self) -> bool {
+        if self.history_pos + 1 >= self.history.len() {
+            return false;
+        }
+        self.history_pos += 1;
+        self.restore_from_history();
+        true
+    }
+
+    // ── View setters (history-aware) ────────────────────────────────────────
 
     pub fn reset_to_list(&mut self) {
         self.kind = PaneType::TableList;
@@ -249,6 +323,7 @@ impl Pane {
         self.sort_desc = false;
         self.autocomplete_matches.clear();
         self.autocomplete_selected = None;
+        self.push_history();
     }
 
     pub fn set_table_view(&mut self, table_name: String) {
@@ -267,11 +342,13 @@ impl Pane {
         self.filter = None;
         self.sort_col = None;
         self.sort_desc = false;
+        self.push_history();
     }
 
     pub fn set_schema_view(&mut self, table_name: String) {
         self.kind = PaneType::SchemaView;
         self.bound_table = Some(table_name);
+        self.push_history();
     }
 
     pub fn set_query_editor(&mut self) {
@@ -281,11 +358,13 @@ impl Pane {
         self.autocomplete_matches.clear();
         self.autocomplete_selected = None;
         self.autocomplete_idx = 0;
+        self.push_history();
     }
 
     pub fn set_query_results(&mut self, idx: usize) {
         self.kind = PaneType::QueryResults;
         self.bound_query_idx = Some(idx);
+        self.push_history();
     }
 
     // ── Row navigation ──────────────────────────────────────────────────────

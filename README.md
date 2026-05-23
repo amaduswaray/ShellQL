@@ -68,11 +68,9 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] change from :open to :show
 - [ ] When i visual mode, the alternating lites get removed to have a better highlight
 - [ ] line number column does not need alternating lines
-- [ ] Hide pane logic
+- [ ] Full screen pane logic - like tmux <leader>z, makes a pane fullscreen. effect reverted when toggling or attempting to change pane
 - [ ] Query view when wrong command shows result view
-- [ ] the / command should work on the query results
-  - [ ] Results are readonly
-
+- [ ] :select command that reduces the rows that are shown
 
 - [ ] Tab logic, as sessions/picker they need to swap between. No visual tabs
   - [ ] One tab per table? Hard to decide due to custom queries
@@ -85,9 +83,9 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] Scrollable completions
 - [ ] Be able to Delete when in connection list
 - [ ] Auto complete for tables and commands
-- [ ] Better navigation ergonomics: Using - to go back between views, or what not
+- [x] Better navigation ergonomics: Using - to go back between views, or what not
 
-- [ ] Inline cell edits
+- [ ] Inline cell edits. Only for tableView. the queryresults is read only, and can only use / and ?
 - [ ] Proper vim commands
   - [ ] o and O for newline over and under, to add a new row
   - [ ] ciw to change in cell

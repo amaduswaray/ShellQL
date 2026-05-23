@@ -38,6 +38,8 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("res", "resize pane"),
     ("query", "open query editor"),
     ("!", "execute SQL directly"),
+    ("back", "go back in pane history"),
+    ("forward", "go forward in pane history"),
     ("disconnect", "disconnect and return home"),
 ];
 

@@ -585,6 +585,52 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
             state.pending_key = Some('g');
         }
 
+        // ── Back / forward history ──────────────────────────────────────────────
+        KeyCode::Char('-') => {
+            if let Some(pane) = dash.tree.active_mut() {
+                if pane.go_back() {
+                    if pane.kind == PaneType::TableView {
+                        if let Some(name) = pane.bound_table.clone() {
+                            if !dash.table_cache.contains_key(&name) {
+                                dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+                                    table: name,
+                                    filter: None,
+                                    sort_col: None,
+                                    sort_desc: false,
+                                });
+                                dash.loading = true;
+                                dash.error = None;
+                            }
+                        }
+                    }
+                } else {
+                    state.cmdline.set_error("no previous view");
+                }
+            }
+        }
+        KeyCode::Char('_') => {
+            if let Some(pane) = dash.tree.active_mut() {
+                if pane.go_forward() {
+                    if pane.kind == PaneType::TableView {
+                        if let Some(name) = pane.bound_table.clone() {
+                            if !dash.table_cache.contains_key(&name) {
+                                dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+                                    table: name,
+                                    filter: None,
+                                    sort_col: None,
+                                    sort_desc: false,
+                                });
+                                dash.loading = true;
+                                dash.error = None;
+                            }
+                        }
+                    }
+                } else {
+                    state.cmdline.set_error("no next view");
+                }
+            }
+        }
+
         // ── Enter — select table or load into current pane ─────────────────────
         KeyCode::Enter => {
             if let Some(pane) = dash.tree.active_mut() {
