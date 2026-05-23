@@ -8,6 +8,23 @@ use crate::tui::{
 };
 
 pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
+    // ── Tab switching (Shift+H / Shift+L) ────────────────────────────────────
+    match event.code {
+        KeyCode::Char('H') => {
+            if state.tabs.len() > 1 {
+                state.active_tab = (state.active_tab + state.tabs.len() - 1) % state.tabs.len();
+            }
+            return;
+        }
+        KeyCode::Char('L') => {
+            if state.tabs.len() > 1 {
+                state.active_tab = (state.active_tab + 1) % state.tabs.len();
+            }
+            return;
+        }
+        _ => {}
+    }
+
     let tables = state.tables.clone();
     let active_idx = state.active_tab;
     let Some(tab) = state.tabs.get_mut(active_idx) else {
