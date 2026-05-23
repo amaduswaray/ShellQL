@@ -158,7 +158,22 @@ pub async fn handle_key_event(
                     // Find or create a QueryResults pane.
                     populate_query_results(dash, false);
                     dash.loading = false;
-                    state.cmdline.loading = Some(format!("Query executed: {} rows", dash.query_results[0].rows.len()));
+
+                    // Build a user-friendly status message.
+                    let msg = if dash.query_results[0].headers == vec!["Rows Affected"] {
+                        let affected = dash.query_results[0]
+                            .rows
+                            .first()
+                            .and_then(|r| r.first())
+                            .cloned()
+                            .unwrap_or_else(|| "0".to_string());
+                        format!("{affected} rows affected")
+                    } else if dash.query_results[0].headers.is_empty() {
+                        "Query returned no rows".to_string()
+                    } else {
+                        format!("Query executed: {} rows", dash.query_results[0].rows.len())
+                    };
+                    state.cmdline.loading = Some(msg);
                 }
                 Err(e) => {
                     dash.query_results = vec![crate::tui::state::dashboard::QueryResult {

@@ -37,7 +37,7 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("resize", "resize pane"),
     ("res", "resize pane"),
     ("query", "open query editor"),
-    ("queryresults", "show query results"),
+    ("!", "execute SQL directly"),
     ("disconnect", "disconnect and return home"),
 ];
 

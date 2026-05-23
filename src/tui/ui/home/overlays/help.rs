@@ -105,6 +105,7 @@ pub fn render_dashboard_help(frame: &mut Frame, area: Rect) {
         Line::from(Span::styled("  Commands", nav_header)),
         Line::from(Span::styled("  ────────", sep_style)),
         binding_line("  : + Tab", "list all commands", key_style, desc_style),
+        binding_line("  :! <sql>", "execute SQL directly", key_style, desc_style),
         binding_line("  :connect", "switch database", key_style, desc_style),
         binding_line("  :disconnect", "return to home", key_style, desc_style),
         binding_line("  :q", "close pane / quit", key_style, desc_style),

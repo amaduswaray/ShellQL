@@ -404,6 +404,8 @@ fn execute_command(cmd: &str, state: &mut AppState) {
             }
         }
 
+        "!" => cmd_bang(state, args),
+
         other => state
             .cmdline
             .set_error(format!("Error: not a command `{other}`")),
@@ -643,6 +645,32 @@ fn cmd_query_results(state: &mut AppState, _args: &[&str]) {
     if let Some(pane) = dash.tree.active_mut() {
         pane.set_query_results(0);
         pane.query_result_count = dash.query_results.len();
+    }
+}
+
+/// Execute SQL directly from the command line (like vim's `:!`).
+/// Skips the query editor and immediately runs the statement.
+fn cmd_bang(state: &mut AppState, args: &[&str]) {
+    let sql = args.join(" ").trim().to_string();
+    if sql.is_empty() {
+        state.cmdline.set_error("! requires an SQL query");
+        return;
+    }
+
+    let Some(dash) = state.dashboard.as_mut() else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    dash.pending_query_exec = Some(sql);
+    dash.loading = true;
+    dash.error = None;
+
+    // Replace the active pane with a QueryResults view (no new pane created).
+    let active_id = dash.tree.active_pane;
+    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+        pane.set_query_results(0);
+        pane.query_result_count = 1;
     }
 }
 

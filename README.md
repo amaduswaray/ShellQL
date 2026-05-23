@@ -61,8 +61,18 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] Syntax highlighting and editor formatting
 
 - [x] Ensure that absolute paths for sqlite works. ensure sqlite and mysql works
-- [ ] When writing :! you should be able to write one liners sql queruers, limited to 1 select that can be displayed/ one query. 
+- [x] When writing :! you should be able to write one liners sql queruers, limited to 1 select that can be displayed/ one query. 
+
+- [ ] query history popup pane
+- [ ] for border overflows and showing(add connection)
+- [ ] change from :open to :show
+- [ ] When i visual mode, the alternating lites get removed to have a better highlight
+- [ ] line number column does not need alternating lines
 - [ ] Hide pane logic
+- [ ] Query view when wrong command shows result view
+- [ ] the / command should work on the query results
+  - [ ] Results are readonly
+
 
 - [ ] Tab logic, as sessions/picker they need to swap between. No visual tabs
   - [ ] One tab per table? Hard to decide due to custom queries
@@ -72,11 +82,11 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] Complete the command line
   - [ ] All commands like, new session, switch session, delete session, add connection, etc
   - [ ] Tab completion for command line commands
+- [ ] Scrollable completions
 - [ ] Be able to Delete when in connection list
 - [ ] Auto complete for tables and commands
-
-
 - [ ] Better navigation ergonomics: Using - to go back between views, or what not
+
 - [ ] Inline cell edits
 - [ ] Proper vim commands
   - [ ] o and O for newline over and under, to add a new row
