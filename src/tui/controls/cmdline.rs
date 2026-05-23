@@ -18,8 +18,8 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
             // Cancel live search: clear live_search from the active pane but
             // leave last_search intact so previous committed search stays.
             if let CommandLineMode::Search(_) = state.cmdline.mode {
-                if let Some(ref mut dash) = state.dashboard {
-                    if let Some(pane) = dash.tree.active_mut() {
+                if let Some(tab) = state.active_tab_mut() {
+                    if let Some(pane) = tab.tree.active_mut() {
                         pane.live_search = None;
                     }
                 }
@@ -116,16 +116,18 @@ fn execute_cmdline(state: &mut AppState) {
         CommandLineMode::CellEdit { row, col, .. } => {
             let new_value = state.cmdline.input.trim().to_string();
             state.cmdline.reset();
-            if let Some(ref mut dash) = state.dashboard {
-                if let Some(pane) = dash.tree.active_mut() {
-                    if let Some(ref table_name) = pane.bound_table {
-                        if let Some(ref loaded) = dash.table_cache.get(table_name) {
-                            if row < loaded.rows.len() && col < loaded.headers.len() {
-                                // Remove any existing pending update for this cell.
-                                pane.pending_updates.retain(|(r, c, _)| !(*r == row && *c == col));
-                                pane.pending_updates.push((row, col, new_value));
-                            }
-                        }
+            let table_name = state.active_tab_mut()
+                .and_then(|tab| tab.tree.active_mut())
+                .and_then(|pane| pane.bound_table.clone());
+
+            if let Some(ref table_name) = table_name {
+                let bounds = state.table_cache.get(table_name).map(|l| (l.rows.len(), l.headers.len()));
+                if let Some((row_count, col_count)) = bounds {
+                    if row < row_count && col < col_count {
+                        let Some(tab) = state.active_tab_mut() else { return };
+                        let Some(pane) = tab.tree.active_mut() else { return };
+                        pane.pending_updates.retain(|(r, c, _)| !(*r == row && *c == col));
+                        pane.pending_updates.push((row, col, new_value));
                     }
                 }
             }
@@ -139,15 +141,21 @@ fn execute_cmdline(state: &mut AppState) {
 /// Stores the result in `pane.live_search` without moving the cursor.
 fn compute_live_search(direction: SearchDirection, state: &mut AppState) {
     let query = state.cmdline.input.trim().to_string();
-    let Some(dash) = state.dashboard.as_mut() else { return };
-    let Some(pane) = dash.tree.active_mut() else { return };
-
     let query_lower = query.to_lowercase();
+
+    // Collect needed info from the active pane first.
+    let pane_info = state.active_tab_mut().and_then(|tab| {
+        tab.tree.active_mut().map(|pane| {
+            (pane.kind.clone(), pane.bound_table.clone(), pane.bound_query_idx, pane.cursor_col)
+        })
+    });
+    let Some((kind, bound_table, bound_query_idx, cursor_col)) = pane_info else { return };
+
     let matches = if query.is_empty() {
         vec![]
     } else {
-        match pane.kind {
-            crate::tui::state::PaneType::TableList => dash
+        match kind {
+            crate::tui::state::PaneType::TableList => state
                 .tables
                 .iter()
                 .enumerate()
@@ -155,29 +163,28 @@ fn compute_live_search(direction: SearchDirection, state: &mut AppState) {
                 .map(|(i, _)| i)
                 .collect(),
             crate::tui::state::PaneType::TableView => {
-                let Some(ref table_name) = pane.bound_table else { return };
-                let Some(ref loaded) = dash.table_cache.get(table_name) else { return };
-                let col = pane.cursor_col;
+                let Some(ref table_name) = bound_table else { return };
+                let Some(ref loaded) = state.table_cache.get(table_name) else { return };
                 loaded
                     .rows
                     .iter()
                     .enumerate()
                     .filter(|(_, row)| {
-                        row.get(col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower))
+                        row.get(cursor_col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower))
                     })
                     .map(|(i, _)| i)
                     .collect()
             }
             crate::tui::state::PaneType::QueryResults => {
-                let Some(idx) = pane.bound_query_idx else { return };
-                let Some(result) = dash.query_results.get(idx) else { return };
-                let col = pane.cursor_col;
+                let Some(idx) = bound_query_idx else { return };
+                let result = state.active_tab().and_then(|tab| tab.query_results.get(idx).cloned());
+                let Some(result) = result else { return };
                 result
                     .rows
                     .iter()
                     .enumerate()
                     .filter(|(_, row)| {
-                        row.get(col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower))
+                        row.get(cursor_col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower))
                     })
                     .map(|(i, _)| i)
                     .collect()
@@ -186,6 +193,8 @@ fn compute_live_search(direction: SearchDirection, state: &mut AppState) {
         }
     };
 
+    let Some(tab) = state.active_tab_mut() else { return };
+    let Some(pane) = tab.tree.active_mut() else { return };
     pane.live_search = Some(LiveSearchState {
         query: query.clone(),
         direction,
@@ -194,21 +203,27 @@ fn compute_live_search(direction: SearchDirection, state: &mut AppState) {
 }
 
 fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) {
-    let Some(dash) = state.dashboard.as_mut() else {
-        return;
-    };
-    let Some(pane) = dash.tree.active_mut() else {
-        return;
-    };
-
-    // Clear live search now that we're committing.
-    pane.live_search = None;
-
     let query_lower = query.to_lowercase();
 
-    match pane.kind {
+    // Collect all pane info first.
+    let pane_info = state.active_tab_mut().and_then(|tab| {
+        tab.tree.active_mut().map(|pane| {
+            pane.live_search = None;
+            (
+                pane.kind.clone(),
+                pane.nav_cursor,
+                pane.row_cursor,
+                pane.cursor_col,
+                pane.bound_table.clone(),
+                pane.bound_query_idx,
+            )
+        })
+    });
+    let Some((kind, nav_cursor, row_cursor, cursor_col, bound_table, bound_query_idx)) = pane_info else { return };
+
+    match kind {
         crate::tui::state::PaneType::TableList => {
-            let matches: Vec<usize> = dash
+            let matches: Vec<usize> = state
                 .tables
                 .iter()
                 .enumerate()
@@ -221,15 +236,16 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
                 return;
             }
 
-            let current = pane.nav_cursor;
             let current_idx = match direction {
-                SearchDirection::Forward => matches.iter().position(|&m| m >= current).unwrap_or(0),
+                SearchDirection::Forward => matches.iter().position(|&m| m >= nav_cursor).unwrap_or(0),
                 SearchDirection::Backward => matches
                     .iter()
-                    .rposition(|&m| m <= current)
+                    .rposition(|&m| m <= nav_cursor)
                     .unwrap_or(matches.len() - 1),
             };
 
+            let Some(tab) = state.active_tab_mut() else { return };
+            let Some(pane) = tab.tree.active_mut() else { return };
             pane.nav_cursor = matches[current_idx];
             pane.last_search = Some(crate::tui::SearchState {
                 query: query.to_string(),
@@ -239,21 +255,20 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
             });
         }
         crate::tui::state::PaneType::TableView => {
-            let Some(ref table_name) = pane.bound_table else {
+            let Some(ref table_name) = bound_table else {
                 state.cmdline.set_error("no table bound");
                 return;
             };
-            let Some(ref loaded) = dash.table_cache.get(table_name) else {
+            let Some(ref loaded) = state.table_cache.get(table_name) else {
                 state.cmdline.set_error("table not loaded");
                 return;
             };
 
-            let col = pane.cursor_col;
             let matches: Vec<usize> = loaded
                 .rows
                 .iter()
                 .enumerate()
-                .filter(|(_, row)| row.get(col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower)))
+                .filter(|(_, row)| row.get(cursor_col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower)))
                 .map(|(i, _)| i)
                 .collect();
 
@@ -262,15 +277,13 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
                 return;
             }
 
-            let current = pane.row_cursor;
             let current_idx = match direction {
-                SearchDirection::Forward => matches.iter().position(|&m| m >= current).unwrap_or(0),
-                SearchDirection::Backward => matches
-                    .iter()
-                    .rposition(|&m| m <= current)
-                    .unwrap_or(matches.len() - 1),
+                SearchDirection::Forward => matches.iter().position(|&m| m >= row_cursor).unwrap_or(0),
+                SearchDirection::Backward => matches.iter().rposition(|&m| m <= row_cursor).unwrap_or(matches.len() - 1),
             };
 
+            let Some(tab) = state.active_tab_mut() else { return };
+            let Some(pane) = tab.tree.active_mut() else { return };
             pane.row_cursor = matches[current_idx];
             pane.last_search = Some(crate::tui::SearchState {
                 query: query.to_string(),
@@ -280,21 +293,21 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
             });
         }
         crate::tui::state::PaneType::QueryResults => {
-            let Some(idx) = pane.bound_query_idx else {
+            let Some(idx) = bound_query_idx else {
                 state.cmdline.set_error("no result set bound");
                 return;
             };
-            let Some(result) = dash.query_results.get(idx) else {
+            let result = state.active_tab().and_then(|tab| tab.query_results.get(idx).cloned());
+            let Some(result) = result else {
                 state.cmdline.set_error("result set not available");
                 return;
             };
 
-            let col = pane.cursor_col;
             let matches: Vec<usize> = result
                 .rows
                 .iter()
                 .enumerate()
-                .filter(|(_, row)| row.get(col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower)))
+                .filter(|(_, row)| row.get(cursor_col).map_or(false, |cell| cell.to_lowercase().contains(&query_lower)))
                 .map(|(i, _)| i)
                 .collect();
 
@@ -303,15 +316,13 @@ fn commit_search(query: &str, direction: SearchDirection, state: &mut AppState) 
                 return;
             }
 
-            let current = pane.row_cursor;
             let current_idx = match direction {
-                SearchDirection::Forward => matches.iter().position(|&m| m >= current).unwrap_or(0),
-                SearchDirection::Backward => matches
-                    .iter()
-                    .rposition(|&m| m <= current)
-                    .unwrap_or(matches.len() - 1),
+                SearchDirection::Forward => matches.iter().position(|&m| m >= row_cursor).unwrap_or(0),
+                SearchDirection::Backward => matches.iter().rposition(|&m| m <= row_cursor).unwrap_or(matches.len() - 1),
             };
 
+            let Some(tab) = state.active_tab_mut() else { return };
+            let Some(pane) = tab.tree.active_mut() else { return };
             pane.row_cursor = matches[current_idx];
             pane.last_search = Some(crate::tui::SearchState {
                 query: query.to_string(),
@@ -343,8 +354,8 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "exit" => state.should_quit = true,
 
         "q" | "quit" => {
-            if let Some(ref dash) = state.dashboard {
-                if dash.tree.pane_count() <= 1 {
+            if let Some(ref tab) = state.active_tab() {
+                if tab.tree.pane_count() <= 1 {
                     state.should_quit = true;
                 } else {
                     cmd_close(state, args);
@@ -410,6 +421,12 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "back" => cmd_back(state),
         "forward" => cmd_forward(state),
 
+        "tnew" => cmd_tab_new(state, args),
+        "tnext" => cmd_tab_next(state),
+        "tprev" => cmd_tab_prev(state),
+        "tdelete" => cmd_tab_delete(state),
+        "t" => cmd_tab_goto(state, args),
+
         "!" => cmd_bang(state, args),
 
         other => state
@@ -420,9 +437,6 @@ fn execute_command(cmd: &str, state: &mut AppState) {
 
 // ── Pane commands ─────────────────────────────────────────────────────────────
 
-fn require_dashboard(state: &mut AppState) -> Option<&mut crate::tui::state::DashboardState> {
-    state.dashboard.as_mut()
-}
 
 fn parse_pane_type(arg: Option<&&str>) -> crate::tui::state::PaneType {
     match arg {
@@ -439,11 +453,6 @@ fn parse_pane_type(arg: Option<&&str>) -> crate::tui::state::PaneType {
 }
 
 fn cmd_vnew(state: &mut AppState, args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
-        state.cmdline.set_error("not in dashboard");
-        return;
-    };
-
     let kind = parse_pane_type(args.first());
     let table_name = args.get(1).map(|s| s.to_string());
 
@@ -453,29 +462,36 @@ fn cmd_vnew(state: &mut AppState, args: &[&str]) {
     }
 
     if let Some(ref name) = table_name {
-        if !dash.tables.contains(name) {
+        if !state.tables.contains(name) {
             state.cmdline.set_error(format!("table `{name}` not found"));
             return;
         }
     }
 
-    match dash.tree.split_active_v(kind) {
+    let cache_has = table_name.as_ref().map(|name| state.table_cache.contains_key(name));
+
+    let Some(tab) = state.active_tab_mut() else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    match tab.tree.split_active_v(kind) {
         Ok(id) => {
             if let Some(table) = table_name {
-                if let Some(pane) = dash.tree.panes.get_mut(&id) {
+                if let Some(pane) = tab.tree.panes.get_mut(&id) {
                     match pane.kind {
                         crate::tui::state::PaneType::TableView => {
                             pane.set_table_view(table.clone());
-                            if !dash.table_cache.contains_key(&table) {
-                                dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+                            if !cache_has.unwrap_or(false) {
+                                tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
                                     table,
                                     filter: None,
                                     sort_col: None,
                                     sort_desc: false,
                                     selected_cols: None,
                                 });
-                                dash.loading = true;
-                                dash.error = None;
+                                tab.loading = true;
+                                tab.error = None;
                             }
                         }
                         crate::tui::state::PaneType::SchemaView => {
@@ -491,11 +507,6 @@ fn cmd_vnew(state: &mut AppState, args: &[&str]) {
 }
 
 fn cmd_hnew(state: &mut AppState, args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
-        state.cmdline.set_error("not in dashboard");
-        return;
-    };
-
     let kind = parse_pane_type(args.first());
     let table_name = args.get(1).map(|s| s.to_string());
 
@@ -505,29 +516,36 @@ fn cmd_hnew(state: &mut AppState, args: &[&str]) {
     }
 
     if let Some(ref name) = table_name {
-        if !dash.tables.contains(name) {
+        if !state.tables.contains(name) {
             state.cmdline.set_error(format!("table `{name}` not found"));
             return;
         }
     }
 
-    match dash.tree.split_active_h(kind) {
+    let cache_has = table_name.as_ref().map(|name| state.table_cache.contains_key(name));
+
+    let Some(tab) = state.active_tab_mut() else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    match tab.tree.split_active_h(kind) {
         Ok(id) => {
             if let Some(table) = table_name {
-                if let Some(pane) = dash.tree.panes.get_mut(&id) {
+                if let Some(pane) = tab.tree.panes.get_mut(&id) {
                     match pane.kind {
                         crate::tui::state::PaneType::TableView => {
                             pane.set_table_view(table.clone());
-                            if !dash.table_cache.contains_key(&table) {
-                                dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+                            if !cache_has.unwrap_or(false) {
+                                tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
                                     table,
                                     filter: None,
                                     sort_col: None,
                                     sort_desc: false,
                                     selected_cols: None,
                                 });
-                                dash.loading = true;
-                                dash.error = None;
+                                tab.loading = true;
+                                tab.error = None;
                             }
                         }
                         crate::tui::state::PaneType::SchemaView => {
@@ -543,27 +561,28 @@ fn cmd_hnew(state: &mut AppState, args: &[&str]) {
 }
 
 fn cmd_open(state: &mut AppState, args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
+    let table_name = args.first().map(|s| s.to_string());
+    let cache_has = table_name.as_ref().map(|name| state.table_cache.contains_key(name));
+
+    let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
-    let table_name = args.first().map(|s| s.to_string());
-
-    if let Some(pane) = dash.tree.active_mut() {
+    if let Some(pane) = tab.tree.active_mut() {
         if let Some(name) = table_name {
             pane.set_table_view(name.clone());
             pane.last_search = None; // clear search highlight
-            if !dash.table_cache.contains_key(&name) {
-                dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+            if !cache_has.unwrap_or(false) {
+                tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
                     table: name,
                     filter: None,
                     sort_col: None,
                     sort_desc: false,
                     selected_cols: None,
                 });
-                dash.loading = true;
-                dash.error = None;
+                tab.loading = true;
+                tab.error = None;
             }
         } else {
             state.cmdline.set_error(":open requires a table name");
@@ -572,53 +591,54 @@ fn cmd_open(state: &mut AppState, args: &[&str]) {
 }
 
 fn cmd_tables(state: &mut AppState, _args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
+    let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
-    if let Some(pane) = dash.tree.active_mut() {
+    if let Some(pane) = tab.tree.active_mut() {
         pane.reset_to_list();
         pane.last_search = None; // clear search highlight
     }
 }
 
 fn cmd_noh(state: &mut AppState) {
-    let Some(dash) = require_dashboard(state) else {
+    let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
-    if let Some(pane) = dash.tree.active_mut() {
+    if let Some(pane) = tab.tree.active_mut() {
         pane.last_search = None;
         pane.live_search = None;
     }
 }
 
 fn cmd_disconnect(state: &mut AppState) {
-    if state.dashboard.is_none() {
+    if state.tabs.is_empty() {
         state.cmdline.set_error("not connected");
         return;
     }
-    state.dashboard = None;
+    state.tabs = vec![];
+    state.active_tab = 0;
     state.mode = AppMode::Home;
     state.cmdline.reset();
 }
 
 fn cmd_schema(state: &mut AppState, args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
-        state.cmdline.set_error("not in dashboard");
-        return;
-    };
-
     // If an argument is provided, use it; otherwise fall back to the
     // active pane's bound table (useful when already viewing a table).
     let table_name = args
         .first()
         .map(|s| s.to_string())
-        .or_else(|| dash.tree.active().and_then(|p| p.bound_table.clone()));
+        .or_else(|| state.active_tab().and_then(|tab| tab.tree.active().and_then(|p| p.bound_table.clone())));
 
-    if let Some(pane) = dash.tree.active_mut() {
+    let Some(tab) = state.active_tab_mut() else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    if let Some(pane) = tab.tree.active_mut() {
         if let Some(name) = table_name {
             pane.set_schema_view(name);
         } else {
@@ -630,91 +650,200 @@ fn cmd_schema(state: &mut AppState, args: &[&str]) {
 }
 
 fn cmd_sql(state: &mut AppState, _args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
+    let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
-    if let Some(pane) = dash.tree.active_mut() {
+    if let Some(pane) = tab.tree.active_mut() {
         pane.set_query_editor();
     }
 }
 
 fn cmd_query_results(state: &mut AppState, _args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
-        state.cmdline.set_error("not in dashboard");
-        return;
-    };
-
-    if dash.query_results.is_empty() {
+    let query_results_empty = state.active_tab().map_or(true, |tab| tab.query_results.is_empty());
+    if query_results_empty {
         state.cmdline.set_error("no query results available");
         return;
     }
 
-    if let Some(pane) = dash.tree.active_mut() {
+    let Some(tab) = state.active_tab_mut() else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+
+    let count = tab.query_results.len();
+    if let Some(pane) = tab.tree.active_mut() {
         pane.set_query_results(0);
-        pane.query_result_count = dash.query_results.len();
+        pane.query_result_count = count;
     }
 }
 
 /// Navigate back in the active pane's view history.
 fn cmd_back(state: &mut AppState) {
-    let Some(dash) = state.dashboard.as_mut() else {
+    let result = state.active_tab_mut().and_then(|tab| {
+        tab.tree.active_mut().map(|pane| {
+            let went_back = pane.go_back();
+            let needs_load = if went_back && pane.kind == crate::tui::state::PaneType::TableView {
+                pane.bound_table.clone()
+            } else {
+                None
+            };
+            (went_back, needs_load)
+        })
+    });
+
+    let Some((went_back, table_name)) = result else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
-    if let Some(pane) = dash.tree.active_mut() {
-        if pane.go_back() {
-            if pane.kind == crate::tui::state::PaneType::TableView {
-                if let Some(name) = pane.bound_table.clone() {
-                    if !dash.table_cache.contains_key(&name) {
-                        dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
-                            table: name,
-                            filter: None,
-                            sort_col: None,
-                            sort_desc: false,
-                            selected_cols: None,
-                        });
-                        dash.loading = true;
-                        dash.error = None;
-                    }
-                }
+    if went_back {
+        if let Some(name) = table_name {
+            let cache_has = state.table_cache.contains_key(&name);
+            let Some(tab) = state.active_tab_mut() else { return };
+            if !cache_has {
+                tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
+                    table: name,
+                    filter: None,
+                    sort_col: None,
+                    sort_desc: false,
+                    selected_cols: None,
+                });
+                tab.loading = true;
+                tab.error = None;
             }
-        } else {
-            state.cmdline.set_error("no previous view");
         }
+    } else {
+        state.cmdline.set_error("no previous view");
     }
 }
 
 /// Navigate forward in the active pane's view history.
 fn cmd_forward(state: &mut AppState) {
-    let Some(dash) = state.dashboard.as_mut() else {
+    let result = state.active_tab_mut().and_then(|tab| {
+        tab.tree.active_mut().map(|pane| {
+            let went_forward = pane.go_forward();
+            let needs_load = if went_forward && pane.kind == crate::tui::state::PaneType::TableView {
+                pane.bound_table.clone()
+            } else {
+                None
+            };
+            (went_forward, needs_load)
+        })
+    });
+
+    let Some((went_forward, table_name)) = result else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
-    if let Some(pane) = dash.tree.active_mut() {
-        if pane.go_forward() {
-            if pane.kind == crate::tui::state::PaneType::TableView {
-                if let Some(name) = pane.bound_table.clone() {
-                    if !dash.table_cache.contains_key(&name) {
-                        dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
-                            table: name,
-                            filter: None,
-                            sort_col: None,
-                            sort_desc: false,
-                            selected_cols: None,
-                        });
-                        dash.loading = true;
-                        dash.error = None;
-                    }
-                }
+    if went_forward {
+        if let Some(name) = table_name {
+            let cache_has = state.table_cache.contains_key(&name);
+            let Some(tab) = state.active_tab_mut() else { return };
+            if !cache_has {
+                tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
+                    table: name,
+                    filter: None,
+                    sort_col: None,
+                    sort_desc: false,
+                    selected_cols: None,
+                });
+                tab.loading = true;
+                tab.error = None;
             }
-        } else {
-            state.cmdline.set_error("no next view");
         }
+    } else {
+        state.cmdline.set_error("no next view");
     }
+}
+
+// ── Tab commands ──────────────────────────────────────────────────────────────
+
+const MAX_TABS: usize = 10;
+
+fn cmd_tab_new(state: &mut AppState, _args: &[&str]) {
+    if state.tabs.len() >= MAX_TABS {
+        state.cmdline.set_error("maximum 10 tabs");
+        return;
+    }
+    if !state.has_session() {
+        state.cmdline.set_error("not connected");
+        return;
+    }
+    state.tabs.push(crate::tui::state::Tab::new());
+    state.active_tab = state.tabs.len() - 1;
+}
+
+fn cmd_tab_next(state: &mut AppState) {
+    if !state.has_session() {
+        state.cmdline.set_error("not connected");
+        return;
+    }
+    if state.tabs.len() <= 1 {
+        return;
+    }
+    state.active_tab = (state.active_tab + 1) % state.tabs.len();
+}
+
+fn cmd_tab_prev(state: &mut AppState) {
+    if !state.has_session() {
+        state.cmdline.set_error("not connected");
+        return;
+    }
+    if state.tabs.len() <= 1 {
+        return;
+    }
+    state.active_tab = (state.active_tab + state.tabs.len() - 1) % state.tabs.len();
+}
+
+fn cmd_tab_delete(state: &mut AppState) {
+    if !state.has_session() {
+        state.cmdline.set_error("not connected");
+        return;
+    }
+    if state.tabs.len() <= 1 {
+        // Last tab — disconnect entirely.
+        state.tabs.clear();
+        state.active_tab = 0;
+        state.connection = None;
+        state.pool = None;
+        state.tables.clear();
+        state.table_cache.clear();
+        state.mode = crate::tui::state::AppMode::Home;
+        state.cmdline.reset();
+        return;
+    }
+    state.tabs.remove(state.active_tab);
+    if state.active_tab >= state.tabs.len() {
+        state.active_tab = state.tabs.len() - 1;
+    }
+}
+
+fn cmd_tab_goto(state: &mut AppState, args: &[&str]) {
+    if !state.has_session() {
+        state.cmdline.set_error("not connected");
+        return;
+    }
+    let id = match args.first() {
+        Some(s) => match s.parse::<usize>() {
+            Ok(v) => v,
+            Err(_) => {
+                state.cmdline.set_error("usage: :t <id>");
+                return;
+            }
+        },
+        None => {
+            state.cmdline.set_error("usage: :t <id>");
+            return;
+        }
+    };
+    if id >= state.tabs.len() {
+        state.cmdline.set_error(format!("invalid tab id `{id}`"));
+        return;
+    }
+    state.active_tab = id;
 }
 
 /// Execute SQL directly from the command line (like vim's `:!`).
@@ -726,25 +855,25 @@ fn cmd_bang(state: &mut AppState, args: &[&str]) {
         return;
     }
 
-    let Some(dash) = state.dashboard.as_mut() else {
+    let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
-    dash.pending_query_exec = Some(sql);
-    dash.loading = true;
-    dash.error = None;
+    tab.pending_query_exec = Some(sql);
+    tab.loading = true;
+    tab.error = None;
 
     // Replace the active pane with a QueryResults view (no new pane created).
-    let active_id = dash.tree.active_pane;
-    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+    let active_id = tab.tree.active_pane;
+    if let Some(pane) = tab.tree.panes.get_mut(&active_id) {
         pane.set_query_results(0);
         pane.query_result_count = 1;
     }
 }
 
 fn cmd_resize(state: &mut AppState, args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
+    let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
@@ -767,7 +896,7 @@ fn cmd_resize(state: &mut AppState, args: &[&str]) {
         }
     };
 
-    match dash.tree.resize_active(delta) {
+    match tab.tree.resize_active(delta) {
         Ok(_) => {}
         Err(e) => state.cmdline.set_error(e),
     }
@@ -775,45 +904,47 @@ fn cmd_resize(state: &mut AppState, args: &[&str]) {
 
 /// Toggle fullscreen (zoom) on the active pane. Like tmux `<prefix>z`.
 fn cmd_fullscreen(state: &mut AppState) {
-    let Some(dash) = require_dashboard(state) else {
+    let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
-    if dash.tree.pane_count() <= 1 {
+    if tab.tree.pane_count() <= 1 {
         state.cmdline.set_error("only one pane — nothing to fullscreen");
         return;
     }
 
-    dash.tree.toggle_fullscreen();
+    tab.tree.toggle_fullscreen();
 }
 
 fn cmd_where(state: &mut AppState, args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
-        state.cmdline.set_error("not in dashboard");
-        return;
-    };
-
-    let active_id = dash.tree.active_pane;
-    let Some(pane) = dash.tree.panes.get(&active_id) else {
-        return;
-    };
-
-    if pane.kind != crate::tui::state::PaneType::TableView {
-        state.cmdline.set_error(":where only works in table view");
-        return;
-    }
-
-    if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
-        state.cmdline.set_error("cannot filter with pending changes; :w or u to clear");
-        return;
-    }
-
-    let table_name = match pane.bound_table.clone() {
-        Some(t) => t,
-        None => {
-            state.cmdline.set_error("no table bound to active pane");
+    let table_name = {
+        let Some(tab) = state.active_tab_mut() else {
+            state.cmdline.set_error("not in dashboard");
             return;
+        };
+
+        let active_id = tab.tree.active_pane;
+        let Some(pane) = tab.tree.panes.get(&active_id) else {
+            return;
+        };
+
+        if pane.kind != crate::tui::state::PaneType::TableView {
+            state.cmdline.set_error(":where only works in table view");
+            return;
+        }
+
+        if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
+            state.cmdline.set_error("cannot filter with pending changes; :w or u to clear");
+            return;
+        }
+
+        match pane.bound_table.clone() {
+            Some(t) => t,
+            None => {
+                state.cmdline.set_error("no table bound to active pane");
+                return;
+            }
         }
     };
 
@@ -823,20 +954,27 @@ fn cmd_where(state: &mut AppState, args: &[&str]) {
         Some(args.join(" "))
     };
 
-    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+    let Some(tab) = state.active_tab_mut() else { return };
+    let active_id = tab.tree.active_pane;
+    let Some(pane) = tab.tree.panes.get(&active_id) else { return };
+
+    let sort_col = pane.sort_col.clone();
+    let sort_desc = pane.sort_desc;
+    let selected_cols = pane.selected_cols.clone();
+
+    if let Some(pane) = tab.tree.panes.get_mut(&active_id) {
         pane.filter = filter.clone();
     }
 
-    let pane = dash.tree.panes.get(&active_id).unwrap();
-    dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+    tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
         table: table_name,
         filter,
-        sort_col: pane.sort_col.clone(),
-        sort_desc: pane.sort_desc,
-        selected_cols: pane.selected_cols.clone(),
+        sort_col,
+        sort_desc,
+        selected_cols,
     });
-    dash.loading = true;
-    dash.error = None;
+    tab.loading = true;
+    tab.error = None;
 
     if args.is_empty() {
         state.cmdline.set_loading("Filter cleared");
@@ -844,31 +982,33 @@ fn cmd_where(state: &mut AppState, args: &[&str]) {
 }
 
 fn cmd_order(state: &mut AppState, args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
-        state.cmdline.set_error("not in dashboard");
-        return;
-    };
-
-    let active_id = dash.tree.active_pane;
-    let Some(pane) = dash.tree.panes.get(&active_id) else {
-        return;
-    };
-
-    if pane.kind != crate::tui::state::PaneType::TableView {
-        state.cmdline.set_error(":order only works in table view");
-        return;
-    }
-
-    if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
-        state.cmdline.set_error("cannot sort with pending changes; :w or u to clear");
-        return;
-    }
-
-    let table_name = match pane.bound_table.clone() {
-        Some(t) => t,
-        None => {
-            state.cmdline.set_error("no table bound to active pane");
+    let table_name = {
+        let Some(tab) = state.active_tab_mut() else {
+            state.cmdline.set_error("not in dashboard");
             return;
+        };
+
+        let active_id = tab.tree.active_pane;
+        let Some(pane) = tab.tree.panes.get(&active_id) else {
+            return;
+        };
+
+        if pane.kind != crate::tui::state::PaneType::TableView {
+            state.cmdline.set_error(":order only works in table view");
+            return;
+        }
+
+        if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
+            state.cmdline.set_error("cannot sort with pending changes; :w or u to clear");
+            return;
+        }
+
+        match pane.bound_table.clone() {
+            Some(t) => t,
+            None => {
+                state.cmdline.set_error("no table bound to active pane");
+                return;
+            }
         }
     };
 
@@ -886,21 +1026,27 @@ fn cmd_order(state: &mut AppState, args: &[&str]) {
         (Some(col), desc)
     };
 
-    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+    let Some(tab) = state.active_tab_mut() else { return };
+    let active_id = tab.tree.active_pane;
+    let Some(pane) = tab.tree.panes.get(&active_id) else { return };
+
+    let filter = pane.filter.clone();
+    let selected_cols = pane.selected_cols.clone();
+
+    if let Some(pane) = tab.tree.panes.get_mut(&active_id) {
         pane.sort_col = sort_col.clone();
         pane.sort_desc = sort_desc;
     }
 
-    let pane = dash.tree.panes.get(&active_id).unwrap();
-    dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+    tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
         table: table_name,
-        filter: pane.filter.clone(),
+        filter,
         sort_col,
         sort_desc,
-        selected_cols: pane.selected_cols.clone(),
+        selected_cols,
     });
-    dash.loading = true;
-    dash.error = None;
+    tab.loading = true;
+    tab.error = None;
 
     if args.is_empty() {
         state.cmdline.set_loading("Sort cleared");
@@ -908,31 +1054,33 @@ fn cmd_order(state: &mut AppState, args: &[&str]) {
 }
 
 fn cmd_select(state: &mut AppState, args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
-        state.cmdline.set_error("not in dashboard");
-        return;
-    };
-
-    let active_id = dash.tree.active_pane;
-    let Some(pane) = dash.tree.panes.get(&active_id) else {
-        return;
-    };
-
-    if pane.kind != crate::tui::state::PaneType::TableView {
-        state.cmdline.set_error(":select only works in table view");
-        return;
-    }
-
-    if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
-        state.cmdline.set_error("cannot select columns with pending changes; :w or u to clear");
-        return;
-    }
-
-    let table_name = match pane.bound_table.clone() {
-        Some(t) => t,
-        None => {
-            state.cmdline.set_error("no table bound to active pane");
+    let table_name = {
+        let Some(tab) = state.active_tab_mut() else {
+            state.cmdline.set_error("not in dashboard");
             return;
+        };
+
+        let active_id = tab.tree.active_pane;
+        let Some(pane) = tab.tree.panes.get(&active_id) else {
+            return;
+        };
+
+        if pane.kind != crate::tui::state::PaneType::TableView {
+            state.cmdline.set_error(":select only works in table view");
+            return;
+        }
+
+        if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
+            state.cmdline.set_error("cannot select columns with pending changes; :w or u to clear");
+            return;
+        }
+
+        match pane.bound_table.clone() {
+            Some(t) => t,
+            None => {
+                state.cmdline.set_error("no table bound to active pane");
+                return;
+            }
         }
     };
 
@@ -941,7 +1089,7 @@ fn cmd_select(state: &mut AppState, args: &[&str]) {
     } else {
         let cols: Vec<String> = args.iter().map(|s| s.to_string()).collect();
         // Validate column names against cached schema.
-        if let Some(loaded) = dash.table_cache.get(&table_name) {
+        if let Some(loaded) = state.table_cache.get(&table_name) {
             let valid_cols: std::collections::HashSet<String> =
                 loaded.headers.iter().cloned().collect();
             for col in &cols {
@@ -954,20 +1102,27 @@ fn cmd_select(state: &mut AppState, args: &[&str]) {
         Some(cols)
     };
 
-    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+    let Some(tab) = state.active_tab_mut() else { return };
+    let active_id = tab.tree.active_pane;
+    let Some(pane) = tab.tree.panes.get(&active_id) else { return };
+
+    let filter = pane.filter.clone();
+    let sort_col = pane.sort_col.clone();
+    let sort_desc = pane.sort_desc;
+
+    if let Some(pane) = tab.tree.panes.get_mut(&active_id) {
         pane.selected_cols = selected_cols.clone();
     }
 
-    let pane = dash.tree.panes.get(&active_id).unwrap();
-    dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+    tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
         table: table_name,
-        filter: pane.filter.clone(),
-        sort_col: pane.sort_col.clone(),
-        sort_desc: pane.sort_desc,
+        filter,
+        sort_col,
+        sort_desc,
         selected_cols,
     });
-    dash.loading = true;
-    dash.error = None;
+    tab.loading = true;
+    tab.error = None;
 
     if args.is_empty() {
         state.cmdline.set_loading("Column selection cleared");
@@ -976,62 +1131,66 @@ fn cmd_select(state: &mut AppState, args: &[&str]) {
 
 /// Reset all TableView modifiers (filter, sort, selected columns).
 fn cmd_reset(state: &mut AppState) {
-    let Some(dash) = require_dashboard(state) else {
-        state.cmdline.set_error("not in dashboard");
-        return;
-    };
-
-    let active_id = dash.tree.active_pane;
-    let Some(pane) = dash.tree.panes.get(&active_id) else {
-        return;
-    };
-
-    if pane.kind != crate::tui::state::PaneType::TableView {
-        state.cmdline.set_error(":reset only works in table view");
-        return;
-    }
-
-    if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
-        state.cmdline.set_error("cannot reset with pending changes; :w or u to clear");
-        return;
-    }
-
-    let table_name = match pane.bound_table.clone() {
-        Some(t) => t,
-        None => {
-            state.cmdline.set_error("no table bound to active pane");
+    let table_name = {
+        let Some(tab) = state.active_tab_mut() else {
+            state.cmdline.set_error("not in dashboard");
             return;
+        };
+
+        let active_id = tab.tree.active_pane;
+        let Some(pane) = tab.tree.panes.get(&active_id) else {
+            return;
+        };
+
+        if pane.kind != crate::tui::state::PaneType::TableView {
+            state.cmdline.set_error(":reset only works in table view");
+            return;
+        }
+
+        if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
+            state.cmdline.set_error("cannot reset with pending changes; :w or u to clear");
+            return;
+        }
+
+        match pane.bound_table.clone() {
+            Some(t) => t,
+            None => {
+                state.cmdline.set_error("no table bound to active pane");
+                return;
+            }
         }
     };
 
-    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+    let Some(tab) = state.active_tab_mut() else { return };
+    let active_id = tab.tree.active_pane;
+    if let Some(pane) = tab.tree.panes.get_mut(&active_id) {
         pane.filter = None;
         pane.sort_col = None;
         pane.sort_desc = false;
         pane.selected_cols = None;
     }
 
-    dash.pending_load = Some(crate::tui::state::dashboard::PendingQuery {
+    tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
         table: table_name,
         filter: None,
         sort_col: None,
         sort_desc: false,
         selected_cols: None,
     });
-    dash.loading = true;
-    dash.error = None;
+    tab.loading = true;
+    tab.error = None;
 
     state.cmdline.set_loading("Reset cleared");
 }
 
 fn cmd_write(state: &mut AppState, _args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
+    let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
-    let active_id = dash.tree.active_pane;
-    let Some(pane) = dash.tree.panes.get(&active_id) else {
+    let active_id = tab.tree.active_pane;
+    let Some(pane) = tab.tree.panes.get(&active_id) else {
         return;
     };
 
@@ -1050,13 +1209,13 @@ fn cmd_write(state: &mut AppState, _args: &[&str]) {
         };
         let formatted = sqlformat::format(&raw_sql, &sqlformat::QueryParams::None, &opts);
         // Update the editor text with the formatted query.
-        if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+        if let Some(pane) = tab.tree.panes.get_mut(&active_id) {
             pane.query_text = formatted.lines().map(|s| s.to_string()).collect();
             pane.query_cursor = (0, 0);
         }
-        dash.pending_query_exec = Some(formatted);
-        dash.loading = true;
-        dash.error = None;
+        tab.pending_query_exec = Some(formatted);
+        tab.loading = true;
+        tab.error = None;
         return;
     }
 
@@ -1091,16 +1250,25 @@ fn cmd_write(state: &mut AppState, _args: &[&str]) {
 
 /// Build a PendingCommit from the active pane's staged changes and queue it.
 fn execute_pending_commit(state: &mut AppState) {
-    let Some(dash) = state.dashboard.as_mut() else { return };
-    let active_id = dash.tree.active_pane;
-    let Some(pane) = dash.tree.panes.get(&active_id) else { return };
+    let (active_id, table_name, pending_updates, pending_deletes) = {
+        let Some(tab) = state.active_tab_mut() else { return };
+        let active_id = tab.tree.active_pane;
+        let Some(pane) = tab.tree.panes.get(&active_id) else { return };
 
-    if pane.pending_updates.is_empty() && pane.pending_deletes.is_empty() {
-        return;
-    }
+        if pane.pending_updates.is_empty() && pane.pending_deletes.is_empty() {
+            return;
+        }
 
-    let Some(ref table_name) = pane.bound_table else { return };
-    let Some(ref loaded) = dash.table_cache.get(table_name) else { return };
+        let Some(ref table_name) = pane.bound_table else { return };
+        (
+            active_id,
+            table_name.clone(),
+            pane.pending_updates.clone(),
+            pane.pending_deletes.clone(),
+        )
+    };
+
+    let Some(loaded) = state.table_cache.get(&table_name).cloned() else { return };
 
     let pk_col = loaded.schema.iter().find(|c| c.is_primary_key);
     let Some(pk_col) = pk_col else {
@@ -1111,7 +1279,7 @@ fn execute_pending_commit(state: &mut AppState) {
     let pk_idx = loaded.schema.iter().position(|c| c.is_primary_key).unwrap_or(0);
 
     let mut updates = Vec::new();
-    for (row, col, new_val) in &pane.pending_updates {
+    for (row, col, new_val) in &pending_updates {
         if *row < loaded.rows.len() && *col < loaded.headers.len() {
             let pk_val = loaded.rows[*row][pk_idx].clone();
             let target_col = loaded.headers[*col].clone();
@@ -1119,34 +1287,35 @@ fn execute_pending_commit(state: &mut AppState) {
         }
     }
 
-    let deletes = pane.pending_deletes.clone();
+    let deletes = pending_deletes;
 
-    dash.pending_commit = Some(crate::tui::state::dashboard::PendingCommit {
-        table: table_name.clone(),
+    let Some(tab) = state.active_tab_mut() else { return };
+    tab.pending_commit = Some(crate::tui::state::tab::PendingCommit {
+        table: table_name,
         pk_col: pk_col.name.clone(),
         updates,
         deletes,
     });
-    dash.loading = true;
-    dash.error = None;
+    tab.loading = true;
+    tab.error = None;
 
     // Clear pending state from the pane.
-    if let Some(pane) = dash.tree.panes.get_mut(&active_id) {
+    if let Some(pane) = tab.tree.panes.get_mut(&active_id) {
         pane.pending_updates.clear();
         pane.pending_deletes.clear();
     }
 }
 
 fn cmd_close(state: &mut AppState, args: &[&str]) {
-    let Some(dash) = require_dashboard(state) else {
+    let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
     let closed = if args.is_empty() {
-        dash.tree.close_active()
+        tab.tree.close_active()
     } else if let Ok(id) = args[0].parse::<usize>() {
-        dash.tree.close_by_display_id(id)
+        tab.tree.close_by_display_id(id)
     } else {
         state
             .cmdline
@@ -1156,7 +1325,8 @@ fn cmd_close(state: &mut AppState, args: &[&str]) {
 
     if closed {
         state.mode = crate::tui::state::AppMode::Home;
-        state.dashboard = None;
+        state.tabs = vec![];
+        state.active_tab = 0;
     }
 }
 

@@ -10,7 +10,6 @@ use ratatui::{
 
 use crate::tui::{
     AppState,
-    state::dashboard::DashboardState,
     ui::home::overlays::render_overlay,
 };
 
@@ -19,38 +18,43 @@ use self::panes::render_pane;
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 pub fn render_dashboard(frame: &mut Frame, area: Rect, state: &mut AppState) {
-    let Some(ref mut dash) = state.dashboard else {
-        frame.render_widget(
-            Paragraph::new("No active connection."),
-            area,
-        );
-        return;
-    };
+    // ── Phase 1: mutate active tab (layout, scroll, fullscreen area) ─────────
+    let fs_id: Option<crate::tui::state::pane_layout::PaneId>;
+    let leaves: Vec<crate::tui::state::pane_layout::PaneId>;
+    {
+        let Some(tab) = state.active_tab_mut() else {
+            frame.render_widget(
+                Paragraph::new("No active connection."),
+                area,
+            );
+            return;
+        };
 
-    // Fullscreen mode: only the zoomed pane fills the whole dashboard area.
-    if let Some(fs_id) = dash.tree.fullscreen_pane {
-        if let Some(pane) = dash.tree.panes.get_mut(&fs_id) {
-            pane.area = Some(area);
+        fs_id = tab.tree.fullscreen_pane;
+        if let Some(id) = fs_id {
+            if let Some(pane) = tab.tree.panes.get_mut(&id) {
+                pane.area = Some(area);
+            }
+            sync_pane_scroll(tab, area);
+            leaves = vec![];
+        } else {
+            tab.tree.compute_areas(area);
+            sync_pane_scroll(tab, area);
+            leaves = tab.tree.collect_leaves();
         }
-        sync_pane_scroll(dash, area);
-        render_pane(frame, fs_id, dash, true);
-        if state.overlay.is_some() {
-            render_overlay(frame, area, state);
-        }
-        return;
     }
 
-    // Compute pane areas from the layout tree.
-    dash.tree.compute_areas(area);
-
-    // Sync scroll offsets inside each pane.
-    sync_pane_scroll(dash, area);
-
-    // Collect all leaves and render each pane.
-    let leaves = dash.tree.collect_leaves();
-    for pane_id in leaves {
-        let is_active = dash.tree.active_pane == pane_id;
-        render_pane(frame, pane_id, dash, is_active);
+    // ── Phase 2: render with immutable borrow ────────────────────────────────
+    if let Some(id) = fs_id {
+        render_pane(frame, id, state, true);
+    } else {
+        for pane_id in leaves {
+            let is_active = state
+                .active_tab()
+                .map(|t| t.tree.active_pane == pane_id)
+                .unwrap_or(false);
+            render_pane(frame, pane_id, state, is_active);
+        }
     }
 
     // Render overlay on top of dashboard (help, connection picker, etc.).
@@ -61,10 +65,10 @@ pub fn render_dashboard(frame: &mut Frame, area: Rect, state: &mut AppState) {
 
 // ── Scroll sync ───────────────────────────────────────────────────────────────
 
-fn sync_pane_scroll(dash: &mut DashboardState, _area: Rect) {
-    let active_id = dash.tree.active_pane;
+fn sync_pane_scroll(tab: &mut crate::tui::state::Tab, _area: Rect) {
+    let active_id = tab.tree.active_pane;
 
-    for (id, pane) in &mut dash.tree.panes {
+    for (id, pane) in &mut tab.tree.panes {
         let Some(pane_area) = pane.area else { continue };
         let _is_active = *id == active_id;
 
@@ -74,15 +78,12 @@ fn sync_pane_scroll(dash: &mut DashboardState, _area: Rect) {
                 pane.sync_nav_offset(inner_h);
             }
             crate::tui::state::PaneType::TableView | crate::tui::state::PaneType::QueryResults => {
-                // Header takes 3 lines (top border pad + header text + header line),
-                // so data viewport is inner height minus 3.
                 let viewport = pane_area.height.saturating_sub(2).saturating_sub(3).max(1) as usize;
                 pane.sync_row_offset(viewport);
                 let col_viewport = (pane_area.width / 10).max(1) as usize;
                 pane.sync_col_offset(col_viewport);
             }
             crate::tui::state::PaneType::SchemaView => {
-                // Each card = 2 content lines + 1 separator = 3 lines.
                 let card_h = 3usize;
                 let viewport = pane_area.height.saturating_sub(2) as usize / card_h.max(1);
                 pane.sync_nav_offset(viewport);

@@ -2,7 +2,7 @@ use crate::tui::{
     AppState,
     controls::handle_key_event,
     render::render,
-    state::{AppMode, DashboardState},
+    state::AppMode,
 };
 use crossterm::{
     event::{self, Event},
@@ -125,7 +125,12 @@ async fn handle_pending_connection(
             result = &mut connect_fut => {
                 match result {
                     Ok((pool, tables)) => {
-                        state.dashboard = Some(DashboardState::new(db, pool, tables));
+                        state.connection = Some(db);
+                        state.pool = Some(pool);
+                        state.tables = tables;
+                        state.table_cache = std::collections::HashMap::new();
+                        state.tabs = vec![crate::tui::state::Tab::new()];
+                        state.active_tab = 0;
                         state.mode = AppMode::Dashboard;
                         state.cmdline.clear_loading();
                     }

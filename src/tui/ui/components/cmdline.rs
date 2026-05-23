@@ -74,9 +74,9 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
             ));
         }
         AppMode::Dashboard => {
-            if let Some(ref dash) = state.dashboard {
-                let active_id = dash.tree.active_pane;
-                let active = dash.tree.panes.get(&active_id);
+            if let Some(tab) = state.active_tab() {
+                let active_id = tab.tree.active_pane;
+                let active = tab.tree.panes.get(&active_id);
 
                 let (mode_label, mode_color) = if let Some(pane) = active {
                     match pane.mode {
@@ -92,11 +92,33 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
                     mode_label,
                     Style::default().fg(mode_color).bold(),
                 ));
-                spans.push(Span::styled(" ", Style::default()));
-                spans.push(Span::styled(
-                    dash.connection.name.as_str(),
-                    Style::default().fg(Color::Blue).bold(),
-                ));
+
+                // Tmux-style tab strip: <id>:<pane_type>[*]
+                if !state.tabs.is_empty() {
+                    spans.push(Span::styled(" ", Style::default()));
+                    for (i, tab) in state.tabs.iter().enumerate() {
+                        let active_pane = tab.tree.panes.get(&tab.tree.active_pane);
+                        let type_name = active_pane.map_or("list", |p| match p.kind {
+                            crate::tui::state::PaneType::TableList => "list",
+                            crate::tui::state::PaneType::TableView => "table",
+                            crate::tui::state::PaneType::SchemaView => "schema",
+                            crate::tui::state::PaneType::QueryEditor => "query",
+                            crate::tui::state::PaneType::QueryResults => "results",
+                        });
+                        let is_active = i == state.active_tab;
+                        let style = if is_active {
+                            Style::default().fg(Color::White).bold()
+                        } else {
+                            Style::default().fg(Color::DarkGray)
+                        };
+                        let suffix = if is_active { "*" } else { "" };
+                        spans.push(Span::styled(
+                            format!("{i}:{type_name}{suffix}"),
+                            style,
+                        ));
+                        spans.push(Span::styled(" ", Style::default()));
+                    }
+                }
 
                 if let Some(pane) = active {
                     // Show search match indicator when a committed search is active.
@@ -108,21 +130,42 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
                         }
                     }
 
-                    if let Some(ref table_name) = pane.bound_table {
-                        spans.push(Span::styled(" ", Style::default()));
-                        spans.push(Span::styled(
-                            table_name.as_str(),
-                            Style::default().fg(Color::DarkGray),
-                        ));
-
-                        if let Some(ref loaded) = dash.table_cache.get(table_name) {
-                            let total_rows = loaded.rows.len();
-                            let total_cols = loaded.headers.len();
-                            let cur_row = pane.row_cursor + 1;
-                            let cur_col = pane.cursor_col + 1;
+                    // Row/Col position only for TableView and QueryResults.
+                    if pane.kind == crate::tui::state::PaneType::TableView
+                        || pane.kind == crate::tui::state::PaneType::QueryResults
+                    {
+                        let (headers, rows) = match pane.kind {
+                            crate::tui::state::PaneType::TableView => {
+                                if let Some(ref name) = pane.bound_table {
+                                    if let Some(ref loaded) = state.table_cache.get(name) {
+                                        (loaded.headers.len(), loaded.rows.len())
+                                    } else {
+                                        (0, 0)
+                                    }
+                                } else {
+                                    (0, 0)
+                                }
+                            }
+                            crate::tui::state::PaneType::QueryResults => {
+                                if let Some(idx) = pane.bound_query_idx {
+                                    if let Some(ref qr) = tab.query_results.get(idx) {
+                                        (qr.headers.len(), qr.rows.len())
+                                    } else {
+                                        (0, 0)
+                                    }
+                                } else {
+                                    (0, 0)
+                                }
+                            }
+                            _ => (0, 0),
+                        };
+                        if headers > 0 {
                             let pos_text = format!(
                                 "Row {}/{}, Col {}/{}",
-                                cur_row, total_rows, cur_col, total_cols
+                                pane.row_cursor + 1,
+                                rows,
+                                pane.cursor_col + 1,
+                                headers
                             );
                             if right_text.is_empty() {
                                 right_text = pos_text;
@@ -132,6 +175,7 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
                         }
                     }
                 }
+
             } else {
                 spans.push(Span::styled(
                     "NORMAL",
@@ -141,19 +185,29 @@ fn render_idle(frame: &mut Frame, area: Rect, state: &AppState) {
         }
     }
 
-    // Pad the right_text to push it to the right edge.
+    // Assemble the right-side text (search/position info + connection name).
+    let conn_text = state.connection.as_ref().map(|c| format!("  {}", c.name));
+    let right_width = right_text.chars().count()
+        + conn_text.as_ref().map_or(0, |s| s.chars().count());
+
+    // Pad to push right-side content to the right edge.
     let left_width: usize = spans.iter().map(|s| s.width()).sum();
-    let right_width = right_text.chars().count();
     let gap = (area.width as usize)
         .saturating_sub(left_width)
         .saturating_sub(right_width);
     if gap > 0 {
         spans.push(Span::styled(" ".repeat(gap), Style::default()));
     }
-    spans.push(Span::styled(
-        right_text,
-        Style::default().fg(Color::DarkGray),
-    ));
+
+    if !right_text.is_empty() {
+        spans.push(Span::styled(
+            right_text,
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
+    if let Some(text) = conn_text {
+        spans.push(Span::styled(text, Style::default().fg(Color::Green)));
+    }
 
     let line = Line::from(spans);
     frame.render_widget(Paragraph::new(vec![line]), area);
@@ -219,9 +273,9 @@ fn render_search(frame: &mut Frame, area: Rect, state: &AppState, direction: Sea
     let input = &state.cmdline.input;
 
     // Show live match count if available.
-    let match_info = if let Some(ref dash) = state.dashboard {
-        let active_id = dash.tree.active_pane;
-        if let Some(pane) = dash.tree.panes.get(&active_id) {
+    let match_info = if let Some(tab) = state.active_tab() {
+        let active_id = tab.tree.active_pane;
+        if let Some(pane) = tab.tree.panes.get(&active_id) {
             if let Some(ref live) = pane.live_search {
                 if live.matches.is_empty() {
                     String::new()

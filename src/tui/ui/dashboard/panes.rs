@@ -10,7 +10,8 @@ use ratatui::{
 };
 use crate::tui::state::{
     TableMode,
-    dashboard::{DashboardState, LoadedTable},
+    app::AppState,
+    dashboard::LoadedTable,
     pane_layout::{Pane, PaneId, PaneType},
 };
 use crate::tui::ui::dashboard::sql_highlight;
@@ -27,18 +28,19 @@ const EDGE_PADDING: u16 = 2;
 pub fn render_pane(
     frame: &mut Frame,
     pane_id: PaneId,
-    dash: &DashboardState,
+    state: &AppState,
     focused: bool,
 ) {
-    let Some(pane) = dash.tree.panes.get(&pane_id) else { return };
+    let Some(tab) = state.active_tab() else { return };
+    let Some(pane) = tab.tree.panes.get(&pane_id) else { return };
     let Some(area) = pane.area else { return };
 
     match pane.kind {
-        PaneType::TableList => render_table_list(frame, area, pane, dash, focused),
-        PaneType::TableView => render_table_view(frame, area, pane, dash, focused),
-        PaneType::SchemaView => render_schema_view(frame, area, pane, dash, focused),
+        PaneType::TableList => render_table_list(frame, area, pane, state, focused),
+        PaneType::TableView => render_table_view(frame, area, pane, state, focused),
+        PaneType::SchemaView => render_schema_view(frame, area, pane, state, focused),
         PaneType::QueryEditor => render_query_editor(frame, area, pane, focused),
-        PaneType::QueryResults => render_query_results(frame, area, pane, dash, focused),
+        PaneType::QueryResults => render_query_results(frame, area, pane, state, focused),
     }
 }
 
@@ -154,7 +156,7 @@ fn render_table_list(
     frame: &mut Frame,
     area: Rect,
     pane: &Pane,
-    dash: &DashboardState,
+    state: &AppState,
     focused: bool,
 ) {
     let title = make_title(pane);
@@ -175,9 +177,9 @@ fn render_table_list(
     let header_lines = 3;
     let viewport = inner.height.saturating_sub(header_lines).max(1) as usize;
     let start = pane.nav_offset;
-    let end = (start + viewport).min(dash.tables.len());
+    let end = (start + viewport).min(state.tables.len());
 
-    if dash.tables.is_empty() {
+    if state.tables.is_empty() {
         lines.push(Line::from(Span::styled(
             "No tables",
             Style::default().fg(Color::DarkGray),
@@ -188,7 +190,7 @@ fn render_table_list(
         let committed_query = pane.last_search.as_ref().map(|s| s.query.as_str());
 
         for table_idx in start..end {
-            let table = &dash.tables[table_idx];
+            let table = &state.tables[table_idx];
             let selected = table_idx == pane.nav_cursor;
 
             let base_style = if selected && focused {
@@ -233,7 +235,7 @@ fn render_table_view(
     frame: &mut Frame,
     area: Rect,
     pane: &Pane,
-    dash: &DashboardState,
+    state: &AppState,
     focused: bool,
 ) {
     let title = make_title(pane);
@@ -241,11 +243,13 @@ fn render_table_view(
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let loading_this = dash.pending_load.as_ref().map_or(false, |q| {
+    let Some(tab) = state.active_tab() else { return };
+
+    let loading_this = tab.pending_load.as_ref().map_or(false, |q| {
         pane.bound_table.as_ref() == Some(&q.table)
     });
 
-    if dash.loading && loading_this {
+    if tab.loading && loading_this {
         frame.render_widget(
             Paragraph::new(Span::styled(" Loading…", Style::default().fg(Color::DarkGray))),
             inner,
@@ -253,7 +257,7 @@ fn render_table_view(
         return;
     }
 
-    if let Some(ref err) = dash.error {
+    if let Some(ref err) = tab.error {
         if loading_this {
             frame.render_widget(
                 Paragraph::new(Span::styled(format!(" {err}"), Style::default().fg(Color::Red))),
@@ -274,7 +278,7 @@ fn render_table_view(
         return;
     };
 
-    let Some(ref loaded) = dash.table_cache.get(table_name) else {
+    let Some(ref loaded) = state.table_cache.get(table_name) else {
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " Loading table data…",
@@ -637,7 +641,7 @@ fn render_schema_view(
     frame: &mut Frame,
     area: Rect,
     pane: &Pane,
-    dash: &DashboardState,
+    state: &AppState,
     focused: bool,
 ) {
     let title = make_title(pane);
@@ -653,7 +657,7 @@ fn render_schema_view(
         return;
     };
 
-    let Some(ref loaded) = dash.table_cache.get(table_name) else {
+    let Some(ref loaded) = state.table_cache.get(table_name) else {
         frame.render_widget(
             Paragraph::new(Span::styled(" Loading…", Style::default().fg(Color::DarkGray))),
             inner,
@@ -878,13 +882,15 @@ fn render_query_results(
     frame: &mut Frame,
     area: Rect,
     pane: &Pane,
-    dash: &DashboardState,
+    state: &AppState,
     focused: bool,
 ) {
     let title = make_title(pane);
     let block = pane_block(&title, focused);
     let inner = block.inner(area);
     frame.render_widget(block, area);
+
+    let Some(tab) = state.active_tab() else { return };
 
     let Some(idx) = pane.bound_query_idx else {
         frame.render_widget(
@@ -897,7 +903,7 @@ fn render_query_results(
         return;
     };
 
-    let Some(result) = dash.query_results.get(idx) else {
+    let Some(result) = tab.query_results.get(idx) else {
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " Result not available.",
@@ -931,7 +937,7 @@ fn render_query_results(
     }
 
     // Build a LoadedTable-like struct to reuse the table renderer.
-    let loaded = crate::tui::state::dashboard::LoadedTable {
+    let loaded = crate::tui::state::tab::LoadedTable {
         name: format!("Result {}", idx + 1),
         schema: vec![], // no schema for arbitrary queries
         headers: result.headers.clone(),

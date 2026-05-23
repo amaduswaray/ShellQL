@@ -43,11 +43,12 @@ pub async fn handle_key_event(
     }
 
     // ── Async table load ──────────────────────────────────────────────────────
-    // Run after EVERY handler path so that commands like `:open` trigger the
-    // load immediately instead of waiting for the next key event.
-    if let Some(ref mut dash) = state.dashboard {
-        if let Some(query) = dash.pending_load.take() {
-            let pool = dash.pool.clone();
+    {
+        let Some(pool) = state.pool.clone() else { return Ok(()); };
+        let table_cache = &mut state.table_cache;
+        let active = state.active_tab;
+        let Some(tab) = state.tabs.get_mut(active) else { return Ok(()); };
+        if let Some(query) = tab.pending_load.take() {
             let table = query.table.clone();
             let result = if query.filter.is_some() || query.sort_col.is_some() || query.selected_cols.is_some() {
                 tokio::try_join!(
@@ -69,30 +70,32 @@ pub async fn handle_key_event(
             };
             match result {
                 Ok((schema, (headers, rows))) => {
-                    use crate::tui::state::dashboard::LoadedTable;
-                    dash.table_cache.insert(table.clone(), LoadedTable::new(table, schema, headers, rows));
-                    dash.loading = false;
+                    use crate::tui::state::tab::LoadedTable;
+                    table_cache.insert(table.clone(), LoadedTable::new(table, schema, headers, rows));
+                    tab.loading = false;
                     state.cmdline.loading = None;
                 }
                 Err(e) => {
-                    dash.error = Some(e.to_string());
-                    dash.loading = false;
+                    tab.error = Some(e.to_string());
+                    tab.loading = false;
                 }
             }
         }
     }
 
     // ── Async commit ──────────────────────────────────────────────────────────
-    if let Some(ref mut dash) = state.dashboard {
-        if let Some(commit) = dash.pending_commit.take() {
-            let pool = dash.pool.clone();
+    {
+        let Some(pool) = state.pool.clone() else { return Ok(()); };
+        let table_cache = &mut state.table_cache;
+        let active = state.active_tab;
+        let Some(tab) = state.tabs.get_mut(active) else { return Ok(()); };
+        if let Some(commit) = tab.pending_commit.take() {
             let table = commit.table.clone();
             let pk_col = commit.pk_col.clone();
 
             let mut success = true;
             let mut err_msg = None;
 
-            // Apply updates.
             for (pk_val, target_col, new_val) in &commit.updates {
                 match crate::connection::update_cell(
                     &pool, &table, &pk_col, pk_val, target_col, new_val,
@@ -106,7 +109,6 @@ pub async fn handle_key_event(
                 }
             }
 
-            // Apply deletes.
             if success && !commit.deletes.is_empty() {
                 match crate::connection::delete_rows(
                     &pool, &table, &pk_col, &commit.deletes,
@@ -120,72 +122,70 @@ pub async fn handle_key_event(
             }
 
             if success {
-                // Reload the table cache.
                 match tokio::try_join!(
                     crate::connection::table_schema(&pool, &table),
                     crate::connection::table_rows(&pool, &table, 200, 0),
                 ) {
                     Ok((schema, (headers, rows))) => {
-                        use crate::tui::state::dashboard::LoadedTable;
-                        dash.table_cache.insert(table.clone(), LoadedTable::new(table, schema, headers, rows));
-                        dash.loading = false;
+                        use crate::tui::state::tab::LoadedTable;
+                        table_cache.insert(table.clone(), LoadedTable::new(table, schema, headers, rows));
+                        tab.loading = false;
                     }
                     Err(e) => {
-                        dash.error = Some(format!("reload after commit failed: {e}"));
-                        dash.loading = false;
+                        tab.error = Some(format!("reload after commit failed: {e}"));
+                        tab.loading = false;
                     }
                 }
             } else {
-                dash.error = err_msg;
-                dash.loading = false;
+                tab.error = err_msg;
+                tab.loading = false;
             }
         }
     }
 
     // ── Async query execution ─────────────────────────────────────────────────
-    if let Some(ref mut dash) = state.dashboard {
-        if let Some(sql) = dash.pending_query_exec.take() {
-            let pool = dash.pool.clone();
+    {
+        let Some(pool) = state.pool.clone() else { return Ok(()); };
+        let active = state.active_tab;
+        let Some(tab) = state.tabs.get_mut(active) else { return Ok(()); };
+        if let Some(sql) = tab.pending_query_exec.take() {
             match crate::connection::execute_query(&pool, &sql).await {
                 Ok((headers, rows)) => {
-                    let result = crate::tui::state::dashboard::QueryResult {
+                    let result = crate::tui::state::tab::QueryResult {
                         sql: sql.clone(),
                         headers,
                         rows,
                         error: None,
                     };
-                    dash.query_results = vec![result];
-                    dash.query_history.push(sql);
-                    // Find or create a QueryResults pane.
-                    populate_query_results(dash, false);
-                    dash.loading = false;
+                    tab.query_results = vec![result];
+                    tab.query_history.push(sql);
+                    populate_query_results(tab, false);
+                    tab.loading = false;
 
-                    // Build a user-friendly status message.
-                    let msg = if dash.query_results[0].headers == vec!["Rows Affected"] {
-                        let affected = dash.query_results[0]
+                    let msg = if tab.query_results[0].headers == vec!["Rows Affected"] {
+                        let affected = tab.query_results[0]
                             .rows
                             .first()
                             .and_then(|r| r.first())
                             .cloned()
                             .unwrap_or_else(|| "0".to_string());
                         format!("{affected} rows affected")
-                    } else if dash.query_results[0].headers.is_empty() {
+                    } else if tab.query_results[0].headers.is_empty() {
                         "Query returned no rows".to_string()
                     } else {
-                        format!("Query executed: {} rows", dash.query_results[0].rows.len())
+                        format!("Query executed: {} rows", tab.query_results[0].rows.len())
                     };
                     state.cmdline.loading = Some(msg);
                 }
                 Err(e) => {
-                    dash.query_results = vec![crate::tui::state::dashboard::QueryResult {
+                    tab.query_results = vec![crate::tui::state::tab::QueryResult {
                         sql,
                         headers: vec![],
                         rows: vec![],
                         error: Some(e.to_string()),
                     }];
-                    // On error, only update existing QueryResults panes, don't create new ones.
-                    populate_query_results(dash, true);
-                    dash.loading = false;
+                    populate_query_results(tab, true);
+                    tab.loading = false;
                     state.cmdline.set_error(format!("Query failed: {e}"));
                 }
             }
@@ -195,34 +195,30 @@ pub async fn handle_key_event(
     Ok(())
 }
 
-/// Find an existing QueryResults pane or auto-create one via hnew.
-/// `error_only` = true means only update existing panes, don't create new ones.
-fn populate_query_results(dash: &mut crate::tui::state::DashboardState, error_only: bool) {
+fn populate_query_results(tab: &mut crate::tui::state::Tab, error_only: bool) {
     use crate::tui::state::pane_layout::{PaneType, PaneId};
 
-    // Look for an existing QueryResults pane.
-    let existing = dash.tree.panes.iter()
+    let existing = tab.tree.panes.iter()
         .find(|(_, p)| p.kind == PaneType::QueryResults)
         .map(|(id, _)| *id);
 
     if let Some(id) = existing {
-        if let Some(pane) = dash.tree.panes.get_mut(&id) {
+        if let Some(pane) = tab.tree.panes.get_mut(&id) {
             pane.bound_query_idx = Some(0);
-            pane.query_result_count = dash.query_results.len();
+            pane.query_result_count = tab.query_results.len();
         }
     } else if !error_only {
-        // Auto-create via hnew below the active pane.
-        let active = dash.tree.active_pane;
-        if dash.tree.pane_count() < 8 {
+        let active = tab.tree.active_pane;
+        if tab.tree.pane_count() < 8 {
             let new_id = PaneId::new();
-            let display_id = dash.tree.alloc_display_id();
-            dash.tree.panes.insert(new_id, crate::tui::state::pane_layout::Pane::new(new_id, PaneType::QueryResults, display_id));
-            if let Some(pane) = dash.tree.panes.get_mut(&new_id) {
+            let display_id = tab.tree.alloc_display_id();
+            tab.tree.panes.insert(new_id, crate::tui::state::pane_layout::Pane::new(new_id, PaneType::QueryResults, display_id));
+            if let Some(pane) = tab.tree.panes.get_mut(&new_id) {
                 pane.bound_query_idx = Some(0);
-                pane.query_result_count = dash.query_results.len();
+                pane.query_result_count = tab.query_results.len();
             }
-            dash.tree.replace_leaf_with_split(active, false, new_id);
-            dash.tree.active_pane = active; // keep focus on editor
+            tab.tree.replace_leaf_with_split(active, false, new_id);
+            tab.tree.active_pane = active;
         }
     }
 }

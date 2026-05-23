@@ -78,7 +78,9 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] :select command that reduces the rows that are shown
 - [x] :select, :where and :order should work in sequence. So all changes are persintant
 
+- [ ] new cmd line with controls
 - [ ] do a find buffer picker like vim
+- [ ] :q when multiple tabs should not quit when pane in tab is 1. it should close the tab
 - [ ] Tab logic, as sessions/picker they need to swap between. No visual tabs
   - [ ] One tab per table? Hard to decide due to custom queries
   - [ ] How to handle multiple sessions

@@ -1,10 +1,11 @@
-use crate::connection::{Database, list_connections};
+use std::collections::HashMap;
+
+use crate::connection::{Database, DbPool, list_connections};
 
 use super::cmdline::CommandLine;
-use super::dashboard::DashboardState;
 use super::form::AddConnectionForm;
 use super::pane::Overlay;
-use super::session::Session;
+use super::tab::{LoadedTable, Tab};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum AppMode {
@@ -12,20 +13,34 @@ pub enum AppMode {
     Dashboard,
 }
 
+/// Nerd Font icons used as tab indicators.
+const TAB_ICONS: [char; 10] = ['󰎢', '󰎥', '󰎨', '󰎫', '󰎲', '󰎯', '󰎴', '󰎷', '󰎺', '󰎽'];
+
 pub struct AppState {
     pub mode: AppMode,
     pub overlay: Option<Overlay>,
     pub should_quit: bool,
     pub connections: Vec<Database>,
     pub selected_connection: usize,
-    pub sessions: Vec<Session>,
-    pub active_session: usize,
     pub pending_key: Option<char>,
     pub cmdline: CommandLine,
     /// Populated when `Overlay::AddConnection` is active.
     pub form: Option<AddConnectionForm>,
-    /// Populated once the user connects to a database.
-    pub dashboard: Option<DashboardState>,
+
+    // ── Shared database session state ─────────────────────────────────────
+    /// Active connection metadata.
+    pub connection: Option<Database>,
+    /// Live DB pool — cheap to clone for async ops.
+    pub pool: Option<DbPool>,
+    /// Schema table list from the current connection.
+    pub tables: Vec<String>,
+    /// Shared table cache across all tabs.
+    pub table_cache: HashMap<String, LoadedTable>,
+
+    // ── Tabs ──────────────────────────────────────────────────────────────
+    pub tabs: Vec<Tab>,
+    pub active_tab: usize,
+
     /// Set by the connection picker; handled in the event loop with a spinner.
     pub pending_connection: Option<Database>,
 }
@@ -38,13 +53,40 @@ impl AppState {
             should_quit: false,
             connections: list_connections(),
             selected_connection: 0,
-            sessions: vec![],
-            active_session: 0,
             pending_key: None,
             cmdline: CommandLine::new(),
             form: None,
-            dashboard: None,
+            connection: None,
+            pool: None,
+            tables: Vec::new(),
+            table_cache: HashMap::new(),
+            tabs: Vec::new(),
+            active_tab: 0,
             pending_connection: None,
+        }
+    }
+
+    /// True if we're in a database session (tabs exist).
+    pub fn has_session(&self) -> bool {
+        !self.tabs.is_empty()
+    }
+
+    /// Mutable reference to the active tab, if any.
+    pub fn active_tab_mut(&mut self) -> Option<&mut Tab> {
+        self.tabs.get_mut(self.active_tab)
+    }
+
+    /// Reference to the active tab, if any.
+    pub fn active_tab(&self) -> Option<&Tab> {
+        self.tabs.get(self.active_tab)
+    }
+
+    /// Return the icon for the active tab.
+    pub fn active_tab_icon(&self) -> char {
+        if self.tabs.is_empty() {
+            TAB_ICONS[0]
+        } else {
+            TAB_ICONS[self.active_tab % TAB_ICONS.len()]
         }
     }
 }
