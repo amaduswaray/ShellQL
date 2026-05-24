@@ -3,8 +3,13 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Clear, Paragraph},
+    widgets::{
+        Block, BorderType, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
+        ScrollbarState,
+    },
 };
+
+const MAX_VISIBLE: usize = 10;
 
 pub fn render(
     frame: &mut Frame,
@@ -18,8 +23,12 @@ pub fn render(
 
     // inner: 1 pad + cmd + 2 gap + desc + 1 pad
     let inner_w = 1 + cmd_col_w + 2 + desc_col_w + 1;
+    let total = completions.len();
+    let visible_count = total.min(MAX_VISIBLE);
+    let needs_scrollbar = total > visible_count;
+
     let popup_w = (inner_w + 2) as u16; // +2 for left/right borders
-    let popup_h = completions.len() as u16 + 2; // +2 for top/bottom borders
+    let popup_h = (visible_count + 2) as u16; // +2 for top/bottom borders
 
     // Anchor: flush with the `:` character, growing upward.
     let popup = Rect {
@@ -40,20 +49,33 @@ pub fn render(
     let inner = block.inner(popup);
     frame.render_widget(block, popup);
 
+    // Compute scroll offset so selected item is always visible.
+    let mut offset = 0usize;
+    if let Some(sel) = selected {
+        if sel >= offset + visible_count {
+            offset = sel + 1 - visible_count;
+        }
+        if sel < offset {
+            offset = sel;
+        }
+    }
+
     let lines: Vec<Line> = completions
         .iter()
         .enumerate()
+        .skip(offset)
+        .take(visible_count)
         .map(|(i, (cmd, desc))| {
-            let selected = Some(i) == selected;
-            let bg = if selected {
-                Style::default().bg(Color::DarkGray) //rgb(38, 35, 58)
+            let is_selected = Some(i) == selected;
+            let bg = if is_selected {
+                Style::default().bg(Color::DarkGray)
             } else {
                 Style::default()
             };
             Line::from(vec![
                 Span::styled(
                     format!(" {cmd:<cmd_col_w$}  "),
-                    bg.fg(Color::White).add_modifier(if selected {
+                    bg.fg(Color::White).add_modifier(if is_selected {
                         Modifier::BOLD
                     } else {
                         Modifier::empty()
@@ -61,7 +83,7 @@ pub fn render(
                 ),
                 Span::styled(
                     format!("{desc:<desc_col_w$}"),
-                    bg.fg(if selected {
+                    bg.fg(if is_selected {
                         Color::White
                     } else {
                         Color::DarkGray
@@ -72,4 +94,21 @@ pub fn render(
         .collect();
 
     frame.render_widget(Paragraph::new(lines), inner);
+
+    // ── Scrollbar (embedded in the right border) ───────────────────────────
+    if needs_scrollbar {
+        let scrollbar_area = Rect {
+            x: popup.x + popup.width - 1,
+            y: popup.y + 1,
+            width: 1,
+            height: popup.height.saturating_sub(2),
+        };
+        let mut scrollbar_state = ScrollbarState::new(total).position(offset);
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None)
+            .track_symbol(Some("│"))
+            .thumb_symbol("█");
+        frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+    }
 }
