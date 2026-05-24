@@ -6,6 +6,7 @@ pub fn cmd_exit(state: &mut AppState) {
     state.should_quit = true;
 }
 
+// TODO: This should be fixed and it is not maintaining the tab and window states
 pub fn cmd_quit(state: &mut AppState, args: &[&str]) {
     let pane_count = state.active_tab().map(|tab| tab.tree.pane_count());
 

@@ -7,12 +7,14 @@ use ratatui::{
 };
 
 use crate::tui::ui::{
-    centered_rect,
+    centered_rect::centered_rect_with_min,
     home::overlays::{open_popup, render_dismiss_hint},
 };
 
 pub fn render_command_palette(frame: &mut Frame, area: Rect) {
-    let popup_area = centered_rect(55, 50, area);
+    let min_w = 26u16.min(area.width); // "  Commands coming soon." (24) + 2 borders
+    let min_h = 6u16.min(area.height); // 3 content lines + 2 borders + hint
+    let popup_area = centered_rect_with_min(55, 50, min_w, min_h, area);
     let (block, inner) = open_popup(frame, popup_area, "Command Palette");
     frame.render_widget(block, popup_area);
 

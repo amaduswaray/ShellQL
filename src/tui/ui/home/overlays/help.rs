@@ -7,12 +7,15 @@ use ratatui::{
 };
 
 use crate::tui::ui::{
-    centered_rect,
+    centered_rect::centered_rect_with_min,
     home::overlays::{binding_line, open_popup, render_dismiss_hint},
 };
 
 pub fn render_help(frame: &mut Frame, area: Rect) {
-    let popup_area = centered_rect(46, 72, area);
+    // Longest line ≈ 31 chars ("  d" padded to 14 + "delete connection" 17).
+    let min_w = 33u16.min(area.width);
+    let min_h = 18u16.min(area.height); // 15 content lines + 2 borders + hint
+    let popup_area = centered_rect_with_min(46, 72, min_w, min_h, area);
     let (block, inner) = open_popup(frame, popup_area, "Help");
     frame.render_widget(block, popup_area);
 
@@ -49,7 +52,10 @@ pub fn render_help(frame: &mut Frame, area: Rect) {
 }
 
 pub fn render_dashboard_help(frame: &mut Frame, area: Rect) {
-    let popup_area = centered_rect(60, 80, area);
+    // Longest line ≈ 48 chars ("  i" padded to 14 + "edit cell (Table) / insert (Query)" 34).
+    let min_w = 50u16.min(area.width);
+    let min_h = 74u16.min(area.height); // 71 content lines + 2 borders + hint
+    let popup_area = centered_rect_with_min(60, 80, min_w, min_h, area);
     let (block, inner) = open_popup(frame, popup_area, "Dashboard Help");
     frame.render_widget(block, popup_area);
 

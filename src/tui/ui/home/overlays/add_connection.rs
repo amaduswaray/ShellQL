@@ -13,7 +13,10 @@ use crate::{
     connection::{Database, Engine},
     tui::{
         AddConnectionForm, AppState, FieldId, FormInputMode, TextMode,
-        ui::{components::centered_rect::centered_rect, home::render_dismiss_hint},
+        ui::{
+            components::centered_rect::centered_rect_with_min,
+            home::render_dismiss_hint,
+        },
     },
 };
 
@@ -24,18 +27,19 @@ pub fn render_add_connection(frame: &mut Frame, area: Rect, state: &AppState) {
 
     let fields = form.visible_fields();
 
-    // ── Compute error height before sizing the popup ───────────────────────────
-    // The popup is 56% wide. Subtract 2 borders + 2×LEFT_PAD to get the text
-    // column width, then measure how many lines the error will need.
-    const LABEL_W: u16 = 13;
+    // ── Compute popup size so nothing is ever clipped ──────────────────────────
     const LEFT_PAD: u16 = 2;
-    let inner_w = (area.width * 56 / 100).saturating_sub(2 + LEFT_PAD * 2) as usize;
-    let _ = inner_w; // reserved for future per-field validation hints
+    let label_w = fields.iter().map(|f| f.label().len()).max().unwrap_or(0) as u16;
+
+    // Widest selector value (Engine: "● Postgres   ● MySQL   ● SQLite")
+    let max_selector_w = 31u16;
+    let min_inner_w = LEFT_PAD + label_w + max_selector_w;
+    let min_w = min_inner_w + 2; // +2 for borders
 
     // Height: 1 top-pad + fields + 1 blank + 1 hint + 2 borders
     let content_h = 1 + fields.len() as u16 + 1 + 1;
     let popup_h_pct = ((content_h + 2) * 100 / area.height.max(1)).clamp(35, 88) as u16;
-    let popup_area = centered_rect(40, popup_h_pct, area);
+    let popup_area = centered_rect_with_min(40, popup_h_pct, min_w, content_h + 2, area);
 
     frame.render_widget(Clear, popup_area);
 
@@ -69,7 +73,7 @@ pub fn render_add_connection(frame: &mut Frame, area: Rect, state: &AppState) {
         let is_focused = i == form.focused;
 
         let [lbl_area, val_area] =
-            Layout::horizontal([Constraint::Length(LABEL_W), Constraint::Min(0)]).areas(row);
+            Layout::horizontal([Constraint::Length(label_w), Constraint::Min(0)]).areas(row);
 
         // Label — blue + bold when focused, muted otherwise
         let lbl_style = if is_focused {

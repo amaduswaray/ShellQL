@@ -9,13 +9,22 @@ use ratatui::{
 use crate::tui::{
     AppState,
     ui::{
-        centered_rect,
+        centered_rect::centered_rect_with_min,
         home::{render_connection_list, render_dismiss_hint, render_empty_connections},
     },
 };
 
 pub fn render_connection_picker(frame: &mut Frame, area: Rect, state: &AppState) {
-    let popup = centered_rect(40, 30, area);
+    // Table columns: bullet(1) + spacing(1) + name + spacing(1) + badge(11)
+    let max_name_w = state
+        .connections
+        .iter()
+        .map(|db| db.name.len())
+        .max()
+        .unwrap_or(0) as u16;
+    let min_w = (16 + max_name_w).min(area.width);
+    let min_h = 7u16; // at least 3 lines + 2 borders + hint row
+    let popup = centered_rect_with_min(40, 30, min_w, min_h, area);
     frame.render_widget(Clear, popup);
 
     let block = Block::default()

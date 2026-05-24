@@ -22,9 +22,13 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 ## V0.1 Issues
 
+- [ ] Inline cell edits in tableview
 - [ ] cmdline query always pops up result view
 - [ ] completions and its scrollwheel
+- [ ] zsh Shell completions for the cli commands
+- [ ] query history popup pane
 - [ ] Better result view and query cohesion
+- [ ] add more posix compliant cli commands - Makes pipable workflow better
 - [ ] Save layouts
 - [ ] No general trait for easy driver expansion
 - [ ] picker for tabs
@@ -48,13 +52,9 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] for border overflows and showing(add connection)
 - [ ] Fix deletion logic - dd should prompt a deletion confirm tab
 
-
+- [ ] Vim based query editor
 - [ ] Tests for the new sql functions
 - [ ] Complete the command line commands
-- [ ] query history popup pane
-- [ ] Inline cell edits. Only for tableView. the queryresults is read only, and can only use / and ?
-- [ ] zsh Shell completions for the cli commands
-- [ ] add more posix compliant cli commands 
 - [ ] Proper vim commands
   - [ ] o and O for newline over and under, to add a new row
   - [ ] ciw to change in cell

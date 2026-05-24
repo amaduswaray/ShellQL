@@ -18,9 +18,27 @@ use crate::tui::{state::AppState, ui::home::overlays::render_overlay};
 pub fn render_home(frame: &mut Frame, area: Rect, state: &AppState) {
     let content_h: u16 = 10;
 
+    // Compute exact width needed for the longest instruction line so nothing
+    // is ever clipped.
+    let items: &[(&str, &str)] = &[
+        ("connect", "connect to one of your DBs"),
+        ("add", "add a new DB connection"),
+        ("help", "for help"),
+        ("q", "to quit"),
+    ];
+    let max_cmd_len = items.iter().map(|(cmd, _)| cmd.len()).max().unwrap_or(0);
+    let content_w = items
+        .iter()
+        .map(|(cmd, desc)| {
+            // "type  " (6) + ":" (1) + cmd + "<Enter>" (7) + pad + desc
+            6 + 1 + cmd.len() + 7 + (max_cmd_len.saturating_sub(cmd.len()) + 3) + desc.len()
+        })
+        .max()
+        .unwrap_or(40) as u16;
+
     let [_, horiz, _] = Layout::horizontal([
         Constraint::Fill(1),
-        Constraint::Percentage(40),
+        Constraint::Length(content_w.min(area.width)),
         Constraint::Fill(1),
     ])
     .areas(area);
