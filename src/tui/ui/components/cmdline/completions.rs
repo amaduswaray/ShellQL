@@ -103,7 +103,9 @@ pub fn render(
             width: 1,
             height: popup.height.saturating_sub(2),
         };
-        let mut scrollbar_state = ScrollbarState::new(total).position(offset);
+        let mut scrollbar_state = ScrollbarState::new(total)
+            .position(offset)
+            .viewport_content_length(visible_count);
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
             .begin_symbol(None)
             .end_symbol(None)

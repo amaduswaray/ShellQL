@@ -7,7 +7,10 @@ use ratatui::{
     layout::Rect,
     style::{Color, Style},
     text::Span,
-    widgets::{Block, BorderType, Borders, Clear, Paragraph},
+    widgets::{
+        Block, BorderType, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
+        ScrollbarState,
+    },
 };
 use unicode_width::UnicodeWidthChar;
 
@@ -98,16 +101,20 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
 
     // ── Autocomplete popup ───────────────────────────────────────────────────
     if let Some(selected) = pane.autocomplete_selected {
-        if !pane.autocomplete_matches.is_empty() {
+        let total = pane.autocomplete_matches.len();
+        if total > 0 {
+            const MAX_VISIBLE: usize = 10;
+            let visible_count = total.min(MAX_VISIBLE);
+            let needs_scrollbar = total > visible_count;
+
             let max_w = pane
                 .autocomplete_matches
                 .iter()
                 .map(|m| m.len())
                 .max()
                 .unwrap_or(8);
-            let popup_w = (max_w + 4).min(inner.width.saturating_sub(4) as usize) as u16;
-            let popup_h =
-                (pane.autocomplete_matches.len() as u16 + 2).min(inner.height.saturating_sub(2));
+            let popup_w = (max_w + 4) as u16;
+            let popup_h = (visible_count + 2) as u16;
 
             let popup = Rect {
                 x: cursor_x.min(inner.right().saturating_sub(popup_w)),
@@ -125,10 +132,21 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
             let inner_popup = block.inner(popup);
             frame.render_widget(block, popup);
 
+            // Compute scroll offset so selected item is always visible.
+            let mut offset = 0usize;
+            if selected >= offset + visible_count {
+                offset = selected + 1 - visible_count;
+            }
+            if selected < offset {
+                offset = selected;
+            }
+
             let lines: Vec<ratatui::text::Line> = pane
                 .autocomplete_matches
                 .iter()
                 .enumerate()
+                .skip(offset)
+                .take(visible_count)
                 .map(|(i, m)| {
                     let is_selected = i == selected;
                     let style = if is_selected {
@@ -143,6 +161,25 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
                 })
                 .collect();
             frame.render_widget(Paragraph::new(lines), inner_popup);
+
+            // Scrollbar embedded in the right border.
+            if needs_scrollbar {
+                let scrollbar_area = Rect {
+                    x: popup.x + popup.width - 1,
+                    y: popup.y + 1,
+                    width: 1,
+                    height: popup.height.saturating_sub(2),
+                };
+                let mut scrollbar_state = ScrollbarState::new(total)
+                    .position(offset)
+                    .viewport_content_length(visible_count);
+                let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .track_symbol(Some("│"))
+                    .thumb_symbol("█");
+                frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+            }
         }
     }
 }

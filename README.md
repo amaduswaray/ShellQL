@@ -23,12 +23,24 @@ Connect to your favourite provider and handle tables and schemas in your db
 ## V0.1 Issues
 
 - [ ] cmdline query always pops up result view
+- [ ] completions and its scrollwheel
 - [ ] Better result view and query cohesion
 - [ ] Save layouts
 - [ ] No general trait for easy driver expansion
 - [ ] picker for tabs
 - [ ] Tmux like session management for multple connections
 - [ ] More expressive cli that integrates better with unix and AI
+- [ ] In app documentation and help
+- [ ] Adding custom keybinds 
+- [ ] Drivers
+  - [ ] turso/libsql
+  - [ ] mariadb
+  - [ ] mongodb
+  - [ ] Cludflare D1
+  - [ ] More....
+- [ ] More Pane options
+  - [ ] Indexes
+  - [ ] Views
 
 
 ### TODOS TUI
