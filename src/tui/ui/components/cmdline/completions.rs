@@ -53,12 +53,11 @@ pub fn render(
             Line::from(vec![
                 Span::styled(
                     format!(" {cmd:<cmd_col_w$}  "),
-                    bg.fg(if selected { Color::White } else { Color::White })
-                        .add_modifier(if selected {
-                            Modifier::BOLD
-                        } else {
-                            Modifier::empty()
-                        }),
+                    bg.fg(Color::White).add_modifier(if selected {
+                        Modifier::BOLD
+                    } else {
+                        Modifier::empty()
+                    }),
                 ),
                 Span::styled(
                     format!("{desc:<desc_col_w$}"),

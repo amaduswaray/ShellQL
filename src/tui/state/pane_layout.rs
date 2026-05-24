@@ -195,6 +195,10 @@ pub struct Pane {
     pub query_text: Vec<String>,
     /// Cursor position (row, col) for the QueryEditor pane.
     pub query_cursor: (usize, usize),
+    /// Horizontal scroll offset (display columns) for the QueryEditor pane.
+    pub query_scroll_offset: usize,
+    /// Vertical scroll offset (line index) for the QueryEditor pane.
+    pub query_row_offset: usize,
     /// Index for cycling through table-name autocomplete matches.
     pub autocomplete_idx: usize,
     /// Current autocomplete candidates (shown in popup).
@@ -241,6 +245,8 @@ impl Pane {
             selected_cols: None,
             query_text: vec![String::new()],
             query_cursor: (0, 0),
+            query_scroll_offset: 0,
+            query_row_offset: 0,
             autocomplete_idx: 0,
             autocomplete_matches: Vec::new(),
             autocomplete_selected: None,
@@ -360,6 +366,8 @@ impl Pane {
         self.kind = PaneType::QueryEditor;
         self.query_text = vec![String::new()];
         self.query_cursor = (0, 0);
+        self.query_scroll_offset = 0;
+        self.query_row_offset = 0;
         self.autocomplete_matches.clear();
         self.autocomplete_selected = None;
         self.autocomplete_idx = 0;
@@ -419,6 +427,16 @@ impl Pane {
             self.col_offset = self.cursor_col;
         } else if self.cursor_col >= self.col_offset + viewport {
             self.col_offset = self.cursor_col + 1 - viewport;
+        }
+    }
+
+    // ── Query editor scroll sync ────────────────────────────────────────────
+    pub fn sync_query_row_offset(&mut self, viewport: usize) {
+        let (row, _) = self.query_cursor;
+        if row < self.query_row_offset {
+            self.query_row_offset = row;
+        } else if row >= self.query_row_offset + viewport {
+            self.query_row_offset = row + 1 - viewport;
         }
     }
 

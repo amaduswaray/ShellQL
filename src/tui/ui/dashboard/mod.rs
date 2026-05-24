@@ -78,7 +78,27 @@ fn sync_pane_scroll(tab: &mut crate::tui::state::Tab, _area: Rect) {
                 let viewport = pane_area.height.saturating_sub(2) as usize / card_h.max(1);
                 pane.sync_nav_offset(viewport);
             }
-            _ => {}
+            crate::tui::state::PaneType::QueryEditor => {
+                // borders (2) + padding (2) = 4
+                let inner_h = pane_area.height.saturating_sub(4).max(1) as usize;
+                pane.sync_query_row_offset(inner_h);
+
+                let pad = 1u16;
+                let inner_w = pane_area.width.saturating_sub(2);
+                let padded_w = inner_w.saturating_sub(pad * 2);
+                let gutter_w = (pane.query_text.len().to_string().len().max(3) + 1) as u16;
+                let text_w = padded_w.saturating_sub(gutter_w).max(1) as usize;
+
+                let (row, col) = pane.query_cursor;
+                if let Some(line) = pane.query_text.get(row) {
+                    let cursor_vx = sql_highlight::cursor_visual_x(line, col);
+                    if cursor_vx < pane.query_scroll_offset {
+                        pane.query_scroll_offset = cursor_vx;
+                    } else if cursor_vx >= pane.query_scroll_offset + text_w {
+                        pane.query_scroll_offset = cursor_vx + 1 - text_w;
+                    }
+                }
+            }
         }
     }
 }

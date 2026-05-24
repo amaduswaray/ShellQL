@@ -79,7 +79,7 @@ fn word_boundary_before(line: &str, pos: usize) -> bool {
 }
 
 /// Tokenize a single line of SQL into colored spans.
-fn tokenize_line(line: &str) -> Vec<Span<'_>> {
+pub fn tokenize_line(line: &str) -> Vec<Span<'_>> {
     let mut spans = Vec::new();
     let mut pos = 0usize;
 

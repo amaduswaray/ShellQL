@@ -72,16 +72,17 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] line number column does not need alternating lines or underline
 - [x] Delete connection in dashboard should not be possible
 - [x] :q when multiple tabs should not quit when pane in tab is 1. it should close the tab
+
+- [ ] Line number in query editor
+- [ ] Scrollable cmdline completions
 - [ ] for border overflows and showing(add connection)
 - [ ] Fix deletion logic
-- [ ] Line number in query editor
-- [ ] Query view when wrong command shows result view
 - [ ] Be able to Delete when in connection list
-- [ ] Complete the command line
-  - [ ] Scrollable cmdline completions
+- [ ] Query view when wrong command shows result view
+
+
 - [ ] Tests for the new sql functions
-
-
+- [ ] Complete the command line commands
 - [ ] query history popup pane
 - [ ] Inline cell edits. Only for tableView. the queryresults is read only, and can only use / and ?
 - [ ] zsh Shell completions for the cli commands

@@ -322,6 +322,7 @@ pub fn cmd_write(state: &mut AppState, _args: &[&str]) {
         if let Some(pane) = tab.tree.panes.get_mut(&active_id) {
             pane.query_text = formatted.lines().map(|s| s.to_string()).collect();
             pane.query_cursor = (0, 0);
+            pane.query_scroll_offset = 0;
         }
         tab.pending_query_exec = Some(formatted);
         tab.loading = true;

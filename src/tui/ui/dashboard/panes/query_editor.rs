@@ -3,10 +3,13 @@ use crate::tui::state::pane_layout::Pane;
 use crate::tui::ui::dashboard::sql_highlight;
 use ratatui::{
     Frame,
+    buffer::Buffer,
     layout::Rect,
     style::{Color, Style},
+    text::Span,
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
+use unicode_width::UnicodeWidthChar;
 
 pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
     let title = make_title(pane);
@@ -23,33 +26,74 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
         height: inner.height.saturating_sub(pad * 2),
     };
 
-    // ── Cursor-line background (vim cursorline style) ────────────────────────
+    // ── Gutter ───────────────────────────────────────────────────────────────
+    let gutter_w = {
+        let digits = pane.query_text.len().to_string().len().max(3);
+        ((digits + 1) as u16).min(padded.width.saturating_sub(1))
+    };
+    let gutter_area = Rect {
+        x: padded.x,
+        y: padded.y,
+        width: gutter_w,
+        height: padded.height,
+    };
+    let text_area = Rect {
+        x: padded.x + gutter_w,
+        y: padded.y,
+        width: padded.width.saturating_sub(gutter_w).max(1),
+        height: padded.height,
+    };
+
+    let gutter_inner_w = gutter_w.saturating_sub(1) as usize; // reserve right padding
+    let start_row = pane.query_row_offset;
+    let end_row = (start_row + gutter_area.height as usize).min(pane.query_text.len());
+    let line_numbers: Vec<ratatui::text::Line> = (start_row..end_row)
+        .map(|line_idx| {
+            let num_str = format!("{:>width$}", line_idx + 1, width = gutter_inner_w);
+            let color = if line_idx == pane.query_cursor.0 {
+                Color::White
+            } else {
+                Color::DarkGray
+            };
+            ratatui::text::Line::from(Span::styled(num_str, Style::default().fg(color)))
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(line_numbers), gutter_area);
+
+    // ── Cursor-line background (vim cursorline style) ──────────────────────────
     let (cursor_row, _cursor_col) = pane.query_cursor;
-    let cursor_y_in_pane = cursor_row as u16;
-    if cursor_y_in_pane < padded.height {
+    let cursor_y_visible = cursor_row.saturating_sub(pane.query_row_offset) as u16;
+    if cursor_y_visible < text_area.height {
         let cursor_line_bg = Rect {
-            x: padded.x,
-            y: padded.y + cursor_y_in_pane,
-            width: padded.width,
+            x: text_area.x,
+            y: text_area.y + cursor_y_visible,
+            width: text_area.width,
             height: 1,
         };
         let bg_style = Style::default().bg(Color::Rgb(41, 46, 66));
         frame.render_widget(Paragraph::new("").style(bg_style), cursor_line_bg);
     }
 
-    // Syntax-highlighted SQL rendering.
-    let highlighted = sql_highlight::highlight_sql_lines(&pane.query_text);
-    let paragraph = Paragraph::new(highlighted);
-    frame.render_widget(paragraph, padded);
+    // ── Syntax-highlighted SQL rendering ───────────────────────────────────────
+    let buf = frame.buffer_mut();
+    for (line_idx, line) in pane.query_text.iter().enumerate().skip(start_row).take(end_row - start_row)
+    {
+        let y = text_area.y + (line_idx - start_row) as u16;
+        if y >= text_area.y + text_area.height {
+            break;
+        }
+        let spans = sql_highlight::tokenize_line(line);
+        render_line_spans(buf, y, text_area, pane.query_scroll_offset, &spans);
+    }
 
     // Position terminal cursor manually.
     let (cursor_row, cursor_col) = pane.query_cursor;
-    let cursor_y = padded.y + cursor_row as u16;
-    let cursor_x = if let Some(line) = pane.query_text.get(cursor_row) {
-        padded.x + sql_highlight::cursor_visual_x(line, cursor_col) as u16
-    } else {
-        padded.x
-    };
+    let cursor_y = text_area.y + cursor_row.saturating_sub(pane.query_row_offset) as u16;
+    let cursor_vx = pane
+        .query_text
+        .get(cursor_row)
+        .map_or(0, |line| sql_highlight::cursor_visual_x(line, cursor_col));
+    let cursor_x = text_area.x + cursor_vx.saturating_sub(pane.query_scroll_offset) as u16;
     frame.set_cursor_position((cursor_x, cursor_y));
 
     // ── Autocomplete popup ───────────────────────────────────────────────────
@@ -100,5 +144,86 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
                 .collect();
             frame.render_widget(Paragraph::new(lines), inner_popup);
         }
+    }
+}
+
+fn render_line_spans(
+    buf: &mut Buffer,
+    y: u16,
+    text_area: Rect,
+    scroll_offset: usize,
+    spans: &[ratatui::text::Span<'_>],
+) {
+    let mut x = text_area.x;
+    let max_x = text_area.x + text_area.width;
+    let mut accumulated_vx = 0usize;
+
+    for span in spans {
+        let span_text = &span.content;
+        let span_vx: usize = span_text
+            .chars()
+            .map(|c| UnicodeWidthChar::width(c).unwrap_or(1))
+            .sum();
+
+        // Skip spans completely before visible area
+        if accumulated_vx + span_vx <= scroll_offset {
+            accumulated_vx += span_vx;
+            continue;
+        }
+
+        // Stop if we've passed the visible area
+        if accumulated_vx >= scroll_offset + text_area.width as usize {
+            break;
+        }
+
+        // This span is at least partially visible
+        let span_start_vx = accumulated_vx;
+        let skip_vx = scroll_offset.saturating_sub(span_start_vx);
+        let take_vx = (scroll_offset + text_area.width as usize).saturating_sub(span_start_vx);
+        let take_vx = take_vx.min(span_vx);
+        let visible_vx = take_vx.saturating_sub(skip_vx);
+
+        if visible_vx == 0 {
+            accumulated_vx += span_vx;
+            continue;
+        }
+
+        // Find byte positions for the visible portion
+        let mut byte_start = 0usize;
+        let mut byte_end = 0usize;
+        let mut display_seen = 0usize;
+        for ch in span_text.chars() {
+            let ch_width = UnicodeWidthChar::width(ch).unwrap_or(1);
+            if display_seen == skip_vx {
+                byte_start = byte_end;
+            }
+            byte_end += ch.len_utf8();
+            display_seen += ch_width;
+            if display_seen >= take_vx {
+                break;
+            }
+        }
+        if display_seen <= skip_vx {
+            byte_start = span_text.len();
+        }
+
+        let visible_text = &span_text[byte_start..byte_end.min(span_text.len())];
+        let visible_width = visible_text
+            .chars()
+            .map(|c| UnicodeWidthChar::width(c).unwrap_or(1))
+            .sum::<usize>() as u16;
+        let draw_width = (max_x - x).min(visible_width);
+
+        if draw_width > 0 && x < max_x {
+            buf.set_span(
+                x,
+                y,
+                &Span::styled(visible_text, span.style),
+                draw_width,
+            );
+            x += draw_width;
+        }
+
+        accumulated_vx += span_vx;
     }
 }
