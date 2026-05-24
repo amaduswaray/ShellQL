@@ -3,7 +3,7 @@
 use crate::tui::state::pane_layout::{Pane, PaneId, PaneType};
 use ratatui::{
     Frame,
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders},
 };
@@ -104,9 +104,7 @@ fn pane_block(title: &str, focused: bool) -> Block<'_> {
     };
 
     let title_style = if focused {
-        Style::default()
-            .fg(Color::Blue)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(Color::Blue).bold()
     } else {
         Style::default().fg(Color::DarkGray)
     };
@@ -150,7 +148,7 @@ pub fn search_highlight_spans<'a>(text: &'a str, query: &str, base: Style) -> Ve
         }
         spans.push(Span::styled(
             &text[start_byte..end_byte],
-            base.fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            base.fg(Color::Yellow).bold(),
         ));
         if end_byte < text.len() {
             spans.push(Span::styled(&text[end_byte..], base));

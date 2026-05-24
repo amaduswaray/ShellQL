@@ -8,7 +8,7 @@ pub use overlays::{
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
     widgets::Paragraph,
 };
@@ -55,9 +55,7 @@ fn render_landing(frame: &mut Frame, area: Rect) {
         Line::from(""),
         Line::from(Span::styled(
             "ShellQL",
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Blue).bold(),
         ))
         .centered(),
         Line::from(Span::styled(
@@ -87,18 +85,11 @@ fn instruction_line(cmd: &str, desc: &str, max_cmd_len: usize) -> Line<'static> 
 
     Line::from(vec![
         Span::styled("type  ".to_string(), Style::default().fg(Color::White)),
-        Span::styled(
-            ":".to_string(),
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD),
-        ),
+        Span::styled(":".to_string(), Style::default().fg(Color::Blue).bold()),
         Span::styled(cmd.to_string(), Style::default().fg(Color::White)),
         Span::styled(
             "<Enter>".to_string(),
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Blue).bold(),
         ),
         Span::raw(" ".repeat(after_pad)),
         Span::styled(desc.to_string(), Style::default().fg(Color::White)),

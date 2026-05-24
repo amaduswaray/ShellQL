@@ -32,7 +32,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
         let line = match form.text_mode {
             TextMode::Normal => Line::from(Span::styled(
                 " NORMAL ",
-                Style::default().fg(Color::Blue).bold(),
+                Style::default().fg(Color::Magenta).bold(),
             )),
 
             TextMode::Insert => Line::from(Span::styled(
@@ -51,7 +51,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
     match state.mode {
         AppMode::Home => {
             spans.push(Span::styled(
-                "NORMAL",
+                " NORMAL ",
                 Style::default().fg(Color::Magenta).bold(),
             ));
         }
@@ -62,12 +62,14 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
 
                 let (mode_label, mode_color) = if let Some(pane) = active {
                     match pane.mode {
-                        TableMode::Normal => ("NORMAL", Color::Magenta),
-                        TableMode::VisualRow | TableMode::VisualColumn => ("VISUAL", Color::Yellow),
-                        TableMode::Insert => ("INSERT", Color::Green),
+                        TableMode::Normal => (" NORMAL ", Color::Magenta),
+                        TableMode::VisualRow | TableMode::VisualColumn => {
+                            (" VISUAL ", Color::Yellow)
+                        }
+                        TableMode::Insert => (" INSERT ", Color::Green),
                     }
                 } else {
-                    ("NORMAL", Color::Magenta)
+                    (" NORMAL ", Color::Magenta)
                 };
 
                 spans.push(Span::styled(
@@ -155,7 +157,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
                 }
             } else {
                 spans.push(Span::styled(
-                    "NORMAL",
+                    " NORMAL ",
                     Style::default().fg(Color::Blue).bold(),
                 ));
             }
@@ -163,7 +165,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
     }
 
     // Assemble the right-side text (search/position info + connection name).
-    let conn_text = state.connection.as_ref().map(|c| format!("  {}", c.name));
+    let conn_text = state.connection.as_ref().map(|c| format!("  {} ", c.name));
     let right_width =
         right_text.chars().count() + conn_text.as_ref().map_or(0, |s| s.chars().count());
 

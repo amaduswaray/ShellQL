@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
     widgets::{
         Block, BorderType, Borders, Cell, Clear, Paragraph, Row, Scrollbar, ScrollbarOrientation,
@@ -302,11 +302,7 @@ pub fn render_connection_list(frame: &mut Frame, area: Rect, state: &AppState) {
 
     let table = Table::new(rows, widths)
         .column_spacing(1)
-        .row_highlight_style(
-            Style::default()
-                .bg(Color::Rgb(28, 42, 74))
-                .add_modifier(Modifier::BOLD),
-        );
+        .row_highlight_style(Style::default().bg(Color::Rgb(28, 42, 74)).bold());
 
     let mut table_state = TableState::default()
         .with_offset(offset)

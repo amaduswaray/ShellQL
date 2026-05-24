@@ -3,7 +3,7 @@ use crate::tui::state::pane_layout::Pane;
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
     widgets::Paragraph,
 };
@@ -24,9 +24,7 @@ pub fn render(
 
     lines.push(Line::from(Span::styled(
         "Tables",
-        Style::default()
-            .fg(Color::Blue)
-            .add_modifier(Modifier::BOLD),
+        Style::default().fg(Color::Blue).bold(),
     )));
 
     let sep = "─".repeat(inner.width as usize);
@@ -58,11 +56,9 @@ pub fn render(
                 Style::default()
                     .bg(Color::Rgb(28, 42, 74))
                     .fg(Color::White)
-                    .add_modifier(Modifier::BOLD)
+                    .bold()
             } else if selected {
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().fg(Color::White).bold()
             } else {
                 Style::default().fg(Color::DarkGray)
             };

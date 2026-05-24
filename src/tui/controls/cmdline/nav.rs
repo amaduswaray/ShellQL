@@ -7,14 +7,23 @@ pub fn cmd_exit(state: &mut AppState) {
 }
 
 pub fn cmd_quit(state: &mut AppState, args: &[&str]) {
-    if let Some(ref tab) = state.active_tab() {
-        if tab.tree.pane_count() <= 1 {
-            state.should_quit = true;
-        } else {
-            super::pane::cmd_close(state, args);
+    let pane_count = state.active_tab().map(|tab| tab.tree.pane_count());
+
+    match pane_count {
+        Some(pane_count) => {
+            if state.tabs.len() <= 1 {
+                if pane_count <= 1 {
+                    state.should_quit = true;
+                } else {
+                    super::pane::cmd_close(state, args);
+                }
+            } else {
+                super::tab::cmd_tab_delete(state);
+            }
         }
-    } else {
-        state.should_quit = true;
+        None => {
+            state.should_quit = true;
+        }
     }
 }
 
@@ -48,7 +57,11 @@ pub fn cmd_disconnect(state: &mut AppState) {
 }
 
 pub fn cmd_delete(state: &mut AppState) {
-    if let Some(db) = selected_connection(state) {
+    if state.mode != AppMode::Home {
+        state
+            .cmdline
+            .set_error("Cannot delete when in active connection");
+    } else if let Some(db) = selected_connection(state) {
         let name = db.name.clone();
         state
             .cmdline

@@ -88,10 +88,7 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
                 .map(|(i, m)| {
                     let is_selected = i == selected;
                     let style = if is_selected {
-                        Style::default()
-                            .bg(Color::DarkGray)
-                            .fg(Color::White)
-                            .add_modifier(ratatui::style::Modifier::BOLD)
+                        Style::default().bg(Color::DarkGray).fg(Color::White).bold()
                     } else {
                         Style::default().fg(Color::White)
                     };

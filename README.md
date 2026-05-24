@@ -27,6 +27,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] Create trait that holds common functions for models(host, connection validator, connection builder, connection string extractor, etc)
 - [ ] Session manager - tmux lik sessionizer to change between connctions. Makes connections out of scope and harder to accidentaly change wrong dbs
 - [ ] Templates: Be able to save pane layouts for quick access of views you often use
+- [ ] Implement a picker
 
 
 
@@ -56,43 +57,38 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 - [x] Ensure that absolute paths for sqlite works. ensure sqlite and mysql works
 - [x] When writing :! you should be able to write one liners sql queruers, limited to 1 select that can be displayed/ one query. 
+- [x] change from :open to :show
 
-- [ ] Delete connection in dashboard should not be possible
-- [ ] query history popup pane
-- [ ] for border overflows and showing(add connection)
-- [ ] change from :open to :show
-
-- [ ] When i visual mode, the alternating lites get removed to have a better highlight
-- [ ] Selection highlight different color
-- [ ] line number column does not need alternating lines
 - [x] proper cmdline design
 
 - [x] Full screen pane logic - like tmux <leader>z, makes a pane fullscreen. effect reverted when toggling or attempting to change pane
 
-- [ ] Query view when wrong command shows result view
 - [x] :select command that reduces the rows that are shown
 - [x] :select, :where and :order should work in sequence. So all changes are persintant
-
-- [ ] do a find buffer picker like vim
-- [ ] :q when multiple tabs should not quit when pane in tab is 1. it should close the tab
-- [ ] Tab logic, as sessions/picker they need to swap between. No visual tabs
-
-
-- [ ] Complete the command line
-  - [ ] All commands like, new session, switch session, delete session, add connection, etc
-  - [ ] Tab completion for command line commands
-  - [ ] Scrollable cmdline completions
-
-- [ ] Be able to Delete when in connection list
 - [x] Auto complete for tables and commands
 - [x] Better navigation ergonomics: Using - to go back between views, or what not
+- [x] Selection highlight different color
+- [x] When in visual mode, the alternating lites get removed to have a better highlight
+- [x] line number column does not need alternating lines or underline
+- [x] Delete connection in dashboard should not be possible
+- [x] :q when multiple tabs should not quit when pane in tab is 1. it should close the tab
+- [ ] for border overflows and showing(add connection)
+- [ ] Fix deletion logic
+- [ ] Line number in query editor
+- [ ] Query view when wrong command shows result view
+- [ ] Be able to Delete when in connection list
+- [ ] Complete the command line
+  - [ ] Scrollable cmdline completions
+- [ ] Tests for the new sql functions
 
+
+- [ ] query history popup pane
 - [ ] Inline cell edits. Only for tableView. the queryresults is read only, and can only use / and ?
+- [ ] zsh Shell completions for the cli commands
+- [ ] add more posix compliant cli commands 
 - [ ] Proper vim commands
   - [ ] o and O for newline over and under, to add a new row
   - [ ] ciw to change in cell
   - [ ] rn to rename the cell value
   - [ ] i to enter insert mode and edit
 
-- [ ] zsh Shell completions for the cli commands
-- [ ] add more posix compliant 

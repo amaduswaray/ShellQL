@@ -7,7 +7,7 @@ use ratatui::{
     Frame,
     layout::Rect,
     prelude::Position,
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::Span,
     widgets::Paragraph,
 };
@@ -214,11 +214,9 @@ pub fn render_loaded(
             Style::default()
                 .bg(Color::Rgb(28, 42, 74))
                 .fg(Color::White)
-                .add_modifier(Modifier::BOLD)
+                .bold()
         } else {
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::Blue).bold()
         };
 
         let search_query = pane
@@ -315,7 +313,7 @@ pub fn render_loaded(
         });
 
         // Alternating row background — every odd row gets a subtle dark shade.
-        let alt_bg = if row_idx % 2 == 1 {
+        let alt_bg = if row_idx % 2 == 1 && !is_selected_row {
             Color::Rgb(30, 32, 42)
         } else {
             Color::Reset
@@ -323,23 +321,15 @@ pub fn render_loaded(
 
         let row_num_str = format!("{}", row_idx + 1);
         let row_num_style = if is_cursor_row && focused {
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+            Style::default().fg(Color::White).bold()
         } else if is_deleted_row {
-            Style::default()
-                .fg(Color::Red)
-                .add_modifier(Modifier::CROSSED_OUT)
+            Style::default().fg(Color::Red).crossed_out()
         } else if is_selected_row && focused {
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::White).bold()
         } else if is_selected_row {
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::White).bold()
         } else {
-            Style::default().fg(Color::DarkGray).bg(alt_bg)
+            Style::default().fg(Color::DarkGray)
         };
         let row_num_span = Span::styled(
             format!("{:>width$}", row_num_str, width = row_num_width as usize),
@@ -394,20 +384,15 @@ pub fn render_loaded(
                     })
             });
 
+            // Cursor and cell style
             let style = if is_selected && focused {
-                Style::default()
-                    .bg(Color::Rgb(28, 42, 74))
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().bg(Color::Yellow).fg(Color::Black).bold()
             } else if is_selected {
-                Style::default().bg(alt_bg).add_modifier(Modifier::BOLD)
+                Style::default().bg(alt_bg).bold()
             } else if is_modified {
-                Style::default().fg(Color::Black).bg(Color::Yellow)
+                Style::default().fg(Color::Black).bg(Color::LightGreen)
             } else if is_deleted_row {
-                Style::default()
-                    .bg(alt_bg)
-                    .fg(Color::Red)
-                    .add_modifier(Modifier::CROSSED_OUT)
+                Style::default().bg(alt_bg).fg(Color::Red).bold()
             } else {
                 Style::default().fg(Color::White).bg(alt_bg)
             };
