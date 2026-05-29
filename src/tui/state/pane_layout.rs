@@ -63,6 +63,7 @@ pub struct HistoryEntry {
     pub kind: PaneType,
     pub bound_table: Option<String>,
     pub bound_query_idx: Option<usize>,
+    pub table_list_selects_schema: bool,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -179,6 +180,8 @@ pub struct Pane {
     // ── TableList state ─────────────────────────────────────────────────────
     pub nav_cursor: usize,
     pub nav_offset: usize,
+    /// When true, selecting a table from TableList opens SchemaView instead of TableView.
+    pub table_list_selects_schema: bool,
 
     // ── TableView / SchemaView state ────────────────────────────────────────
     pub row_cursor: usize,
@@ -278,6 +281,7 @@ impl Pane {
             bound_table: None,
             nav_cursor: 0,
             nav_offset: 0,
+            table_list_selects_schema: false,
             row_cursor: 0,
             row_offset: 0,
             cursor_col: 0,
@@ -318,6 +322,7 @@ impl Pane {
                 kind,
                 bound_table: None,
                 bound_query_idx: None,
+                table_list_selects_schema: false,
             }],
             history_pos: 0,
         }
@@ -333,6 +338,7 @@ impl Pane {
             kind: self.kind.clone(),
             bound_table: self.bound_table.clone(),
             bound_query_idx: self.bound_query_idx,
+            table_list_selects_schema: self.table_list_selects_schema,
         };
         // Truncate forward history (everything after the current position).
         if self.history_pos + 1 < self.history.len() {
@@ -351,6 +357,7 @@ impl Pane {
             self.kind = entry.kind.clone();
             self.bound_table = entry.bound_table.clone();
             self.bound_query_idx = entry.bound_query_idx;
+            self.table_list_selects_schema = entry.table_list_selects_schema;
         }
     }
 
@@ -381,6 +388,7 @@ impl Pane {
         self.bound_table = None;
         self.nav_cursor = 0;
         self.nav_offset = 0;
+        self.table_list_selects_schema = false;
         self.row_cursor = 0;
         self.row_offset = 0;
         self.cursor_col = 0;
@@ -413,6 +421,7 @@ impl Pane {
     pub fn set_table_view(&mut self, table_name: String) {
         self.kind = PaneType::TableView;
         self.bound_table = Some(table_name);
+        self.table_list_selects_schema = false;
         self.row_cursor = 0;
         self.row_offset = 0;
         self.cursor_col = 0;
@@ -433,11 +442,15 @@ impl Pane {
     pub fn set_schema_view(&mut self, table_name: String) {
         self.kind = PaneType::SchemaView;
         self.bound_table = Some(table_name);
+        self.table_list_selects_schema = false;
+        self.nav_cursor = 0;
+        self.nav_offset = 0;
         self.push_history();
     }
 
     pub fn set_query_editor(&mut self) {
         self.kind = PaneType::QueryEditor;
+        self.table_list_selects_schema = false;
         self.query_text = vec![String::new()];
         self.query_cursor = (0, 0);
         self.query_scroll_offset = 0;
@@ -459,6 +472,7 @@ impl Pane {
 
     pub fn set_query_results(&mut self, idx: usize) {
         self.kind = PaneType::QueryResults;
+        self.table_list_selects_schema = false;
         self.bound_query_idx = Some(idx);
         self.push_history();
     }

@@ -54,6 +54,31 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] Fix tab/pane deletion
 - [x] Fix deletion logic - dd should prompt a deletion confirm tab
 - :schema or new :schema with no following param should open a table list, then you can select which table to open the schema for
+- [ ] fix schema bug
+```shell
+
+    Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
+                                                                                    Run with RUST_BACKTRACE=full to include source snippets.
+                        The application panicked (crashed).
+                                                           Message:  range start index 6 out of range for slice of length 4
+       Location: src/tui/ui/dashboard/panes/schema_view.rs:62
+
+                                                             Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
+                         Run with RUST_BACKTRACE=full to include source snippets.
+                                                                                 The application panicked (crashed).
+Message:  range start index 6 out of range for slice of length 4
+                                                                Location: src/tui/ui/dashboard/panes/schema_view.rs:62
+
+  Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
+                                                                                  Run with RUST_BACKTRACE=full to include source snippets.
+                      The application panicked (crashed).
+                                                         Message:  range start index 6 out of range for slice of length 4
+     Location: src/tui/ui/dashboard/panes/schema_view.rs:62
+
+                                                           Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
+                       Run with RUST_BACKTRACE=full to include source snippets.
+
+```
 - [x] for border overflows and showing(add connection)
 - [x] Proper vim commands
   - [x] o and O for newline over and under, to add a new row

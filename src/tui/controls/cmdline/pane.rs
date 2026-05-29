@@ -36,6 +36,8 @@ pub fn cmd_vnew(state: &mut AppState, args: &[&str]) {
         .as_ref()
         .map(|name| state.table_cache.contains_key(name));
 
+    let schema_picker = kind == crate::tui::state::PaneType::SchemaView && table_name.is_none();
+
     let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
@@ -61,10 +63,27 @@ pub fn cmd_vnew(state: &mut AppState, args: &[&str]) {
                             }
                         }
                         crate::tui::state::PaneType::SchemaView => {
-                            pane.set_schema_view(table);
+                            pane.set_schema_view(table.clone());
+                            if !cache_has.unwrap_or(false) {
+                                tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
+                                    table,
+                                    filter: None,
+                                    sort_col: None,
+                                    sort_desc: false,
+                                    selected_cols: None,
+                                });
+                                tab.loading = true;
+                                tab.error = None;
+                            }
                         }
                         _ => {}
                     }
+                }
+            } else if schema_picker {
+                if let Some(pane) = tab.tree.panes.get_mut(&id) {
+                    pane.reset_to_list();
+                    pane.table_list_selects_schema = true;
+                    pane.last_search = None;
                 }
             }
         }
@@ -94,6 +113,8 @@ pub fn cmd_hnew(state: &mut AppState, args: &[&str]) {
         .as_ref()
         .map(|name| state.table_cache.contains_key(name));
 
+    let schema_picker = kind == crate::tui::state::PaneType::SchemaView && table_name.is_none();
+
     let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
@@ -119,10 +140,27 @@ pub fn cmd_hnew(state: &mut AppState, args: &[&str]) {
                             }
                         }
                         crate::tui::state::PaneType::SchemaView => {
-                            pane.set_schema_view(table);
+                            pane.set_schema_view(table.clone());
+                            if !cache_has.unwrap_or(false) {
+                                tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
+                                    table,
+                                    filter: None,
+                                    sort_col: None,
+                                    sort_desc: false,
+                                    selected_cols: None,
+                                });
+                                tab.loading = true;
+                                tab.error = None;
+                            }
                         }
                         _ => {}
                     }
+                }
+            } else if schema_picker {
+                if let Some(pane) = tab.tree.panes.get_mut(&id) {
+                    pane.reset_to_list();
+                    pane.table_list_selects_schema = true;
+                    pane.last_search = None;
                 }
             }
         }
@@ -187,13 +225,10 @@ pub fn cmd_noh(state: &mut AppState) {
 }
 
 pub fn cmd_schema(state: &mut AppState, args: &[&str]) {
-    // If an argument is provided, use it; otherwise fall back to the
-    // active pane's bound table (useful when already viewing a table).
-    let table_name = args.first().map(|s| s.to_string()).or_else(|| {
-        state
-            .active_tab()
-            .and_then(|tab| tab.tree.active().and_then(|p| p.bound_table.clone()))
-    });
+    let table_name = args.first().map(|s| s.to_string());
+    let cache_has = table_name
+        .as_ref()
+        .map(|name| state.table_cache.contains_key(name));
 
     let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
@@ -202,11 +237,23 @@ pub fn cmd_schema(state: &mut AppState, args: &[&str]) {
 
     if let Some(pane) = tab.tree.active_mut() {
         if let Some(name) = table_name {
-            pane.set_schema_view(name);
+            pane.set_schema_view(name.clone());
+            pane.last_search = None;
+            if !cache_has.unwrap_or(false) {
+                tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
+                    table: name,
+                    filter: None,
+                    sort_col: None,
+                    sort_desc: false,
+                    selected_cols: None,
+                });
+                tab.loading = true;
+                tab.error = None;
+            }
         } else {
-            state
-                .cmdline
-                .set_error(":schema requires a table name (no bound table)");
+            pane.reset_to_list();
+            pane.table_list_selects_schema = true;
+            pane.last_search = None;
         }
     }
 }

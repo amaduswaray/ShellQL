@@ -55,11 +55,12 @@ pub fn render(
         return;
     }
 
-    let cursor = pane.nav_cursor;
-    let offset = pane.nav_offset;
     let viewport = (inner.height as usize / SCHEMA_CARD_HEIGHT).max(1);
+    let max_start = schema.len().saturating_sub(viewport);
+    let offset = pane.nav_offset.min(max_start);
     let end = (offset + viewport).min(schema.len());
     let visible = &schema[offset..end];
+    let cursor = pane.nav_cursor.min(schema.len().saturating_sub(1));
 
     let mut lines: Vec<Line> = Vec::new();
     let usable_w = inner.width.saturating_sub(2 * SCHEMA_PAD as u16) as usize;

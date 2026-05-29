@@ -301,9 +301,16 @@ pub fn enter(state: &mut AppState, tables: &[String]) {
     if let Some(pane) = tab.tree.active_mut() {
         if pane.kind == PaneType::TableList && !tab.loading {
             if let Some(name) = tables.get(pane.nav_cursor).cloned() {
-                // Convert the active pane to a TableView bound to this table.
-                pane.set_table_view(name.clone());
-                pane.last_search = None; // clear search highlight
+                let open_schema = pane.table_list_selects_schema;
+                if open_schema {
+                    pane.set_schema_view(name.clone());
+                    pane.last_search = None;
+                } else {
+                    // Convert the active pane to a TableView bound to this table.
+                    pane.set_table_view(name.clone());
+                    pane.last_search = None; // clear search highlight
+                }
+
                 // If not cached, trigger an async load.
                 if !state.table_cache.contains_key(&name) {
                     tab.pending_load = Some(crate::tui::state::tab::PendingQuery {
