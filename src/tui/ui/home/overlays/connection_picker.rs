@@ -46,5 +46,9 @@ pub fn render_connection_picker(frame: &mut Frame, area: Rect, state: &AppState)
         render_connection_list(frame, list_area, state);
     }
 
-    render_dismiss_hint(frame, hint_area, "j/k <nav>   ↵ <connect>   esc/q <close> ");
+    render_dismiss_hint(
+        frame,
+        hint_area,
+        "j/k <nav>   ↵ <connect>   dd <delete>   esc/q <close> ",
+    );
 }

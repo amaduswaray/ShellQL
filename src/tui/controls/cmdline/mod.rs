@@ -2,7 +2,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::tui::{
     AppMode, AppState, CommandLineMode, ConfirmAction, DASHBOARD_COMMANDS, HOME_COMMANDS,
-    compute_completions, ui::home::remove_selected,
+    compute_completions,
 };
 
 pub mod data;
@@ -90,7 +90,7 @@ fn execute_cmdline(state: &mut AppState) {
         CommandLineMode::Confirm(ConfirmAction::DeleteConnection(ref name)) => {
             if state.cmdline.input.to_lowercase() == "y" {
                 let _ = crate::connection::delete_connection(name.clone());
-                remove_selected(state);
+                remove_connection_by_name(state, name);
             }
             state.cmdline.reset();
         }
@@ -151,6 +151,24 @@ fn execute_cmdline(state: &mut AppState) {
 }
 
 /// Parse and dispatch a `:command` string with optional arguments.
+fn remove_connection_by_name(state: &mut AppState, name: &str) {
+    let Some(idx) = state.connections.iter().position(|db| db.name == name) else {
+        return;
+    };
+
+    state.connections.remove(idx);
+    if state.connections.is_empty() {
+        state.selected_connection = 0;
+        return;
+    }
+
+    if state.selected_connection > idx {
+        state.selected_connection -= 1;
+    } else if state.selected_connection >= state.connections.len() {
+        state.selected_connection = state.connections.len() - 1;
+    }
+}
+
 fn execute_command(cmd: &str, state: &mut AppState) {
     let parts: Vec<&str> = cmd.split_whitespace().collect();
     if parts.is_empty() {
@@ -200,7 +218,7 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "full" => nav::cmd_fullscreen(state),
 
         // Destructive actions
-        "d" | "delete" => nav::cmd_delete(state),
+        "d" | "delete" => nav::cmd_delete(state, args),
 
         "back" => nav::cmd_back(state),
         "forward" => nav::cmd_forward(state),

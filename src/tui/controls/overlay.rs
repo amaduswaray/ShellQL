@@ -57,6 +57,20 @@ pub async fn handle_overlay(event: KeyEvent, state: &mut AppState) -> color_eyre
                 state.pending_key = Some('g');
             }
         }
+        (Overlay::ConnectionPicker, KeyCode::Char('d')) => {
+            if state.pending_key == Some('d') {
+                if let Some(db) = selected_connection(state) {
+                    state
+                        .cmdline
+                        .open_confirm(crate::tui::ConfirmAction::DeleteConnection(db.name.clone()));
+                } else {
+                    state.cmdline.set_error("no connection selected");
+                }
+                state.pending_key = None;
+            } else {
+                state.pending_key = Some('d');
+            }
+        }
 
         // ── Connection picker — connect ────────────────────────────────────────
         (Overlay::ConnectionPicker, KeyCode::Enter) => {

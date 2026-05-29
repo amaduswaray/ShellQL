@@ -1,6 +1,4 @@
-use crate::tui::{
-    AddConnectionForm, AppMode, AppState, ConfirmAction, Overlay, ui::home::selected_connection,
-};
+use crate::tui::{AddConnectionForm, AppMode, AppState, ConfirmAction, Overlay};
 
 pub fn cmd_exit(state: &mut AppState) {
     state.should_quit = true;
@@ -47,18 +45,33 @@ pub fn cmd_disconnect(state: &mut AppState) {
     state.cmdline.reset();
 }
 
-pub fn cmd_delete(state: &mut AppState) {
-    if state.mode != AppMode::Home {
-        state
-            .cmdline
-            .set_error("Cannot delete when in active connection");
-    } else if let Some(db) = selected_connection(state) {
-        let name = db.name.clone();
+pub fn cmd_delete(state: &mut AppState, args: &[&str]) {
+    let name_input = args.join(" ").trim().to_string();
+    if name_input.is_empty() {
+        state.cmdline.set_error("usage: :delete <connection name>");
+        return;
+    }
+
+    let target = state
+        .connections
+        .iter()
+        .find(|db| db.name == name_input)
+        .or_else(|| {
+            state
+                .connections
+                .iter()
+                .find(|db| db.name.eq_ignore_ascii_case(&name_input))
+        })
+        .map(|db| db.name.clone());
+
+    if let Some(name) = target {
         state
             .cmdline
             .open_confirm(ConfirmAction::DeleteConnection(name));
     } else {
-        state.cmdline.set_error("no connection selected");
+        state
+            .cmdline
+            .set_error(format!("connection `{name_input}` not found"));
     }
 }
 

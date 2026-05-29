@@ -51,8 +51,8 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 ### TODOS TUI
 
-- [ ] Fix tab/pane deletion
-- [ ] Fix deletion logic - dd should prompt a deletion confirm tab
+- [x] Fix tab/pane deletion
+- [x] Fix deletion logic - dd should prompt a deletion confirm tab
 - [ ] for border overflows and showing(add connection)
 - [ ] Proper vim commands
   - [ ] o and O for newline over and under, to add a new row

@@ -10,8 +10,8 @@ pub const HOME_COMMANDS: &[(&str, &str)] = &[
     ("h", "help overlay"),
     ("help", "help overlay"),
     ("add", "add connection"),
-    ("d", "delete selected"),
-    ("delete", "delete selected"),
+    ("d", "delete <connection name>"),
+    ("delete", "delete <connection name>"),
     ("connect", "open connection picker"),
 ];
 
@@ -42,6 +42,8 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("back", "go back in pane history"),
     ("forward", "go forward in pane history"),
     ("disconnect", "disconnect and return home"),
+    ("d", "delete <connection name>"),
+    ("delete", "delete <connection name>"),
     ("tnew", "new tab"),
     ("tnext", "next tab"),
     ("tprev", "previous tab"),
