@@ -28,7 +28,7 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("show", "show table"),
     ("tables", "table list view"),
     ("noh", "clear search highlight"),
-    ("schema", "switch to schema view"),
+    ("schema", "schema view / picker"),
     ("sql", "switch to query editor"),
     ("query", "switch to query editor"),
     ("close", "close pane"),

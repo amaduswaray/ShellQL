@@ -94,6 +94,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
                         let active_pane = tab.tree.panes.get(&tab.tree.active_pane);
                         let type_name = active_pane.map_or("list", |p| match p.kind {
                             crate::tui::state::PaneType::TableList => "list",
+                            crate::tui::state::PaneType::SchemaPicker => "schema",
                             crate::tui::state::PaneType::TableView => "table",
                             crate::tui::state::PaneType::SchemaView => "schema",
                             crate::tui::state::PaneType::QueryEditor => "query",

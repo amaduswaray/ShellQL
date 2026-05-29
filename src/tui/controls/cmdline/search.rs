@@ -25,13 +25,15 @@ pub fn compute_live_search(direction: SearchDirection, state: &mut AppState) {
         vec![]
     } else {
         match kind {
-            crate::tui::state::PaneType::TableList => state
-                .tables
-                .iter()
-                .enumerate()
-                .filter(|(_, name)| name.to_lowercase().contains(&query_lower))
-                .map(|(i, _)| i)
-                .collect(),
+            crate::tui::state::PaneType::TableList | crate::tui::state::PaneType::SchemaPicker => {
+                state
+                    .tables
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, name)| name.to_lowercase().contains(&query_lower))
+                    .map(|(i, _)| i)
+                    .collect()
+            }
             crate::tui::state::PaneType::TableView => {
                 let Some(ref table_name) = bound_table else {
                     return;
@@ -107,7 +109,7 @@ pub fn commit_search(query: &str, direction: SearchDirection, state: &mut AppSta
     };
 
     match kind {
-        crate::tui::state::PaneType::TableList => {
+        crate::tui::state::PaneType::TableList | crate::tui::state::PaneType::SchemaPicker => {
             let matches: Vec<usize> = state
                 .tables
                 .iter()

@@ -25,7 +25,8 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState, direction: Search
                 } else {
                     // Determine which match the cursor would jump to.
                     let current_pos = match pane.kind {
-                        crate::tui::state::PaneType::TableList => pane.nav_cursor,
+                        crate::tui::state::PaneType::TableList
+                        | crate::tui::state::PaneType::SchemaPicker => pane.nav_cursor,
                         _ => pane.row_cursor,
                     };
                     let idx = match live.direction {

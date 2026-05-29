@@ -41,7 +41,7 @@ pub fn handle_ctrl(event: KeyEvent, state: &mut AppState, tables: &[String]) -> 
                     for _ in 0..viewport {
                         pane.row_prev();
                     }
-                } else if pane.kind == PaneType::TableList {
+                } else if pane.kind == PaneType::TableList || pane.kind == PaneType::SchemaPicker {
                     let viewport = pane.area.map_or(10, |a| (a.height / 2).max(1) as usize);
                     for _ in 0..viewport {
                         pane.nav_prev();
@@ -70,7 +70,7 @@ pub fn handle_ctrl(event: KeyEvent, state: &mut AppState, tables: &[String]) -> 
                     for _ in 0..viewport {
                         pane.row_next(bound);
                     }
-                } else if pane.kind == PaneType::TableList {
+                } else if pane.kind == PaneType::TableList || pane.kind == PaneType::SchemaPicker {
                     let viewport = pane.area.map_or(10, |a| (a.height / 2).max(1) as usize);
                     for _ in 0..viewport {
                         pane.nav_next(tables.len());
@@ -101,7 +101,7 @@ pub fn go_top(state: &mut AppState) {
     };
     if let Some(pane) = tab.tree.active_mut() {
         match pane.kind {
-            PaneType::TableList => pane.nav_top(),
+            PaneType::TableList | PaneType::SchemaPicker => pane.nav_top(),
             PaneType::TableView | PaneType::QueryResults => pane.row_top(),
             PaneType::SchemaView => pane.nav_top(),
             _ => {}
@@ -116,7 +116,7 @@ pub fn down(state: &mut AppState, tables: &[String]) {
     };
     if let Some(pane) = tab.tree.active_mut() {
         match pane.kind {
-            PaneType::TableList => pane.nav_next(tables.len()),
+            PaneType::TableList | PaneType::SchemaPicker => pane.nav_next(tables.len()),
             PaneType::TableView | PaneType::QueryResults => {
                 let loaded_rows = pane_data(&state.table_cache, &tab.query_results, pane)
                     .map_or(0, |(_, rows, _)| rows.len());
@@ -148,7 +148,7 @@ pub fn up(state: &mut AppState) {
     };
     if let Some(pane) = tab.tree.active_mut() {
         match pane.kind {
-            PaneType::TableList => pane.nav_prev(),
+            PaneType::TableList | PaneType::SchemaPicker => pane.nav_prev(),
             PaneType::TableView | PaneType::QueryResults => {
                 let loaded_rows = pane_data(&state.table_cache, &tab.query_results, pane)
                     .map_or(0, |(_, rows, _)| rows.len());
@@ -212,7 +212,7 @@ pub fn bottom(state: &mut AppState, tables: &[String]) {
     };
     if let Some(pane) = tab.tree.active_mut() {
         match pane.kind {
-            PaneType::TableList => pane.nav_bottom(tables.len()),
+            PaneType::TableList | PaneType::SchemaPicker => pane.nav_bottom(tables.len()),
             PaneType::TableView | PaneType::QueryResults => {
                 let loaded_rows = pane_data(&state.table_cache, &tab.query_results, pane)
                     .map_or(0, |(_, rows, _)| rows.len());
@@ -299,10 +299,10 @@ pub fn enter(state: &mut AppState, tables: &[String]) {
         return;
     };
     if let Some(pane) = tab.tree.active_mut() {
-        if pane.kind == PaneType::TableList && !tab.loading {
+        if (pane.kind == PaneType::TableList || pane.kind == PaneType::SchemaPicker) && !tab.loading
+        {
             if let Some(name) = tables.get(pane.nav_cursor).cloned() {
-                let open_schema = pane.table_list_selects_schema;
-                if open_schema {
+                if pane.kind == PaneType::SchemaPicker {
                     pane.set_schema_view(name.clone());
                     pane.last_search = None;
                 } else {

@@ -36,14 +36,18 @@ pub fn cmd_vnew(state: &mut AppState, args: &[&str]) {
         .as_ref()
         .map(|name| state.table_cache.contains_key(name));
 
-    let schema_picker = kind == crate::tui::state::PaneType::SchemaView && table_name.is_none();
+    let split_kind = if kind == crate::tui::state::PaneType::SchemaView && table_name.is_none() {
+        crate::tui::state::PaneType::SchemaPicker
+    } else {
+        kind
+    };
 
     let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
-    match tab.tree.split_active_v(kind) {
+    match tab.tree.split_active_v(split_kind) {
         Ok(id) => {
             if let Some(table) = table_name {
                 if let Some(pane) = tab.tree.panes.get_mut(&id) {
@@ -78,12 +82,6 @@ pub fn cmd_vnew(state: &mut AppState, args: &[&str]) {
                         }
                         _ => {}
                     }
-                }
-            } else if schema_picker {
-                if let Some(pane) = tab.tree.panes.get_mut(&id) {
-                    pane.reset_to_list();
-                    pane.table_list_selects_schema = true;
-                    pane.last_search = None;
                 }
             }
         }
@@ -113,14 +111,18 @@ pub fn cmd_hnew(state: &mut AppState, args: &[&str]) {
         .as_ref()
         .map(|name| state.table_cache.contains_key(name));
 
-    let schema_picker = kind == crate::tui::state::PaneType::SchemaView && table_name.is_none();
+    let split_kind = if kind == crate::tui::state::PaneType::SchemaView && table_name.is_none() {
+        crate::tui::state::PaneType::SchemaPicker
+    } else {
+        kind
+    };
 
     let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
     };
 
-    match tab.tree.split_active_h(kind) {
+    match tab.tree.split_active_h(split_kind) {
         Ok(id) => {
             if let Some(table) = table_name {
                 if let Some(pane) = tab.tree.panes.get_mut(&id) {
@@ -155,12 +157,6 @@ pub fn cmd_hnew(state: &mut AppState, args: &[&str]) {
                         }
                         _ => {}
                     }
-                }
-            } else if schema_picker {
-                if let Some(pane) = tab.tree.panes.get_mut(&id) {
-                    pane.reset_to_list();
-                    pane.table_list_selects_schema = true;
-                    pane.last_search = None;
                 }
             }
         }
@@ -251,8 +247,7 @@ pub fn cmd_schema(state: &mut AppState, args: &[&str]) {
                 tab.error = None;
             }
         } else {
-            pane.reset_to_list();
-            pane.table_list_selects_schema = true;
+            pane.set_schema_picker();
             pane.last_search = None;
         }
     }

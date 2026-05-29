@@ -128,7 +128,7 @@ impl Tab {
     /// Signal that the currently selected table in the active list pane should be loaded.
     pub fn request_load(&mut self, tables: &[String]) {
         if let Some(pane) = self.tree.active() {
-            if pane.kind == PaneType::TableList {
+            if pane.kind == PaneType::TableList || pane.kind == PaneType::SchemaPicker {
                 if let Some(name) = tables.get(pane.nav_cursor) {
                     self.pending_load = Some(PendingQuery {
                         table: name.clone(),

@@ -67,6 +67,10 @@ fn sync_pane_scroll(tab: &mut crate::tui::state::Tab, _area: Rect) {
                 let inner_h = pane_area.height.saturating_sub(2 + 3).max(1) as usize;
                 pane.sync_nav_offset(inner_h);
             }
+            crate::tui::state::PaneType::SchemaPicker => {
+                let inner_h = pane_area.height.saturating_sub(2).max(1) as usize;
+                pane.sync_nav_offset(inner_h);
+            }
             crate::tui::state::PaneType::TableView | crate::tui::state::PaneType::QueryResults => {
                 let viewport = pane_area.height.saturating_sub(2).saturating_sub(3).max(1) as usize;
                 pane.sync_row_offset(viewport);

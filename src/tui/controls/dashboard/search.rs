@@ -18,7 +18,9 @@ pub fn next(state: &mut AppState) {
                     }
                 }
                 match pane.kind {
-                    PaneType::TableList => pane.nav_cursor = search.matches[search.current_idx],
+                    PaneType::TableList | PaneType::SchemaPicker => {
+                        pane.nav_cursor = search.matches[search.current_idx]
+                    }
                     PaneType::TableView | PaneType::QueryResults => {
                         pane.row_cursor = search.matches[search.current_idx]
                     }
@@ -47,7 +49,9 @@ pub fn prev(state: &mut AppState) {
                     }
                 }
                 match pane.kind {
-                    PaneType::TableList => pane.nav_cursor = search.matches[search.current_idx],
+                    PaneType::TableList | PaneType::SchemaPicker => {
+                        pane.nav_cursor = search.matches[search.current_idx]
+                    }
                     PaneType::TableView | PaneType::QueryResults => {
                         pane.row_cursor = search.matches[search.current_idx]
                     }

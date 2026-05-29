@@ -10,6 +10,7 @@ use ratatui::{
 
 pub mod query_editor;
 pub mod query_results;
+pub mod schema_picker;
 pub mod schema_view;
 pub mod table_list;
 pub mod table_view;
@@ -39,6 +40,7 @@ pub fn render_pane(
 
     match pane.kind {
         PaneType::TableList => table_list::render(frame, area, pane, state, focused),
+        PaneType::SchemaPicker => schema_picker::render(frame, area, pane, state, focused),
         PaneType::TableView => table_view::render(frame, area, pane, state, focused),
         PaneType::SchemaView => schema_view::render(frame, area, pane, state, focused),
         PaneType::QueryEditor => query_editor::render(frame, area, pane, focused),
@@ -51,6 +53,7 @@ pub fn render_pane(
 fn make_title(pane: &Pane) -> String {
     match pane.kind {
         PaneType::TableList => format!(" {} ", pane.display_id),
+        PaneType::SchemaPicker => format!(" {}: Schema ", pane.display_id),
         PaneType::TableView => {
             if let Some(ref table) = pane.bound_table {
                 let dirty = !pane.pending_updates.is_empty()
