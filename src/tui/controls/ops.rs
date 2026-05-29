@@ -102,6 +102,20 @@ async fn run_pending_commit(state: &mut AppState) -> color_eyre::Result<()> {
         }
 
         if success {
+            for insert in &commit.inserts {
+                match crate::connection::insert_row(&pool, &table, &insert.cols, &insert.vals).await
+                {
+                    Ok(_) => {}
+                    Err(e) => {
+                        success = false;
+                        err_msg = Some(format!("insert failed: {e}"));
+                        break;
+                    }
+                }
+            }
+        }
+
+        if success {
             match tokio::try_join!(
                 crate::connection::table_schema(&pool, &table),
                 crate::connection::table_rows(&pool, &table, 200, 0),

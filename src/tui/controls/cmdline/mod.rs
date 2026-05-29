@@ -120,6 +120,7 @@ fn execute_cmdline(state: &mut AppState) {
         CommandLineMode::CellEdit { row, col, .. } => {
             let new_value = state.cmdline.input.trim().to_string();
             state.cmdline.reset();
+
             let table_name = state
                 .active_tab_mut()
                 .and_then(|tab| tab.tree.active_mut())
@@ -130,17 +131,35 @@ fn execute_cmdline(state: &mut AppState) {
                     .table_cache
                     .get(table_name)
                     .map(|l| (l.rows.len(), l.headers.len()));
-                if let Some((row_count, col_count)) = bounds {
-                    if row < row_count && col < col_count {
-                        let Some(tab) = state.active_tab_mut() else {
-                            return;
-                        };
-                        let Some(pane) = tab.tree.active_mut() else {
-                            return;
-                        };
-                        pane.pending_updates
-                            .retain(|(r, c, _)| !(*r == row && *c == col));
-                        pane.pending_updates.push((row, col, new_value));
+                if let Some((loaded_row_count, col_count)) = bounds {
+                    if col >= col_count {
+                        return;
+                    }
+
+                    let Some(tab) = state.active_tab_mut() else {
+                        return;
+                    };
+                    let Some(pane) = tab.tree.active_mut() else {
+                        return;
+                    };
+
+                    match pane.display_row_ref(loaded_row_count, row) {
+                        Some(crate::tui::state::pane_layout::DisplayRowRef::Existing(real_row)) => {
+                            pane.pending_updates
+                                .retain(|(r, c, _)| !(*r == real_row && *c == col));
+                            pane.pending_updates.push((real_row, col, new_value));
+                        }
+                        Some(crate::tui::state::pane_layout::DisplayRowRef::PendingInsert(
+                            insert_idx,
+                        )) => {
+                            if let Some(staged) = pane.pending_inserts.get_mut(insert_idx) {
+                                if staged.values.len() <= col {
+                                    staged.values.resize(col + 1, String::new());
+                                }
+                                staged.values[col] = new_value;
+                            }
+                        }
+                        None => {}
                     }
                 }
             }

@@ -53,7 +53,9 @@ fn make_title(pane: &Pane) -> String {
         PaneType::TableList => format!(" {} ", pane.display_id),
         PaneType::TableView => {
             if let Some(ref table) = pane.bound_table {
-                let dirty = !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty();
+                let dirty = !pane.pending_updates.is_empty()
+                    || !pane.pending_deletes.is_empty()
+                    || !pane.pending_inserts.is_empty();
                 let filtered = pane.filter.is_some();
                 let sorted = pane.sort_col.is_some();
                 let mut tags = String::new();

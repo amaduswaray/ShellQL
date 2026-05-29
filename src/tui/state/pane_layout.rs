@@ -142,6 +142,22 @@ pub struct QueryEditorSnapshot {
     pub cursor: (usize, usize),
 }
 
+/// A staged INSERT row in TableView.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingInsertRow {
+    /// Display-row index where this row is inserted.
+    pub position: usize,
+    /// Per-column values aligned with loaded table headers.
+    pub values: Vec<String>,
+}
+
+/// Maps a display row in TableView to either a loaded row or a staged insert.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisplayRowRef {
+    Existing(usize),
+    PendingInsert(usize),
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Pane state
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -187,6 +203,10 @@ pub struct Pane {
     // ── Staged row deletes (pane-local) ─────────────────────────────────────
     /// PK values of rows marked for deletion.
     pub pending_deletes: Vec<String>,
+
+    // ── Staged row inserts (pane-local) ──────────────────────────────────────
+    /// New rows staged for insertion at display positions.
+    pub pending_inserts: Vec<PendingInsertRow>,
 
     // ── Filter / sort (pane-local) ──────────────────────────────────────────
     pub filter: Option<String>,
@@ -268,6 +288,7 @@ impl Pane {
             visual_anchor: None,
             pending_updates: Vec::new(),
             pending_deletes: Vec::new(),
+            pending_inserts: Vec::new(),
             filter: None,
             sort_col: None,
             sort_desc: false,
@@ -369,6 +390,7 @@ impl Pane {
         self.live_search = None;
         self.pending_updates.clear();
         self.pending_deletes.clear();
+        self.pending_inserts.clear();
         self.filter = None;
         self.sort_col = None;
         self.sort_desc = false;
@@ -401,6 +423,7 @@ impl Pane {
         self.visual_anchor = None;
         self.pending_updates.clear();
         self.pending_deletes.clear();
+        self.pending_inserts.clear();
         self.filter = None;
         self.sort_col = None;
         self.sort_desc = false;
@@ -438,6 +461,83 @@ impl Pane {
         self.kind = PaneType::QueryResults;
         self.bound_query_idx = Some(idx);
         self.push_history();
+    }
+
+    // ── Table display-row helpers ───────────────────────────────────────────
+    pub fn total_table_rows(&self, loaded_row_count: usize) -> usize {
+        loaded_row_count + self.pending_inserts.len()
+    }
+
+    pub fn display_row_ref(
+        &self,
+        loaded_row_count: usize,
+        display_row: usize,
+    ) -> Option<DisplayRowRef> {
+        let total = self.total_table_rows(loaded_row_count);
+        if display_row >= total {
+            return None;
+        }
+
+        let mut inserts: Vec<(usize, usize)> = self
+            .pending_inserts
+            .iter()
+            .enumerate()
+            .map(|(idx, row)| (row.position, idx))
+            .collect();
+        inserts.sort_unstable_by_key(|(pos, _)| *pos);
+
+        let mut inserted_before = 0usize;
+        for (pos, idx) in inserts {
+            if pos == display_row {
+                return Some(DisplayRowRef::PendingInsert(idx));
+            }
+            if pos < display_row {
+                inserted_before += 1;
+            } else {
+                break;
+            }
+        }
+
+        let loaded_idx = display_row.saturating_sub(inserted_before);
+        if loaded_idx < loaded_row_count {
+            Some(DisplayRowRef::Existing(loaded_idx))
+        } else {
+            None
+        }
+    }
+
+    /// Stage a new insert row at `display_index` and return its insert index.
+    pub fn stage_insert_row(&mut self, display_index: usize, col_count: usize) -> usize {
+        for row in &mut self.pending_inserts {
+            if row.position >= display_index {
+                row.position += 1;
+            }
+        }
+
+        self.pending_inserts.push(PendingInsertRow {
+            position: display_index,
+            values: vec![String::new(); col_count],
+        });
+        self.pending_inserts.sort_unstable_by_key(|r| r.position);
+
+        self.pending_inserts
+            .iter()
+            .position(|r| r.position == display_index)
+            .unwrap_or_else(|| self.pending_inserts.len().saturating_sub(1))
+    }
+
+    /// Remove a staged insert row by insert index.
+    pub fn remove_pending_insert(&mut self, insert_idx: usize) {
+        if insert_idx >= self.pending_inserts.len() {
+            return;
+        }
+        let removed_pos = self.pending_inserts[insert_idx].position;
+        self.pending_inserts.remove(insert_idx);
+        for row in &mut self.pending_inserts {
+            if row.position > removed_pos {
+                row.position = row.position.saturating_sub(1);
+            }
+        }
     }
 
     // ── Row navigation ──────────────────────────────────────────────────────

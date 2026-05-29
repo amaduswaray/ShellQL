@@ -15,7 +15,16 @@ pub fn render(frame: &mut Frame, area: Rect, action: &ConfirmAction, input: &str
             table,
             update_count,
             delete_count,
-        } => render_commit(frame, area, table, *update_count, *delete_count, input),
+            insert_count,
+        } => render_commit(
+            frame,
+            area,
+            table,
+            *update_count,
+            *delete_count,
+            *insert_count,
+            input,
+        ),
     }
 }
 
@@ -50,6 +59,7 @@ fn render_commit(
     table: &str,
     update_count: usize,
     delete_count: usize,
+    insert_count: usize,
     input: &str,
 ) {
     let mut parts = vec![Span::styled("Commit ", Style::default().fg(Color::Yellow))];
@@ -69,6 +79,15 @@ fn render_commit(
                 if delete_count == 1 { "" } else { "s" }
             ),
             Style::default().fg(Color::Red).bold(),
+        ));
+    }
+    if insert_count > 0 {
+        parts.push(Span::styled(
+            format!(
+                "{insert_count} insertion{} ",
+                if insert_count == 1 { "" } else { "s" }
+            ),
+            Style::default().fg(Color::Green).bold(),
         ));
     }
     parts.push(Span::styled(

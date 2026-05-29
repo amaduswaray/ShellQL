@@ -17,7 +17,10 @@ pub fn cmd_where(state: &mut AppState, args: &[&str]) {
             return;
         }
 
-        if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
+        if !pane.pending_updates.is_empty()
+            || !pane.pending_deletes.is_empty()
+            || !pane.pending_inserts.is_empty()
+        {
             state
                 .cmdline
                 .set_error("cannot filter with pending changes; :w or u to clear");
@@ -87,7 +90,10 @@ pub fn cmd_order(state: &mut AppState, args: &[&str]) {
             return;
         }
 
-        if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
+        if !pane.pending_updates.is_empty()
+            || !pane.pending_deletes.is_empty()
+            || !pane.pending_inserts.is_empty()
+        {
             state
                 .cmdline
                 .set_error("cannot sort with pending changes; :w or u to clear");
@@ -168,7 +174,10 @@ pub fn cmd_select(state: &mut AppState, args: &[&str]) {
             return;
         }
 
-        if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
+        if !pane.pending_updates.is_empty()
+            || !pane.pending_deletes.is_empty()
+            || !pane.pending_inserts.is_empty()
+        {
             state
                 .cmdline
                 .set_error("cannot select columns with pending changes; :w or u to clear");
@@ -253,7 +262,10 @@ pub fn cmd_reset(state: &mut AppState) {
             return;
         }
 
-        if !pane.pending_updates.is_empty() || !pane.pending_deletes.is_empty() {
+        if !pane.pending_updates.is_empty()
+            || !pane.pending_deletes.is_empty()
+            || !pane.pending_inserts.is_empty()
+        {
             state
                 .cmdline
                 .set_error("cannot reset with pending changes; :w or u to clear");
@@ -330,7 +342,10 @@ pub fn cmd_write(state: &mut AppState, _args: &[&str]) {
         return;
     }
 
-    if pane.pending_updates.is_empty() && pane.pending_deletes.is_empty() {
+    if pane.pending_updates.is_empty()
+        && pane.pending_deletes.is_empty()
+        && pane.pending_inserts.is_empty()
+    {
         state.cmdline.set_error("no pending changes");
         return;
     }
@@ -345,6 +360,7 @@ pub fn cmd_write(state: &mut AppState, _args: &[&str]) {
 
     let update_count = pane.pending_updates.len();
     let delete_count = pane.pending_deletes.len();
+    let insert_count = pane.pending_inserts.len();
 
     // If there are deletes, ask for confirmation. Otherwise commit immediately.
     if delete_count > 0 {
@@ -354,6 +370,7 @@ pub fn cmd_write(state: &mut AppState, _args: &[&str]) {
                 table: table_name,
                 update_count,
                 delete_count,
+                insert_count,
             });
         return;
     }
@@ -363,7 +380,7 @@ pub fn cmd_write(state: &mut AppState, _args: &[&str]) {
 
 /// Build a PendingCommit from the active pane's staged changes and queue it.
 pub fn execute_pending_commit(state: &mut AppState) {
-    let (active_id, table_name, pending_updates, pending_deletes) = {
+    let (active_id, table_name, pending_updates, pending_deletes, mut pending_inserts) = {
         let Some(tab) = state.active_tab_mut() else {
             return;
         };
@@ -372,7 +389,10 @@ pub fn execute_pending_commit(state: &mut AppState) {
             return;
         };
 
-        if pane.pending_updates.is_empty() && pane.pending_deletes.is_empty() {
+        if pane.pending_updates.is_empty()
+            && pane.pending_deletes.is_empty()
+            && pane.pending_inserts.is_empty()
+        {
             return;
         }
 
@@ -384,6 +404,7 @@ pub fn execute_pending_commit(state: &mut AppState) {
             table_name.clone(),
             pane.pending_updates.clone(),
             pane.pending_deletes.clone(),
+            pane.pending_inserts.clone(),
         )
     };
 
@@ -391,37 +412,108 @@ pub fn execute_pending_commit(state: &mut AppState) {
         return;
     };
 
-    let pk_col = loaded.schema.iter().find(|c| c.is_primary_key);
-    let Some(pk_col) = pk_col else {
-        state.cmdline.set_error("no primary key found for table");
-        return;
-    };
+    let needs_pk = !pending_updates.is_empty() || !pending_deletes.is_empty();
 
-    let pk_idx = loaded
-        .schema
-        .iter()
-        .position(|c| c.is_primary_key)
-        .unwrap_or(0);
-
+    let mut pk_col_name = String::new();
     let mut updates = Vec::new();
-    for (row, col, new_val) in &pending_updates {
-        if *row < loaded.rows.len() && *col < loaded.headers.len() {
-            let pk_val = loaded.rows[*row][pk_idx].clone();
-            let target_col = loaded.headers[*col].clone();
-            updates.push((pk_val, target_col, new_val.clone()));
+    let mut deletes = Vec::new();
+
+    if needs_pk {
+        let Some(pk_col) = loaded.schema.iter().find(|c| c.is_primary_key) else {
+            state.cmdline.set_error("no primary key found for table");
+            return;
+        };
+        let Some(pk_idx) = loaded.schema.iter().position(|c| c.is_primary_key) else {
+            state.cmdline.set_error("no primary key found for table");
+            return;
+        };
+
+        pk_col_name = pk_col.name.clone();
+
+        for (row, col, new_val) in &pending_updates {
+            if *row < loaded.rows.len() && *col < loaded.headers.len() {
+                let pk_val = loaded.rows[*row][pk_idx].clone();
+                let target_col = loaded.headers[*col].clone();
+                updates.push((pk_val, target_col, new_val.clone()));
+            }
         }
+
+        deletes = pending_deletes;
     }
 
-    let deletes = pending_deletes;
+    let header_idx: std::collections::HashMap<&str, usize> = loaded
+        .headers
+        .iter()
+        .enumerate()
+        .map(|(i, h)| (h.as_str(), i))
+        .collect();
+
+    pending_inserts.sort_unstable_by_key(|r| r.position);
+
+    let mut inserts = Vec::new();
+    for (insert_order, staged) in pending_inserts.iter().enumerate() {
+        let mut missing_required = Vec::new();
+        for col in &loaded.schema {
+            if !is_required_insert_column(col) {
+                continue;
+            }
+            match header_idx.get(col.name.as_str()).copied() {
+                Some(col_idx) => {
+                    let val = staged
+                        .values
+                        .get(col_idx)
+                        .map(|s| s.trim())
+                        .unwrap_or_default();
+                    if val.is_empty() {
+                        missing_required.push(col.name.clone());
+                    }
+                }
+                None => missing_required.push(col.name.clone()),
+            }
+        }
+
+        if !missing_required.is_empty() {
+            state.cmdline.set_error(format!(
+                "insert row {} missing required values: {}",
+                insert_order + 1,
+                missing_required.join(", ")
+            ));
+            return;
+        }
+
+        let mut cols = Vec::new();
+        let mut vals = Vec::new();
+        for (col_idx, col_name) in loaded.headers.iter().enumerate() {
+            let val = staged
+                .values
+                .get(col_idx)
+                .map(|s| s.trim())
+                .unwrap_or_default();
+            if !val.is_empty() {
+                cols.push(col_name.clone());
+                vals.push(val.to_string());
+            }
+        }
+
+        if cols.is_empty() {
+            state
+                .cmdline
+                .set_error(format!("insert row {} has no values", insert_order + 1));
+            return;
+        }
+
+        inserts.push(crate::tui::state::tab::PendingInsert { cols, vals });
+    }
 
     let Some(tab) = state.active_tab_mut() else {
         return;
     };
     tab.pending_commit = Some(crate::tui::state::tab::PendingCommit {
         table: table_name,
-        pk_col: pk_col.name.clone(),
+        pk_col: pk_col_name,
         updates,
         deletes,
+        inserts,
     });
     tab.loading = true;
     tab.error = None;
@@ -430,5 +522,13 @@ pub fn execute_pending_commit(state: &mut AppState) {
     if let Some(pane) = tab.tree.panes.get_mut(&active_id) {
         pane.pending_updates.clear();
         pane.pending_deletes.clear();
+        pane.pending_inserts.clear();
     }
+}
+
+fn is_required_insert_column(col: &crate::connection::ColumnInfo) -> bool {
+    if col.nullable || col.default_value.is_some() {
+        return false;
+    }
+    true
 }

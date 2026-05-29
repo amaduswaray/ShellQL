@@ -59,8 +59,13 @@ pub fn handle_ctrl(event: KeyEvent, state: &mut AppState, tables: &[String]) -> 
             // Half-page scroll down
             if let Some(pane) = tab.tree.active_mut() {
                 if pane.kind == PaneType::TableView || pane.kind == PaneType::QueryResults {
-                    let bound = pane_data(&state.table_cache, &tab.query_results, pane)
+                    let loaded_rows = pane_data(&state.table_cache, &tab.query_results, pane)
                         .map_or(0, |(_, rows, _)| rows.len());
+                    let bound = if pane.kind == PaneType::TableView {
+                        pane.total_table_rows(loaded_rows)
+                    } else {
+                        loaded_rows
+                    };
                     let viewport = pane.area.map_or(10, |a| (a.height / 2).max(1) as usize);
                     for _ in 0..viewport {
                         pane.row_next(bound);
@@ -113,8 +118,13 @@ pub fn down(state: &mut AppState, tables: &[String]) {
         match pane.kind {
             PaneType::TableList => pane.nav_next(tables.len()),
             PaneType::TableView | PaneType::QueryResults => {
-                let bound = pane_data(&state.table_cache, &tab.query_results, pane)
+                let loaded_rows = pane_data(&state.table_cache, &tab.query_results, pane)
                     .map_or(0, |(_, rows, _)| rows.len());
+                let bound = if pane.kind == PaneType::TableView {
+                    pane.total_table_rows(loaded_rows)
+                } else {
+                    loaded_rows
+                };
                 pane.row_next(bound);
             }
             PaneType::SchemaView => {
@@ -140,8 +150,13 @@ pub fn up(state: &mut AppState) {
         match pane.kind {
             PaneType::TableList => pane.nav_prev(),
             PaneType::TableView | PaneType::QueryResults => {
-                let bound = pane_data(&state.table_cache, &tab.query_results, pane)
+                let loaded_rows = pane_data(&state.table_cache, &tab.query_results, pane)
                     .map_or(0, |(_, rows, _)| rows.len());
+                let bound = if pane.kind == PaneType::TableView {
+                    pane.total_table_rows(loaded_rows)
+                } else {
+                    loaded_rows
+                };
                 if bound > 0 {
                     pane.row_prev();
                 }
@@ -199,8 +214,13 @@ pub fn bottom(state: &mut AppState, tables: &[String]) {
         match pane.kind {
             PaneType::TableList => pane.nav_bottom(tables.len()),
             PaneType::TableView | PaneType::QueryResults => {
-                let bound = pane_data(&state.table_cache, &tab.query_results, pane)
+                let loaded_rows = pane_data(&state.table_cache, &tab.query_results, pane)
                     .map_or(0, |(_, rows, _)| rows.len());
+                let bound = if pane.kind == PaneType::TableView {
+                    pane.total_table_rows(loaded_rows)
+                } else {
+                    loaded_rows
+                };
                 pane.row_bottom(bound);
             }
             PaneType::SchemaView => {

@@ -2,7 +2,10 @@ use super::{
     EDGE_PADDING, MAX_COLUMN_WIDTH_FRACTION, NUM_SPACES_BETWEEN_COLUMNS, ROW_NUMBER_PADDING,
     make_title, pane_block, search_highlight_spans,
 };
-use crate::tui::state::{TableMode, pane_layout::Pane};
+use crate::tui::state::{
+    TableMode,
+    pane_layout::{DisplayRowRef, Pane, PaneType},
+};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -100,7 +103,13 @@ pub fn render_loaded(
         return;
     }
 
-    let max_row_num = loaded.rows.len().max(1);
+    let is_table_view = pane.kind == PaneType::TableView;
+    let total_rows = if is_table_view {
+        pane.total_table_rows(loaded.rows.len())
+    } else {
+        loaded.rows.len()
+    };
+    let max_row_num = total_rows.max(1);
     let row_num_width = format!("{}", max_row_num).len() as u16;
     let gutter_width = row_num_width + 2 * ROW_NUMBER_PADDING + 1;
 
@@ -121,13 +130,20 @@ pub fn render_loaded(
                     w = w.max(cell.len() as u16);
                 }
             }
+            if is_table_view {
+                for staged in &pane.pending_inserts {
+                    if let Some(cell) = staged.values.get(col_idx) {
+                        w = w.max(cell.len() as u16);
+                    }
+                }
+            }
             w = w.min(max_single_width);
             w + NUM_SPACES_BETWEEN_COLUMNS
         })
         .collect();
 
     let mut col_offset = pane.col_offset.min(loaded.headers.len().saturating_sub(1));
-    let cursor_col = pane.cursor_col;
+    let cursor_col = pane.cursor_col.min(loaded.headers.len().saturating_sub(1));
 
     loop {
         let mut visible_width = 0;
@@ -278,54 +294,86 @@ pub fn render_loaded(
     }
 
     let visible_rows = (area.y + area.height).saturating_sub(y_first_record) as usize;
-    let start_row = pane.row_offset;
-    let end_row = (start_row + visible_rows).min(loaded.rows.len());
+    let start_row = if total_rows > 0 {
+        pane.row_offset.min(total_rows.saturating_sub(1))
+    } else {
+        0
+    };
+    let end_row = (start_row + visible_rows).min(total_rows);
+    let cursor_row = if total_rows > 0 {
+        pane.row_cursor.min(total_rows.saturating_sub(1))
+    } else {
+        0
+    };
 
     // Helper: is this row inside the current visual selection?
-    let in_visual_row = |row_idx: usize| -> bool {
+    let in_visual_row = |display_row_idx: usize| -> bool {
         if pane.mode != TableMode::VisualRow {
             return false;
         }
-        let cursor = pane.row_cursor;
+        let cursor = cursor_row;
         match pane.visual_anchor {
-            Some(anchor) if row_idx >= anchor.min(cursor) && row_idx <= anchor.max(cursor) => true,
-            _ => row_idx == cursor,
+            Some(anchor)
+                if display_row_idx >= anchor.min(cursor)
+                    && display_row_idx <= anchor.max(cursor) =>
+            {
+                true
+            }
+            _ => display_row_idx == cursor,
         }
     };
 
-    for row_idx in start_row..end_row {
-        let y = y_first_record + (row_idx - start_row) as u16;
+    let pk_idx = loaded.schema.iter().position(|c| c.is_primary_key);
+    let is_deleted_existing = |real_row_idx: usize| -> bool {
+        pk_idx.map_or(false, |pk_col_idx| {
+            loaded
+                .rows
+                .get(real_row_idx)
+                .and_then(|r| r.get(pk_col_idx))
+                .map_or(false, |pk_val| {
+                    pane.pending_deletes.iter().any(|p| p == pk_val)
+                })
+        })
+    };
+
+    for display_row_idx in start_row..end_row {
+        let y = y_first_record + (display_row_idx - start_row) as u16;
         if y >= area.y + area.height {
             break;
         }
-        let row = &loaded.rows[row_idx];
-        let is_selected_row = in_visual_row(row_idx);
-        let is_cursor_row = row_idx == pane.row_cursor;
 
-        let is_deleted_row = pane.pending_deletes.iter().any(|pk| {
-            loaded
-                .schema
-                .iter()
-                .position(|c| c.is_primary_key)
-                .map_or(false, |pk_idx| {
-                    row_idx < loaded.rows.len() && loaded.rows[row_idx].get(pk_idx) == Some(pk)
-                })
-        });
+        let row_ref = if is_table_view {
+            match pane.display_row_ref(loaded.rows.len(), display_row_idx) {
+                Some(r) => r,
+                None => continue,
+            }
+        } else {
+            DisplayRowRef::Existing(display_row_idx)
+        };
 
-        // Alternating row background — every odd row gets a subtle dark shade.
-        let alt_bg = if row_idx % 2 == 1 && !is_selected_row {
+        let is_pending_insert = matches!(row_ref, DisplayRowRef::PendingInsert(_));
+        let is_selected_row = in_visual_row(display_row_idx);
+        let is_cursor_row = display_row_idx == cursor_row;
+        let is_deleted_row = match row_ref {
+            DisplayRowRef::Existing(real_row_idx) => is_deleted_existing(real_row_idx),
+            DisplayRowRef::PendingInsert(_) => false,
+        };
+
+        let alt_bg = if is_pending_insert {
+            Color::Rgb(24, 40, 24)
+        } else if display_row_idx % 2 == 1 && !is_selected_row {
             Color::Rgb(30, 32, 42)
         } else {
             Color::Reset
         };
 
-        let row_num_str = format!("{}", row_idx + 1);
+        let row_num_str = format!("{}", display_row_idx + 1);
         let row_num_style = if is_cursor_row && focused {
             Style::default().fg(Color::White).bold()
+        } else if is_pending_insert {
+            Style::default().fg(Color::Green).bold()
         } else if is_deleted_row {
             Style::default().fg(Color::Red).crossed_out()
-        } else if is_selected_row && focused {
-            Style::default().fg(Color::White).bold()
         } else if is_selected_row {
             Style::default().fg(Color::White).bold()
         } else {
@@ -337,7 +385,6 @@ pub fn render_loaded(
         );
         buf.set_span(area.x + ROW_NUMBER_PADDING, y, &row_num_span, row_num_width);
 
-        // Fill the entire data area for this row with the alternating background.
         let data_start = area.x + gutter_width;
         let data_end = right_boundary;
         if data_end > data_start {
@@ -351,10 +398,11 @@ pub fn render_loaded(
         }
 
         let mut x = area.x + gutter_width + EDGE_PADDING;
-        for (col_idx, cell_text) in row.iter().enumerate().skip(col_offset) {
+        for (col_idx, _) in loaded.headers.iter().enumerate().skip(col_offset) {
             if x >= right_boundary {
                 break;
             }
+
             let width = column_widths[col_idx];
             let effective_width = width
                 .saturating_sub(NUM_SPACES_BETWEEN_COLUMNS)
@@ -362,49 +410,62 @@ pub fn render_loaded(
 
             let is_selected = match pane.mode {
                 TableMode::Normal | TableMode::Insert => {
-                    row_idx == pane.row_cursor && col_idx == cursor_col
+                    display_row_idx == cursor_row && col_idx == cursor_col
                 }
-                TableMode::VisualRow => in_visual_row(row_idx),
+                TableMode::VisualRow => in_visual_row(display_row_idx),
                 TableMode::VisualColumn => col_idx == cursor_col,
             };
 
-            let staged_value = pane
-                .pending_updates
-                .iter()
-                .find(|(r, c, _)| *r == row_idx && *c == col_idx)
-                .map(|(_, _, val)| val.as_str());
-            let is_modified = staged_value.is_some();
-            let is_deleted_row = pane.pending_deletes.iter().any(|pk| {
-                loaded
-                    .schema
-                    .iter()
-                    .position(|c| c.is_primary_key)
-                    .map_or(false, |pk_idx| {
-                        row_idx < loaded.rows.len() && loaded.rows[row_idx].get(pk_idx) == Some(pk)
-                    })
-            });
+            let (base_text, staged_existing): (&str, Option<&str>) = match row_ref {
+                DisplayRowRef::Existing(real_row_idx) => {
+                    let staged = pane
+                        .pending_updates
+                        .iter()
+                        .find(|(r, c, _)| *r == real_row_idx && *c == col_idx)
+                        .map(|(_, _, val)| val.as_str());
+                    let base = loaded
+                        .rows
+                        .get(real_row_idx)
+                        .and_then(|r| r.get(col_idx))
+                        .map(|s| s.as_str())
+                        .unwrap_or("");
+                    (base, staged)
+                }
+                DisplayRowRef::PendingInsert(insert_idx) => {
+                    let val = pane
+                        .pending_inserts
+                        .get(insert_idx)
+                        .and_then(|r| r.values.get(col_idx))
+                        .map(|s| s.as_str())
+                        .unwrap_or("");
+                    (val, None)
+                }
+            };
 
-            // Cursor and cell style
+            let display_text = staged_existing.unwrap_or(base_text);
+            let has_insert_value = is_pending_insert && !display_text.trim().is_empty();
+            let is_modified = staged_existing.is_some();
+
             let style = if is_selected && focused {
                 Style::default().bg(Color::Yellow).fg(Color::Black).bold()
             } else if is_selected {
                 Style::default().bg(alt_bg).bold()
-            } else if is_modified {
+            } else if is_modified || has_insert_value {
                 Style::default().fg(Color::Black).bg(Color::LightGreen)
+            } else if is_pending_insert {
+                Style::default().fg(Color::Green).bg(alt_bg)
             } else if is_deleted_row {
                 Style::default().bg(alt_bg).fg(Color::Red).bold()
             } else {
                 Style::default().fg(Color::White).bg(alt_bg)
             };
 
-            let display_text = staged_value.unwrap_or(cell_text.as_str());
             let display = if display_text.is_empty() {
                 " "
             } else {
                 display_text
             };
 
-            // Fuzzy highlight on the selected column when a search is active.
             let search_query = pane
                 .live_search
                 .as_ref()
@@ -424,7 +485,6 @@ pub fn render_loaded(
                     buf.set_span(cell_x, y, &span, avail);
                     cell_x += avail;
                 }
-                // Pad remainder with spaces.
                 if cell_x < max_x {
                     let pad = " ".repeat((max_x - cell_x) as usize);
                     buf.set_span(cell_x, y, &Span::styled(pad, style), max_x - cell_x);
@@ -452,7 +512,7 @@ pub fn render_loaded(
         }
     }
 
-    if end_row < loaded.rows.len() {
+    if end_row < total_rows {
         let indicator_y = (area.y + area.height).saturating_sub(1);
         let indicator_x = area.x + gutter_width + 1;
         if let Some(cell) = buf.cell_mut(Position::new(indicator_x, indicator_y)) {

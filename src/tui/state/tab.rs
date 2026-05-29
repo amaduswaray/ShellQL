@@ -71,11 +71,18 @@ pub struct PendingQuery {
 // ── Async commit parameters ─────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
+pub struct PendingInsert {
+    pub cols: Vec<String>,
+    pub vals: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct PendingCommit {
     pub table: String,
     pub pk_col: String,
     pub updates: Vec<(String, String, String)>, // (pk_val, target_col, new_value)
     pub deletes: Vec<String>,                   // pk_vals
+    pub inserts: Vec<PendingInsert>,
 }
 
 // ── Tab state ─────────────────────────────────────────────────────────────────

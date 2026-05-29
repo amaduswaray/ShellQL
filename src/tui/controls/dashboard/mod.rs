@@ -109,6 +109,12 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
         KeyCode::Char('i') => {
             modes::start_insert_or_cell_edit(state);
         }
+        KeyCode::Char('o') => {
+            modes::stage_insert_row_below(state);
+        }
+        KeyCode::Char('O') => {
+            modes::stage_insert_row_above(state);
+        }
         KeyCode::Tab => {
             modes::cycle_query_results(state);
         }

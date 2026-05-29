@@ -53,9 +53,11 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 - [x] Fix tab/pane deletion
 - [x] Fix deletion logic - dd should prompt a deletion confirm tab
+- :schema or new :schema with no following param should open a table list, then you can select which table to open the schema for
 - [x] for border overflows and showing(add connection)
-- [ ] Proper vim commands
-  - [ ] o and O for newline over and under, to add a new row
+- [x] Proper vim commands
+  - [x] o and O for newline over and under, to add a new row
+  - [ ] navigate text in the cmdline with arrows
 
 - [x] Vim based query editor
   - [x] Remember visual mode

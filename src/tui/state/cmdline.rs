@@ -94,11 +94,12 @@ pub enum CommandLineMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfirmAction {
     DeleteConnection(String),
-    /// Commit staged changes (updates + deletes) for a table.
+    /// Commit staged changes (updates + deletes + inserts) for a table.
     CommitWrites {
         table: String,
         update_count: usize,
         delete_count: usize,
+        insert_count: usize,
     },
 }
 

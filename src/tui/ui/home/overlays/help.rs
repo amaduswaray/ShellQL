@@ -124,6 +124,7 @@ pub fn render_dashboard_help(frame: &mut Frame, area: Rect) {
         Line::from(""),
         Line::from(Span::styled("  Editing", nav_header)),
         Line::from(Span::styled("  ───────", sep_style)),
+        binding_line("  o / O", "stage row below / above", key_style, desc_style),
         binding_line("  dd", "stage row for delete", key_style, desc_style),
         binding_line(
             "  d + visual",

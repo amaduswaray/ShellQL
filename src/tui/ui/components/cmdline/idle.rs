@@ -128,7 +128,10 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
                             crate::tui::state::PaneType::TableView => {
                                 if let Some(ref name) = pane.bound_table {
                                     if let Some(ref loaded) = state.table_cache.get(name) {
-                                        (loaded.headers.len(), loaded.rows.len())
+                                        (
+                                            loaded.headers.len(),
+                                            pane.total_table_rows(loaded.rows.len()),
+                                        )
                                     } else {
                                         (0, 0)
                                     }
@@ -150,13 +153,14 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
                             _ => (0, 0),
                         };
                         if headers > 0 {
-                            let pos_text = format!(
-                                "Row {}/{}, Col {}/{}",
-                                pane.row_cursor + 1,
-                                rows,
-                                pane.cursor_col + 1,
-                                headers
-                            );
+                            let row_pos = if rows == 0 {
+                                0
+                            } else {
+                                pane.row_cursor.min(rows.saturating_sub(1)) + 1
+                            };
+                            let col_pos = pane.cursor_col.min(headers.saturating_sub(1)) + 1;
+                            let pos_text =
+                                format!("Row {}/{}, Col {}/{}", row_pos, rows, col_pos, headers);
                             if right_text.is_empty() {
                                 right_text = pos_text;
                             } else {
