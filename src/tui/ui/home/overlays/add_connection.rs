@@ -13,10 +13,7 @@ use crate::{
     connection::{Database, Engine},
     tui::{
         AddConnectionForm, AppState, FieldId, FormInputMode, TextMode,
-        ui::{
-            components::centered_rect::centered_rect_with_min,
-            home::render_dismiss_hint,
-        },
+        ui::{components::centered_rect::centered_rect_with_min, home::render_dismiss_hint},
     },
 };
 
@@ -29,11 +26,18 @@ pub fn render_add_connection(frame: &mut Frame, area: Rect, state: &AppState) {
 
     // ── Compute popup size so nothing is ever clipped ──────────────────────────
     const LEFT_PAD: u16 = 2;
-    let label_w = fields.iter().map(|f| f.label().len()).max().unwrap_or(0) as u16;
+    const RIGHT_PAD: u16 = 2;
+    const LABEL_VALUE_GAP: u16 = 3;
+    // Include a ':' after every label for clearer separation from values.
+    let label_w = fields
+        .iter()
+        .map(|f| f.label().len() + 1)
+        .max()
+        .unwrap_or(0) as u16;
 
     // Widest selector value (Engine: "● Postgres   ● MySQL   ● SQLite")
     let max_selector_w = 31u16;
-    let min_inner_w = LEFT_PAD + label_w + max_selector_w;
+    let min_inner_w = LEFT_PAD + label_w + LABEL_VALUE_GAP + max_selector_w + RIGHT_PAD;
     let min_w = min_inner_w + 2; // +2 for borders
 
     // Height: 1 top-pad + fields + 1 blank + 1 hint + 2 borders
@@ -67,13 +71,16 @@ pub fn render_add_connection(frame: &mut Frame, area: Rect, state: &AppState) {
         let row = Rect {
             x: fields_area.x + LEFT_PAD,
             y,
-            width: fields_area.width.saturating_sub(LEFT_PAD),
+            width: fields_area.width.saturating_sub(LEFT_PAD + RIGHT_PAD),
             height: 1,
         };
         let is_focused = i == form.focused;
 
-        let [lbl_area, val_area] =
-            Layout::horizontal([Constraint::Length(label_w), Constraint::Min(0)]).areas(row);
+        let [lbl_area, val_area] = Layout::horizontal([
+            Constraint::Length(label_w + LABEL_VALUE_GAP),
+            Constraint::Min(0),
+        ])
+        .areas(row);
 
         // Label — blue + bold when focused, muted otherwise
         let lbl_style = if is_focused {
@@ -82,7 +89,10 @@ pub fn render_add_connection(frame: &mut Frame, area: Rect, state: &AppState) {
             Style::default().fg(Color::DarkGray)
         };
         frame.render_widget(
-            Paragraph::new(Line::from(Span::styled(field_id.label(), lbl_style))),
+            Paragraph::new(Line::from(Span::styled(
+                format!("{}:", field_id.label()),
+                lbl_style,
+            ))),
             lbl_area,
         );
 
