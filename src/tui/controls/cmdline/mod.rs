@@ -35,6 +35,9 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
             } else {
                 state.cmdline.clear_completions();
                 state.cmdline.pop();
+                if let CommandLineMode::Search(direction) = state.cmdline.mode {
+                    search::compute_live_search(direction, state);
+                }
             }
         }
 
@@ -57,6 +60,65 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
         KeyCode::BackTab => {
             if let CommandLineMode::Input = state.cmdline.mode {
                 state.cmdline.prev_completion();
+            }
+        }
+
+        KeyCode::Delete => {
+            if matches!(
+                state.cmdline.mode,
+                CommandLineMode::Input
+                    | CommandLineMode::Search(_)
+                    | CommandLineMode::CellEdit { .. }
+            ) {
+                state.cmdline.clear_completions();
+                state.cmdline.delete();
+                if let CommandLineMode::Search(direction) = state.cmdline.mode {
+                    search::compute_live_search(direction, state);
+                }
+            }
+        }
+
+        KeyCode::Left => {
+            if matches!(
+                state.cmdline.mode,
+                CommandLineMode::Input
+                    | CommandLineMode::Search(_)
+                    | CommandLineMode::CellEdit { .. }
+            ) {
+                state.cmdline.move_cursor_left();
+            }
+        }
+
+        KeyCode::Right => {
+            if matches!(
+                state.cmdline.mode,
+                CommandLineMode::Input
+                    | CommandLineMode::Search(_)
+                    | CommandLineMode::CellEdit { .. }
+            ) {
+                state.cmdline.move_cursor_right();
+            }
+        }
+
+        KeyCode::Home => {
+            if matches!(
+                state.cmdline.mode,
+                CommandLineMode::Input
+                    | CommandLineMode::Search(_)
+                    | CommandLineMode::CellEdit { .. }
+            ) {
+                state.cmdline.move_cursor_home();
+            }
+        }
+
+        KeyCode::End => {
+            if matches!(
+                state.cmdline.mode,
+                CommandLineMode::Input
+                    | CommandLineMode::Search(_)
+                    | CommandLineMode::CellEdit { .. }
+            ) {
+                state.cmdline.move_cursor_end();
             }
         }
 

@@ -19,8 +19,8 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
 
     frame.render_widget(Paragraph::new(vec![line]), area);
 
-    // Terminal cursor sits just after the last typed character.
-    let cursor_x = (area.x + 1 + input.len() as u16).min(area.right().saturating_sub(1));
+    let cursor_char = state.cmdline.input_cursor as u16;
+    let cursor_x = (area.x + 1 + cursor_char).min(area.right().saturating_sub(1));
     frame.set_cursor_position((cursor_x, area.y));
 
     // Completion popup floats above the bar when candidates are available.

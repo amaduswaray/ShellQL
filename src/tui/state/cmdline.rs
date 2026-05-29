@@ -62,6 +62,17 @@ pub fn compute_completions(
         .collect()
 }
 
+fn char_idx_to_byte_idx(s: &str, char_idx: usize) -> usize {
+    let mut byte_idx = 0;
+    for (i, ch) in s.chars().enumerate() {
+        if i == char_idx {
+            return byte_idx;
+        }
+        byte_idx += ch.len_utf8();
+    }
+    s.len()
+}
+
 // ── Search direction ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,6 +121,8 @@ pub struct CommandLine {
     pub mode: CommandLineMode,
     /// Current text the user has typed.
     pub input: String,
+    /// Cursor position inside `input` as a character index.
+    pub input_cursor: usize,
     /// One-shot error message shown in idle mode after a failed command.
     pub error: Option<String>,
     /// Loading / spinner message shown in idle mode during async work.
@@ -125,6 +138,7 @@ impl CommandLine {
         Self {
             mode: CommandLineMode::Idle,
             input: String::new(),
+            input_cursor: 0,
             error: None,
             loading: None,
             completions: Vec::new(),
@@ -143,6 +157,7 @@ impl CommandLine {
     pub fn open_input(&mut self) {
         self.mode = CommandLineMode::Input;
         self.input.clear();
+        self.input_cursor = 0;
         self.error = None;
         self.clear_completions();
     }
@@ -151,6 +166,7 @@ impl CommandLine {
     pub fn open_search(&mut self, direction: SearchDirection) {
         self.mode = CommandLineMode::Search(direction);
         self.input.clear();
+        self.input_cursor = 0;
         self.error = None;
         self.clear_completions();
     }
@@ -163,6 +179,7 @@ impl CommandLine {
             col_name: col_name.to_string(),
         };
         self.input = current_value.to_string();
+        self.input_cursor = self.input.chars().count();
         self.error = None;
         self.clear_completions();
     }
@@ -171,6 +188,7 @@ impl CommandLine {
     pub fn open_confirm(&mut self, action: ConfirmAction) {
         self.mode = CommandLineMode::Confirm(action);
         self.input.clear();
+        self.input_cursor = 0;
         self.error = None;
         self.clear_completions();
     }
@@ -179,6 +197,7 @@ impl CommandLine {
     pub fn reset(&mut self) {
         self.mode = CommandLineMode::Idle;
         self.input.clear();
+        self.input_cursor = 0;
         self.error = None;
         self.loading = None;
         self.clear_completions();
@@ -187,11 +206,48 @@ impl CommandLine {
     // ── Input buffer ──────────────────────────────────────────────────────────
 
     pub fn push(&mut self, c: char) {
-        self.input.push(c);
+        let byte = char_idx_to_byte_idx(&self.input, self.input_cursor);
+        self.input.insert(byte, c);
+        self.input_cursor += 1;
     }
 
+    /// Backspace behavior: delete the character before the cursor.
     pub fn pop(&mut self) {
-        self.input.pop();
+        if self.input_cursor == 0 {
+            return;
+        }
+        let end = char_idx_to_byte_idx(&self.input, self.input_cursor);
+        let start = char_idx_to_byte_idx(&self.input, self.input_cursor - 1);
+        self.input.replace_range(start..end, "");
+        self.input_cursor -= 1;
+    }
+
+    /// Delete behavior: delete the character at the cursor.
+    pub fn delete(&mut self) {
+        let len = self.input.chars().count();
+        if self.input_cursor >= len {
+            return;
+        }
+        let start = char_idx_to_byte_idx(&self.input, self.input_cursor);
+        let end = char_idx_to_byte_idx(&self.input, self.input_cursor + 1);
+        self.input.replace_range(start..end, "");
+    }
+
+    pub fn move_cursor_left(&mut self) {
+        self.input_cursor = self.input_cursor.saturating_sub(1);
+    }
+
+    pub fn move_cursor_right(&mut self) {
+        let len = self.input.chars().count();
+        self.input_cursor = (self.input_cursor + 1).min(len);
+    }
+
+    pub fn move_cursor_home(&mut self) {
+        self.input_cursor = 0;
+    }
+
+    pub fn move_cursor_end(&mut self) {
+        self.input_cursor = self.input.chars().count();
     }
 
     // ── Error ─────────────────────────────────────────────────────────────────
@@ -222,6 +278,7 @@ impl CommandLine {
             return;
         }
         self.input = candidates[0].0.to_string();
+        self.input_cursor = self.input.chars().count();
         self.completion_selected = Some(0);
         self.completions = candidates;
     }
@@ -235,6 +292,7 @@ impl CommandLine {
         let next = self.completion_selected.map_or(0, |i| (i + 1) % len);
         self.completion_selected = Some(next);
         self.input = self.completions[next].0.to_string();
+        self.input_cursor = self.input.chars().count();
     }
 
     /// Retreat to the previous completion and apply it to the input buffer.
@@ -246,11 +304,46 @@ impl CommandLine {
         let prev = self.completion_selected.map_or(0, |i| (i + len - 1) % len);
         self.completion_selected = Some(prev);
         self.input = self.completions[prev].0.to_string();
+        self.input_cursor = self.input.chars().count();
     }
 
     /// Discard the candidate list and selection without touching the input.
     pub fn clear_completions(&mut self) {
         self.completions.clear();
         self.completion_selected = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cmdline_cursor_insert_backspace() {
+        let mut c = CommandLine::new();
+        c.open_input();
+        c.push('a');
+        c.push('c');
+        c.move_cursor_left();
+        c.push('b');
+        assert_eq!(c.input, "abc");
+        assert_eq!(c.input_cursor, 2);
+
+        c.pop();
+        assert_eq!(c.input, "ac");
+        assert_eq!(c.input_cursor, 1);
+    }
+
+    #[test]
+    fn cmdline_cursor_delete_at_position() {
+        let mut c = CommandLine::new();
+        c.open_input();
+        c.push('a');
+        c.push('b');
+        c.push('c');
+        c.move_cursor_left();
+        c.delete();
+        assert_eq!(c.input, "ab");
+        assert_eq!(c.input_cursor, 2);
     }
 }
