@@ -36,6 +36,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] More expressive cli that integrates better with unix and AI
 - [ ] In app documentation and help
 - [ ] Adding custom keybinds 
+- [ ] Leader key
 - [ ] Advanced vim bindings
 - [ ] Drivers
   - [ ] turso/libsql
@@ -50,18 +51,16 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 ### TODOS TUI
 
-- [ ] for border overflows and showing(add connection)
+- [ ] Fix tab/pane deletion
 - [ ] Fix deletion logic - dd should prompt a deletion confirm tab
+- [ ] for border overflows and showing(add connection)
+- [ ] Proper vim commands
+  - [ ] o and O for newline over and under, to add a new row
 
 - [x] Vim based query editor
   - [x] Remember visual mode
   - [x] Cursor edit
-  - [ ] commands like dG dgg, yG, etc
+  - [x] commands like dG dgg, yG, etc
+
 - [ ] Tests for the new sql functions
 - [ ] Complete the command line commands
-- [ ] Proper vim commands
-  - [ ] o and O for newline over and under, to add a new row
-  - [ ] ciw to change in cell
-  - [ ] rn to rename the cell value
-  - [ ] i to enter insert mode and edit
-

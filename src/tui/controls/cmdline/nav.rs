@@ -6,23 +6,13 @@ pub fn cmd_exit(state: &mut AppState) {
     state.should_quit = true;
 }
 
-// TODO: This should be fixed and it is not maintaining the tab and window states
 pub fn cmd_quit(state: &mut AppState, args: &[&str]) {
     let pane_count = state.active_tab().map(|tab| tab.tree.pane_count());
 
     match pane_count {
-        Some(pane_count) => {
-            if state.tabs.len() <= 1 {
-                if pane_count <= 1 {
-                    state.should_quit = true;
-                } else {
-                    super::pane::cmd_close(state, args);
-                }
-            } else {
-                super::tab::cmd_tab_delete(state);
-            }
-        }
-        None => {
+        Some(count) if count > 1 => super::pane::cmd_close(state, args),
+        Some(_) if state.tabs.len() > 1 => super::tab::cmd_tab_delete(state),
+        Some(_) | None => {
             state.should_quit = true;
         }
     }
