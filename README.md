@@ -36,6 +36,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] More expressive cli that integrates better with unix and AI
 - [ ] In app documentation and help
 - [ ] Adding custom keybinds 
+- [ ] Advanced vim bindings
 - [ ] Drivers
   - [ ] turso/libsql
   - [ ] mariadb
@@ -54,6 +55,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 - [x] Vim based query editor
   - [x] Remember visual mode
+  - [ ] Cursor edit
 - [ ] Tests for the new sql functions
 - [ ] Complete the command line commands
 - [ ] Proper vim commands

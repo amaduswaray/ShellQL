@@ -218,7 +218,7 @@ fn handle_normal_mode(event: KeyEvent, pane: &mut Pane) -> bool {
             run_edit(pane, |p| {
                 let mut changed = false;
                 for _ in 0..count {
-                    changed |= delete_char_at_cursor(p, false);
+                    changed |= delete_char_at_cursor(p, false, true);
                 }
                 changed
             });
@@ -281,7 +281,7 @@ fn handle_normal_mode(event: KeyEvent, pane: &mut Pane) -> bool {
         }
         KeyCode::Char('s') => {
             pane.query_pending_count = None;
-            run_edit(pane, |p| delete_char_at_cursor(p, false));
+            run_edit(pane, |p| delete_char_at_cursor(p, false, true));
             enter_insert_mode(pane);
             true
         }
@@ -854,7 +854,7 @@ fn handle_insert_mode(event: KeyEvent, pane: &mut Pane, tables: &[String]) -> bo
                 changed_text = run_edit(pane, backspace);
             }
             KeyCode::Delete => {
-                changed_text = run_edit(pane, |p| delete_char_at_cursor(p, true));
+                changed_text = run_edit(pane, |p| delete_char_at_cursor(p, true, false));
             }
             KeyCode::Left => {
                 move_left(pane, 1);
@@ -1530,9 +1530,12 @@ fn yank_visual_selection(pane: &mut Pane) -> bool {
 
     if sel.linewise {
         let text = collect_line_range_text(&pane.query_text, sel.start.row, sel.end.row);
-        set_yank_register(pane, text, true)
+        let ranges =
+            collect_line_range_highlight_ranges(&pane.query_text, sel.start.row, sel.end.row);
+        set_yank_register_with_flash(pane, text, true, ranges)
     } else if let Some(text) = collect_range_text(&pane.query_text, sel.start, sel.end) {
-        set_yank_register(pane, text, false)
+        let ranges = collect_range_highlight_ranges(&pane.query_text, sel.start, sel.end);
+        set_yank_register_with_flash(pane, text, false, ranges)
     } else {
         false
     }
@@ -1542,13 +1545,23 @@ fn yank_visual_selection(pane: &mut Pane) -> bool {
 // Yank / paste helpers
 // ═══════════════════════════════════════════════════════════════════════════════
 
-fn set_yank_register(pane: &mut Pane, text: String, linewise: bool) -> bool {
+fn set_yank_register(
+    pane: &mut Pane,
+    text: String,
+    linewise: bool,
+    flash_ranges: Option<Vec<(usize, usize, usize)>>,
+) -> bool {
     if text.is_empty() {
         return false;
     }
 
     pane.query_yank_register = text.clone();
     pane.query_yank_linewise = linewise;
+
+    if let Some(ranges) = flash_ranges.filter(|r| !r.is_empty()) {
+        pane.query_yank_highlight_ranges = ranges;
+        pane.query_yank_highlight_at = Some(std::time::Instant::now());
+    }
 
     let mut clipboard_text = text;
     if linewise && !clipboard_text.ends_with('\n') {
@@ -1558,20 +1571,35 @@ fn set_yank_register(pane: &mut Pane, text: String, linewise: bool) -> bool {
     true
 }
 
+fn set_delete_register(pane: &mut Pane, text: String, linewise: bool) -> bool {
+    set_yank_register(pane, text, linewise, None)
+}
+
+fn set_yank_register_with_flash(
+    pane: &mut Pane,
+    text: String,
+    linewise: bool,
+    flash_ranges: Vec<(usize, usize, usize)>,
+) -> bool {
+    set_yank_register(pane, text, linewise, Some(flash_ranges))
+}
+
 fn yank_line_count(pane: &mut Pane, count: usize) -> bool {
     let start = pane.query_cursor.0;
     let end = start
         .saturating_add(count.saturating_sub(1))
         .min(pane.query_text.len().saturating_sub(1));
     let text = collect_line_range_text(&pane.query_text, start, end);
-    set_yank_register(pane, text, true)
+    let ranges = collect_line_range_highlight_ranges(&pane.query_text, start, end);
+    set_yank_register_with_flash(pane, text, true, ranges)
 }
 
 fn yank_previous_lines_and_current(pane: &mut Pane, count: usize) -> bool {
     let end = pane.query_cursor.0;
     let start = end.saturating_sub(count);
     let text = collect_line_range_text(&pane.query_text, start, end);
-    set_yank_register(pane, text, true)
+    let ranges = collect_line_range_highlight_ranges(&pane.query_text, start, end);
+    set_yank_register_with_flash(pane, text, true, ranges)
 }
 
 fn yank_word_forward(pane: &mut Pane, count: usize) -> bool {
@@ -1712,7 +1740,8 @@ fn yank_cursor_range(pane: &mut Pane, a: QueryCursor, b: QueryCursor) -> bool {
     let Some(text) = collect_range_text(&pane.query_text, start, end) else {
         return false;
     };
-    set_yank_register(pane, text, false)
+    let ranges = collect_range_highlight_ranges(&pane.query_text, start, end);
+    set_yank_register_with_flash(pane, text, false, ranges)
 }
 
 fn collect_line_range_text(lines: &[String], start: usize, end: usize) -> String {
@@ -1785,7 +1814,76 @@ fn collect_range_text(lines: &[String], a: QueryCursor, b: QueryCursor) -> Optio
     Some(out)
 }
 
+fn collect_line_range_highlight_ranges(
+    lines: &[String],
+    start: usize,
+    end: usize,
+) -> Vec<(usize, usize, usize)> {
+    if lines.is_empty() {
+        return Vec::new();
+    }
+
+    let last = lines.len().saturating_sub(1);
+    let start = start.min(last);
+    let end = end.min(last);
+    let (start, end) = if start <= end {
+        (start, end)
+    } else {
+        (end, start)
+    };
+
+    (start..=end)
+        .map(|row| {
+            let len = lines.get(row).map_or(0, |line| line_char_len(line));
+            (row, 0, len)
+        })
+        .collect()
+}
+
+fn collect_range_highlight_ranges(
+    lines: &[String],
+    a: QueryCursor,
+    b: QueryCursor,
+) -> Vec<(usize, usize, usize)> {
+    if lines.is_empty() {
+        return Vec::new();
+    }
+
+    let (mut start, mut end) = order_range(a, b);
+    let last = lines.len().saturating_sub(1);
+    start.row = start.row.min(last);
+    end.row = end.row.min(last);
+
+    let start_len = lines.get(start.row).map_or(0, |line| line_char_len(line));
+    let end_len = lines.get(end.row).map_or(0, |line| line_char_len(line));
+    start.col = start.col.min(start_len);
+    end.col = end.col.min(end_len);
+
+    if start == end {
+        return Vec::new();
+    }
+
+    let mut out = Vec::new();
+    if start.row == end.row {
+        out.push((start.row, start.col, end.col));
+        return out;
+    }
+
+    let first_len = lines.get(start.row).map_or(0, |line| line_char_len(line));
+    out.push((start.row, start.col, first_len));
+
+    for row in (start.row + 1)..end.row {
+        let len = lines.get(row).map_or(0, |line| line_char_len(line));
+        out.push((row, 0, len));
+    }
+
+    out.push((end.row, 0, end.col));
+    out
+}
+
 fn paste_after_cursor(pane: &mut Pane) -> bool {
+    clamp_cursor_for_mode(pane, false);
+
     let text = pane.query_yank_register.clone();
     if text.is_empty() {
         return false;
@@ -1812,6 +1910,8 @@ fn paste_after_cursor(pane: &mut Pane) -> bool {
 }
 
 fn paste_before_cursor(pane: &mut Pane) -> bool {
+    clamp_cursor_for_mode(pane, false);
+
     let text = pane.query_yank_register.clone();
     if text.is_empty() {
         return false;
@@ -1988,7 +2088,7 @@ fn backspace(pane: &mut Pane) -> bool {
     true
 }
 
-fn delete_char_at_cursor(pane: &mut Pane, join_on_eol: bool) -> bool {
+fn delete_char_at_cursor(pane: &mut Pane, join_on_eol: bool, update_register: bool) -> bool {
     ensure_query_buffer(pane);
     let (row, col) = pane.query_cursor;
 
@@ -1997,6 +2097,21 @@ fn delete_char_at_cursor(pane: &mut Pane, join_on_eol: bool) -> bool {
     };
 
     if col < line_len {
+        if update_register {
+            let removed = pane
+                .query_text
+                .get(row)
+                .and_then(|line| {
+                    let start = char_idx_to_byte_idx(line, col);
+                    let end = char_idx_to_byte_idx(line, col + 1);
+                    (start < end && end <= line.len()).then(|| line[start..end].to_string())
+                })
+                .unwrap_or_default();
+            if !removed.is_empty() {
+                set_delete_register(pane, removed, false);
+            }
+        }
+
         let Some(line) = pane.query_text.get_mut(row) else {
             return false;
         };
@@ -2010,6 +2125,10 @@ fn delete_char_at_cursor(pane: &mut Pane, join_on_eol: bool) -> bool {
     }
 
     if join_on_eol && row + 1 < pane.query_text.len() {
+        if update_register {
+            set_delete_register(pane, "\n".to_string(), false);
+        }
+
         let next = pane.query_text.remove(row + 1);
         if let Some(line) = pane.query_text.get_mut(row) {
             line.push_str(&next);
@@ -2105,14 +2224,19 @@ fn delete_line_range(pane: &mut Pane, start_row: usize, end_row: usize) -> bool 
         std::mem::swap(&mut start, &mut end);
     }
 
+    let removed_text = collect_line_range_text(&pane.query_text, start, end);
+
     if start == 0 && end == 0 && pane.query_text.len() == 1 {
         if pane.query_text[0].is_empty() {
             return false;
         }
+        set_delete_register(pane, removed_text, true);
         pane.query_text[0].clear();
         pane.query_cursor = (0, 0);
         return true;
     }
+
+    set_delete_register(pane, removed_text, true);
 
     pane.query_text.drain(start..=end);
     if pane.query_text.is_empty() {
@@ -2139,6 +2263,9 @@ fn change_current_line(pane: &mut Pane) -> bool {
         pane.query_cursor = (row, indent.chars().count());
         return false;
     }
+
+    let removed = pane.query_text[row].clone();
+    set_delete_register(pane, removed, true);
 
     pane.query_text[row] = indent.clone();
     pane.query_cursor = (row, indent.chars().count());
@@ -2361,6 +2488,11 @@ fn delete_range(pane: &mut Pane, start: QueryCursor, end: QueryCursor) -> bool {
     if start == end {
         return false;
     }
+
+    let Some(removed_text) = collect_range_text(&pane.query_text, start, end) else {
+        return false;
+    };
+    set_delete_register(pane, removed_text, false);
 
     if start.row == end.row {
         let Some(line) = pane.query_text.get_mut(start.row) else {

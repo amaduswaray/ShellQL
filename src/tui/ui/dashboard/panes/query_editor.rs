@@ -14,6 +14,10 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthChar;
 
+const YANK_FLASH_DURATION_MS: u64 = 180;
+const YANK_FLASH_BG: Color = Color::Rgb(115, 116, 52);
+const YANK_FLASH_FG: Color = Color::Black;
+
 pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
     let title = make_title(pane);
     let block = pane_block(&title, focused);
@@ -101,6 +105,8 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
 
     // Visual selection overlay.
     render_visual_selection_overlay(buf, pane, text_area, start_row, end_row);
+    // Yank flash overlay (Neovim-style brief highlight after yank).
+    render_yank_flash_overlay(buf, pane, text_area, start_row, end_row);
 
     // Position terminal cursor manually.
     let (cursor_row, cursor_col) = pane.query_cursor;
@@ -362,6 +368,67 @@ fn render_visual_selection_overlay(
         let visible_start = start_vx.saturating_sub(pane.query_scroll_offset);
         let visible_end = end_vx.saturating_sub(pane.query_scroll_offset);
 
+        let clip_start = visible_start.min(text_area.width as usize);
+        let clip_end = visible_end.min(text_area.width as usize);
+        if clip_start >= clip_end {
+            continue;
+        }
+
+        buf.set_style(
+            Rect {
+                x: text_area.x + clip_start as u16,
+                y,
+                width: (clip_end - clip_start) as u16,
+                height: 1,
+            },
+            style,
+        );
+    }
+}
+
+fn render_yank_flash_overlay(
+    buf: &mut Buffer,
+    pane: &Pane,
+    text_area: Rect,
+    start_row: usize,
+    end_row: usize,
+) {
+    let Some(at) = pane.query_yank_highlight_at else {
+        return;
+    };
+    if at.elapsed() > std::time::Duration::from_millis(YANK_FLASH_DURATION_MS) {
+        return;
+    }
+
+    let style = Style::default().bg(YANK_FLASH_BG).fg(YANK_FLASH_FG);
+
+    for (row, start_col, end_col) in &pane.query_yank_highlight_ranges {
+        if *row < start_row || *row >= end_row {
+            continue;
+        }
+
+        let y = text_area.y + (*row - start_row) as u16;
+        if y >= text_area.bottom() {
+            continue;
+        }
+
+        let line = pane.query_text.get(*row).map_or("", String::as_str);
+        let line_len = line.chars().count();
+        let start_col = (*start_col).min(line_len);
+        let end_col = (*end_col).min(line_len);
+        if start_col >= end_col {
+            continue;
+        }
+
+        let start_vx = sql_highlight::cursor_visual_x(line, start_col);
+        let end_vx = sql_highlight::cursor_visual_x(line, end_col);
+
+        if end_vx <= pane.query_scroll_offset {
+            continue;
+        }
+
+        let visible_start = start_vx.saturating_sub(pane.query_scroll_offset);
+        let visible_end = end_vx.saturating_sub(pane.query_scroll_offset);
         let clip_start = visible_start.min(text_area.width as usize);
         let clip_end = visible_end.min(text_area.width as usize);
         if clip_start >= clip_end {

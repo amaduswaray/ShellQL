@@ -226,6 +226,10 @@ pub struct Pane {
     pub query_yank_register: String,
     /// Whether the yank register is linewise (`yy`, `Vy`, ...).
     pub query_yank_linewise: bool,
+    /// Last yank-highlight ranges (row, start_col, end_col), end is exclusive.
+    pub query_yank_highlight_ranges: Vec<(usize, usize, usize)>,
+    /// Timestamp for the latest yank highlight flash.
+    pub query_yank_highlight_at: Option<std::time::Instant>,
     /// Query editor undo snapshots.
     pub query_undo_stack: Vec<QueryEditorSnapshot>,
     /// Query editor redo snapshots.
@@ -282,6 +286,8 @@ impl Pane {
             query_visual_line_mode: false,
             query_yank_register: String::new(),
             query_yank_linewise: false,
+            query_yank_highlight_ranges: Vec::new(),
+            query_yank_highlight_at: None,
             query_undo_stack: Vec::new(),
             query_redo_stack: Vec::new(),
             bound_query_idx: None,
@@ -375,6 +381,8 @@ impl Pane {
         self.query_visual_line_mode = false;
         self.query_yank_register.clear();
         self.query_yank_linewise = false;
+        self.query_yank_highlight_ranges.clear();
+        self.query_yank_highlight_at = None;
         self.query_undo_stack.clear();
         self.query_redo_stack.clear();
         self.push_history();
@@ -419,6 +427,8 @@ impl Pane {
         self.query_last_find = None;
         self.query_visual_anchor = None;
         self.query_visual_line_mode = false;
+        self.query_yank_highlight_ranges.clear();
+        self.query_yank_highlight_at = None;
         self.query_undo_stack.clear();
         self.query_redo_stack.clear();
         self.push_history();
@@ -526,6 +536,8 @@ impl Pane {
         self.query_last_find = None;
         self.query_visual_anchor = None;
         self.query_visual_line_mode = false;
+        self.query_yank_highlight_ranges.clear();
+        self.query_yank_highlight_at = None;
         self.autocomplete_matches.clear();
         self.autocomplete_selected = None;
         true
@@ -554,6 +566,8 @@ impl Pane {
         self.query_last_find = None;
         self.query_visual_anchor = None;
         self.query_visual_line_mode = false;
+        self.query_yank_highlight_ranges.clear();
+        self.query_yank_highlight_at = None;
         self.autocomplete_matches.clear();
         self.autocomplete_selected = None;
         true
