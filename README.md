@@ -55,7 +55,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 
 - [x] Vim based query editor
   - [x] Remember visual mode
-  - [ ] Cursor edit
+  - [x] Cursor edit
   - [ ] commands like dG dgg, yG, etc
 - [ ] Tests for the new sql functions
 - [ ] Complete the command line commands

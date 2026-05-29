@@ -463,8 +463,39 @@ fn handle_pending_normal_combo(event: KeyEvent, pane: &mut Pane) -> bool {
         'L' => handle_pending_text_object(event, pane, 'c', true),
         'M' => handle_pending_text_object(event, pane, 'y', false),
         'N' => handle_pending_text_object(event, pane, 'y', true),
+        'U' => handle_pending_delete_to_top(event, pane),
+        'W' => handle_pending_change_to_top(event, pane),
+        'X' => handle_pending_yank_to_top(event, pane),
         _ => false,
     }
+}
+
+fn handle_pending_delete_to_top(event: KeyEvent, pane: &mut Pane) -> bool {
+    if event.code != KeyCode::Char('g') {
+        return false;
+    }
+    run_edit(pane, delete_to_top_linewise);
+    close_autocomplete(pane);
+    true
+}
+
+fn handle_pending_change_to_top(event: KeyEvent, pane: &mut Pane) -> bool {
+    if event.code != KeyCode::Char('g') {
+        return false;
+    }
+    let changed = run_edit(pane, delete_to_top_linewise);
+    close_autocomplete(pane);
+    if changed {
+        enter_insert_mode(pane);
+    }
+    true
+}
+
+fn handle_pending_yank_to_top(event: KeyEvent, pane: &mut Pane) -> bool {
+    if event.code != KeyCode::Char('g') {
+        return false;
+    }
+    yank_to_top_linewise(pane)
 }
 
 fn handle_pending_delete(event: KeyEvent, pane: &mut Pane) -> bool {
@@ -510,6 +541,16 @@ fn handle_pending_delete(event: KeyEvent, pane: &mut Pane) -> bool {
         KeyCode::Char('$') | KeyCode::End => {
             pane.query_pending_count = None;
             run_edit(pane, delete_to_line_end);
+            true
+        }
+        KeyCode::Char('G') => {
+            pane.query_pending_count = None;
+            run_edit(pane, delete_to_bottom_linewise);
+            true
+        }
+        KeyCode::Char('g') => {
+            pane.query_pending_count = None;
+            pane.query_pending_key = Some('U');
             true
         }
         KeyCode::Char('j') | KeyCode::Down => {
@@ -585,6 +626,16 @@ fn handle_pending_change(event: KeyEvent, pane: &mut Pane) -> bool {
             run_edit(pane, delete_to_line_end);
             true
         }
+        KeyCode::Char('G') => {
+            pane.query_pending_count = None;
+            run_edit(pane, delete_to_bottom_linewise);
+            true
+        }
+        KeyCode::Char('g') => {
+            pane.query_pending_count = None;
+            pane.query_pending_key = Some('W');
+            true
+        }
         KeyCode::Char('i') => {
             pane.query_pending_key = Some('K');
             true
@@ -640,6 +691,15 @@ fn handle_pending_yank(event: KeyEvent, pane: &mut Pane) -> bool {
         KeyCode::Char('$') | KeyCode::End => {
             pane.query_pending_count = None;
             yank_to_line_end(pane)
+        }
+        KeyCode::Char('G') => {
+            pane.query_pending_count = None;
+            yank_to_bottom_linewise(pane)
+        }
+        KeyCode::Char('g') => {
+            pane.query_pending_count = None;
+            pane.query_pending_key = Some('X');
+            true
         }
         KeyCode::Char('j') | KeyCode::Down => {
             let count = take_count(pane);
@@ -1594,6 +1654,21 @@ fn yank_line_count(pane: &mut Pane, count: usize) -> bool {
     set_yank_register_with_flash(pane, text, true, ranges)
 }
 
+fn yank_to_bottom_linewise(pane: &mut Pane) -> bool {
+    let start = pane.query_cursor.0;
+    let end = pane.query_text.len().saturating_sub(1);
+    let text = collect_line_range_text(&pane.query_text, start, end);
+    let ranges = collect_line_range_highlight_ranges(&pane.query_text, start, end);
+    set_yank_register_with_flash(pane, text, true, ranges)
+}
+
+fn yank_to_top_linewise(pane: &mut Pane) -> bool {
+    let end = pane.query_cursor.0;
+    let text = collect_line_range_text(&pane.query_text, 0, end);
+    let ranges = collect_line_range_highlight_ranges(&pane.query_text, 0, end);
+    set_yank_register_with_flash(pane, text, true, ranges)
+}
+
 fn yank_previous_lines_and_current(pane: &mut Pane, count: usize) -> bool {
     let end = pane.query_cursor.0;
     let start = end.saturating_sub(count);
@@ -2203,6 +2278,17 @@ fn delete_line_count(pane: &mut Pane, count: usize) -> bool {
     let row = pane.query_cursor.0;
     let end = row.saturating_add(count.saturating_sub(1));
     delete_line_range(pane, row, end)
+}
+
+fn delete_to_bottom_linewise(pane: &mut Pane) -> bool {
+    let row = pane.query_cursor.0;
+    let end = pane.query_text.len().saturating_sub(1);
+    delete_line_range(pane, row, end)
+}
+
+fn delete_to_top_linewise(pane: &mut Pane) -> bool {
+    let row = pane.query_cursor.0;
+    delete_line_range(pane, 0, row)
 }
 
 fn delete_previous_lines_and_current(pane: &mut Pane, count: usize) -> bool {
