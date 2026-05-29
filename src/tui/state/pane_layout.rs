@@ -135,6 +135,13 @@ pub struct LiveSearchState {
     pub matches: Vec<usize>,
 }
 
+/// Snapshot used for QueryEditor undo/redo.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueryEditorSnapshot {
+    pub text: Vec<String>,
+    pub cursor: (usize, usize),
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Pane state
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -205,6 +212,12 @@ pub struct Pane {
     pub autocomplete_matches: Vec<String>,
     /// Selected index in the autocomplete popup (None = closed).
     pub autocomplete_selected: Option<usize>,
+    /// Pending Normal-mode key for two-key combos (currently `gg`, `dd`).
+    pub query_pending_key: Option<char>,
+    /// Query editor undo snapshots.
+    pub query_undo_stack: Vec<QueryEditorSnapshot>,
+    /// Query editor redo snapshots.
+    pub query_redo_stack: Vec<QueryEditorSnapshot>,
 
     // ── Query results state (pane-local) ────────────────────────────────────
     /// Which result set this QueryResults pane is displaying.
@@ -250,6 +263,9 @@ impl Pane {
             autocomplete_idx: 0,
             autocomplete_matches: Vec::new(),
             autocomplete_selected: None,
+            query_pending_key: None,
+            query_undo_stack: Vec::new(),
+            query_redo_stack: Vec::new(),
             bound_query_idx: None,
             query_result_count: 0,
             area: None,
@@ -334,6 +350,9 @@ impl Pane {
         self.sort_desc = false;
         self.autocomplete_matches.clear();
         self.autocomplete_selected = None;
+        self.query_pending_key = None;
+        self.query_undo_stack.clear();
+        self.query_redo_stack.clear();
         self.push_history();
     }
 
@@ -371,6 +390,9 @@ impl Pane {
         self.autocomplete_matches.clear();
         self.autocomplete_selected = None;
         self.autocomplete_idx = 0;
+        self.query_pending_key = None;
+        self.query_undo_stack.clear();
+        self.query_redo_stack.clear();
         self.push_history();
     }
 
@@ -438,6 +460,67 @@ impl Pane {
         } else if row >= self.query_row_offset + viewport {
             self.query_row_offset = row + 1 - viewport;
         }
+    }
+
+    /// Push the current query buffer/cursor state onto the undo stack.
+    /// Duplicate consecutive snapshots are ignored.
+    pub fn push_query_snapshot(&mut self) {
+        let snapshot = QueryEditorSnapshot {
+            text: self.query_text.clone(),
+            cursor: self.query_cursor,
+        };
+        if self.query_undo_stack.last() != Some(&snapshot) {
+            self.query_undo_stack.push(snapshot);
+        }
+        self.query_redo_stack.clear();
+    }
+
+    /// Undo one query-editor change. Returns `true` when a snapshot was applied.
+    pub fn query_undo(&mut self) -> bool {
+        let Some(snapshot) = self.query_undo_stack.pop() else {
+            return false;
+        };
+
+        let current = QueryEditorSnapshot {
+            text: self.query_text.clone(),
+            cursor: self.query_cursor,
+        };
+        self.query_redo_stack.push(current);
+
+        self.query_text = if snapshot.text.is_empty() {
+            vec![String::new()]
+        } else {
+            snapshot.text
+        };
+        self.query_cursor = snapshot.cursor;
+        self.query_pending_key = None;
+        self.autocomplete_matches.clear();
+        self.autocomplete_selected = None;
+        true
+    }
+
+    /// Redo one query-editor change. Returns `true` when a snapshot was applied.
+    pub fn query_redo(&mut self) -> bool {
+        let Some(snapshot) = self.query_redo_stack.pop() else {
+            return false;
+        };
+
+        let current = QueryEditorSnapshot {
+            text: self.query_text.clone(),
+            cursor: self.query_cursor,
+        };
+        self.query_undo_stack.push(current);
+
+        self.query_text = if snapshot.text.is_empty() {
+            vec![String::new()]
+        } else {
+            snapshot.text
+        };
+        self.query_cursor = snapshot.cursor;
+        self.query_pending_key = None;
+        self.autocomplete_matches.clear();
+        self.autocomplete_selected = None;
+        true
     }
 
     // ── Nav list navigation ─────────────────────────────────────────────────

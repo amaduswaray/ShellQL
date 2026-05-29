@@ -35,8 +35,8 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
         state.cmdline.error = None;
     }
 
-    // ── QueryEditor insert mode ───────────────────────────────────────────────
-    if editor::handle_insert_mode(event, state, &tables) {
+    // ── QueryEditor vim mode (Normal/Insert) ─────────────────────────────────
+    if editor::handle_query_editor(event, state, &tables) {
         return;
     }
 

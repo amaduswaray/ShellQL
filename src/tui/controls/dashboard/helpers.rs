@@ -1,5 +1,3 @@
-use ratatui_textarea::TextArea;
-
 /// Return (headers, rows, schema) for a TableView or QueryResults pane.
 pub fn pane_data<'a>(
     table_cache: &'a std::collections::HashMap<String, crate::tui::state::tab::LoadedTable>,
@@ -35,22 +33,6 @@ pub fn pane_data<'a>(
             Some((qr.headers.clone(), &qr.rows, schema))
         }
         _ => None,
-    }
-}
-
-/// Restore TextArea cursor position from stored (row, col).
-pub fn restore_cursor(textarea: &mut TextArea, (target_row, target_col): (usize, usize)) {
-    use ratatui_textarea::CursorMove;
-    // Move to top-left first.
-    textarea.move_cursor(CursorMove::Top);
-    textarea.move_cursor(CursorMove::Head);
-    // Move down to target row.
-    for _ in 0..target_row {
-        textarea.move_cursor(CursorMove::Down);
-    }
-    // Move right to target col.
-    for _ in 0..target_col {
-        textarea.move_cursor(CursorMove::Forward);
     }
 }
 

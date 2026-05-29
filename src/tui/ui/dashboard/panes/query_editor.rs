@@ -1,8 +1,7 @@
 use super::{make_title, pane_block};
-use crate::tui::state::pane_layout::Pane;
+use crate::tui::state::{pane_layout::Pane, TableMode};
 use crate::tui::ui::dashboard::sql_highlight;
 use ratatui::{
-    Frame,
     buffer::Buffer,
     layout::Rect,
     style::{Color, Style},
@@ -11,6 +10,7 @@ use ratatui::{
         Block, BorderType, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
         ScrollbarState,
     },
+    Frame,
 };
 use unicode_width::UnicodeWidthChar;
 
@@ -52,7 +52,12 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
     let end_row = (start_row + gutter_area.height as usize).min(pane.query_text.len());
     let line_numbers: Vec<ratatui::text::Line> = (start_row..end_row)
         .map(|line_idx| {
-            let num_str = format!("{:>width$}", line_idx + 1, width = gutter_inner_w);
+            let display_num = if pane.mode == TableMode::Insert || line_idx == pane.query_cursor.0 {
+                line_idx + 1
+            } else {
+                line_idx.abs_diff(pane.query_cursor.0)
+            };
+            let num_str = format!("{:>width$}", display_num, width = gutter_inner_w);
             let color = if line_idx == pane.query_cursor.0 {
                 Color::White
             } else {
@@ -66,7 +71,7 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
     // ── Cursor-line background (vim cursorline style) ──────────────────────────
     let (cursor_row, _cursor_col) = pane.query_cursor;
     let cursor_y_visible = cursor_row.saturating_sub(pane.query_row_offset) as u16;
-    if cursor_y_visible < text_area.height {
+    if focused && cursor_y_visible < text_area.height {
         let cursor_line_bg = Rect {
             x: text_area.x,
             y: text_area.y + cursor_y_visible,
@@ -79,7 +84,12 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
 
     // ── Syntax-highlighted SQL rendering ───────────────────────────────────────
     let buf = frame.buffer_mut();
-    for (line_idx, line) in pane.query_text.iter().enumerate().skip(start_row).take(end_row - start_row)
+    for (line_idx, line) in pane
+        .query_text
+        .iter()
+        .enumerate()
+        .skip(start_row)
+        .take(end_row - start_row)
     {
         let y = text_area.y + (line_idx - start_row) as u16;
         if y >= text_area.y + text_area.height {
@@ -97,88 +107,94 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
         .get(cursor_row)
         .map_or(0, |line| sql_highlight::cursor_visual_x(line, cursor_col));
     let cursor_x = text_area.x + cursor_vx.saturating_sub(pane.query_scroll_offset) as u16;
-    frame.set_cursor_position((cursor_x, cursor_y));
+    let cursor_x = cursor_x.min(text_area.right().saturating_sub(1));
+    let cursor_y = cursor_y.min(text_area.bottom().saturating_sub(1));
+    if focused {
+        frame.set_cursor_position((cursor_x, cursor_y));
+    }
 
     // ── Autocomplete popup ───────────────────────────────────────────────────
-    if let Some(selected) = pane.autocomplete_selected {
-        let total = pane.autocomplete_matches.len();
-        if total > 0 {
-            const MAX_VISIBLE: usize = 10;
-            let visible_count = total.min(MAX_VISIBLE);
-            let needs_scrollbar = total > visible_count;
+    if focused {
+        if let Some(selected) = pane.autocomplete_selected {
+            let total = pane.autocomplete_matches.len();
+            if total > 0 {
+                const MAX_VISIBLE: usize = 10;
+                let visible_count = total.min(MAX_VISIBLE);
+                let needs_scrollbar = total > visible_count;
 
-            let max_w = pane
-                .autocomplete_matches
-                .iter()
-                .map(|m| m.len())
-                .max()
-                .unwrap_or(8);
-            let popup_w = (max_w + 4) as u16;
-            let popup_h = (visible_count + 2) as u16;
+                let max_w = pane
+                    .autocomplete_matches
+                    .iter()
+                    .map(|m| m.len())
+                    .max()
+                    .unwrap_or(8);
+                let popup_w = (max_w + 4) as u16;
+                let popup_h = (visible_count + 2) as u16;
 
-            let popup = Rect {
-                x: cursor_x.min(inner.right().saturating_sub(popup_w)),
-                y: cursor_y + 1,
-                width: popup_w,
-                height: popup_h,
-            };
-
-            frame.render_widget(Clear, popup);
-            let block = Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(Color::White))
-                .style(Style::default().bg(Color::Reset));
-            let inner_popup = block.inner(popup);
-            frame.render_widget(block, popup);
-
-            // Compute scroll offset so selected item is always visible.
-            let mut offset = 0usize;
-            if selected >= offset + visible_count {
-                offset = selected + 1 - visible_count;
-            }
-            if selected < offset {
-                offset = selected;
-            }
-
-            let lines: Vec<ratatui::text::Line> = pane
-                .autocomplete_matches
-                .iter()
-                .enumerate()
-                .skip(offset)
-                .take(visible_count)
-                .map(|(i, m)| {
-                    let is_selected = i == selected;
-                    let style = if is_selected {
-                        Style::default().bg(Color::DarkGray).fg(Color::White).bold()
-                    } else {
-                        Style::default().fg(Color::White)
-                    };
-                    ratatui::text::Line::from(ratatui::text::Span::styled(
-                        format!(" {} ", m),
-                        style,
-                    ))
-                })
-                .collect();
-            frame.render_widget(Paragraph::new(lines), inner_popup);
-
-            // Scrollbar embedded in the right border.
-            if needs_scrollbar {
-                let scrollbar_area = Rect {
-                    x: popup.x + popup.width - 1,
-                    y: popup.y + 1,
-                    width: 1,
-                    height: popup.height.saturating_sub(2),
+                let popup = Rect {
+                    x: cursor_x.min(inner.right().saturating_sub(popup_w)),
+                    y: cursor_y + 1,
+                    width: popup_w,
+                    height: popup_h,
                 };
-                let mut scrollbar_state = ScrollbarState::new(total)
-                    .position(offset)
-                    .viewport_content_length(visible_count);
-                let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .track_symbol(Some("│"))
-                    .thumb_symbol("█");
-                frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+
+                frame.render_widget(Clear, popup);
+                let block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(Color::White))
+                    .style(Style::default().bg(Color::Reset));
+                let inner_popup = block.inner(popup);
+                frame.render_widget(block, popup);
+
+                // Compute scroll offset so selected item is always visible.
+                let mut offset = 0usize;
+                if selected >= offset + visible_count {
+                    offset = selected + 1 - visible_count;
+                }
+                if selected < offset {
+                    offset = selected;
+                }
+
+                let lines: Vec<ratatui::text::Line> = pane
+                    .autocomplete_matches
+                    .iter()
+                    .enumerate()
+                    .skip(offset)
+                    .take(visible_count)
+                    .map(|(i, m)| {
+                        let is_selected = i == selected;
+                        let style = if is_selected {
+                            Style::default().bg(Color::DarkGray).fg(Color::White).bold()
+                        } else {
+                            Style::default().fg(Color::White)
+                        };
+                        ratatui::text::Line::from(ratatui::text::Span::styled(
+                            format!(" {} ", m),
+                            style,
+                        ))
+                    })
+                    .collect();
+                frame.render_widget(Paragraph::new(lines), inner_popup);
+
+                // Scrollbar embedded in the right border.
+                if needs_scrollbar {
+                    let scrollbar_area = Rect {
+                        x: popup.x + popup.width - 1,
+                        y: popup.y + 1,
+                        width: 1,
+                        height: popup.height.saturating_sub(2),
+                    };
+                    let mut scrollbar_state = ScrollbarState::new(total)
+                        .position(offset)
+                        .viewport_content_length(visible_count);
+                    let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                        .begin_symbol(None)
+                        .end_symbol(None)
+                        .track_symbol(Some("│"))
+                        .thumb_symbol("█");
+                    frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
+                }
             }
         }
     }
@@ -252,12 +268,7 @@ fn render_line_spans(
         let draw_width = (max_x - x).min(visible_width);
 
         if draw_width > 0 && x < max_x {
-            buf.set_span(
-                x,
-                y,
-                &Span::styled(visible_text, span.style),
-                draw_width,
-            );
+            buf.set_span(x, y, &Span::styled(visible_text, span.style), draw_width);
             x += draw_width;
         }
 
