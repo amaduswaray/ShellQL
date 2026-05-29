@@ -1,7 +1,8 @@
 use super::{make_title, pane_block};
-use crate::tui::state::{pane_layout::Pane, TableMode};
+use crate::tui::state::{TableMode, pane_layout::Pane};
 use crate::tui::ui::dashboard::sql_highlight;
 use ratatui::{
+    Frame,
     buffer::Buffer,
     layout::Rect,
     style::{Color, Style},
@@ -10,7 +11,6 @@ use ratatui::{
         Block, BorderType, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
         ScrollbarState,
     },
-    Frame,
 };
 use unicode_width::UnicodeWidthChar;
 
@@ -98,6 +98,9 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
         let spans = sql_highlight::tokenize_line(line);
         render_line_spans(buf, y, text_area, pane.query_scroll_offset, &spans);
     }
+
+    // Visual selection overlay.
+    render_visual_selection_overlay(buf, pane, text_area, start_row, end_row);
 
     // Position terminal cursor manually.
     let (cursor_row, cursor_col) = pane.query_cursor;
@@ -200,6 +203,12 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct QueryCursor {
+    row: usize,
+    col: usize,
+}
+
 fn render_line_spans(
     buf: &mut Buffer,
     y: u16,
@@ -273,5 +282,133 @@ fn render_line_spans(
         }
 
         accumulated_vx += span_vx;
+    }
+}
+
+fn render_visual_selection_overlay(
+    buf: &mut Buffer,
+    pane: &Pane,
+    text_area: Rect,
+    start_row: usize,
+    end_row: usize,
+) {
+    let Some(anchor) = pane.query_visual_anchor else {
+        return;
+    };
+
+    let anchor = QueryCursor {
+        row: anchor.0,
+        col: anchor.1,
+    };
+    let cursor = QueryCursor {
+        row: pane.query_cursor.0,
+        col: pane.query_cursor.1,
+    };
+
+    let style = Style::default().bg(Color::DarkGray).fg(Color::White);
+
+    if pane.query_visual_line_mode {
+        let line_start = anchor.row.min(cursor.row);
+        let line_end = anchor.row.max(cursor.row);
+
+        for row in line_start.max(start_row)..line_end.min(end_row.saturating_sub(1)) + 1 {
+            let y = text_area.y + (row - start_row) as u16;
+            if y >= text_area.bottom() {
+                break;
+            }
+            buf.set_style(
+                Rect {
+                    x: text_area.x,
+                    y,
+                    width: text_area.width,
+                    height: 1,
+                },
+                style,
+            );
+        }
+        return;
+    }
+
+    let min = anchor.min(cursor);
+    let max = anchor.max(cursor);
+    let end = cursor_after_current_char(&pane.query_text, max);
+
+    if min == end {
+        return;
+    }
+
+    for row in min.row.max(start_row)..end.row.min(end_row.saturating_sub(1)) + 1 {
+        let y = text_area.y + (row - start_row) as u16;
+        if y >= text_area.bottom() {
+            break;
+        }
+
+        let line = pane.query_text.get(row).map_or("", String::as_str);
+        let line_len = line.chars().count();
+
+        let start_col = if row == min.row { min.col } else { 0 };
+        let end_col = if row == end.row { end.col } else { line_len };
+        if start_col >= end_col {
+            continue;
+        }
+
+        let start_vx = sql_highlight::cursor_visual_x(line, start_col);
+        let end_vx = sql_highlight::cursor_visual_x(line, end_col);
+
+        if end_vx <= pane.query_scroll_offset {
+            continue;
+        }
+
+        let visible_start = start_vx.saturating_sub(pane.query_scroll_offset);
+        let visible_end = end_vx.saturating_sub(pane.query_scroll_offset);
+
+        let clip_start = visible_start.min(text_area.width as usize);
+        let clip_end = visible_end.min(text_area.width as usize);
+        if clip_start >= clip_end {
+            continue;
+        }
+
+        buf.set_style(
+            Rect {
+                x: text_area.x + clip_start as u16,
+                y,
+                width: (clip_end - clip_start) as u16,
+                height: 1,
+            },
+            style,
+        );
+    }
+}
+
+fn cursor_after_current_char(lines: &[String], cur: QueryCursor) -> QueryCursor {
+    let line_len = lines.get(cur.row).map_or(0, |line| line.chars().count());
+
+    if line_len == 0 {
+        if cur.row + 1 < lines.len() {
+            QueryCursor {
+                row: cur.row + 1,
+                col: 0,
+            }
+        } else {
+            QueryCursor {
+                row: cur.row,
+                col: 0,
+            }
+        }
+    } else if cur.col + 1 < line_len {
+        QueryCursor {
+            row: cur.row,
+            col: cur.col + 1,
+        }
+    } else if cur.row + 1 < lines.len() {
+        QueryCursor {
+            row: cur.row + 1,
+            col: 0,
+        }
+    } else {
+        QueryCursor {
+            row: cur.row,
+            col: line_len,
+        }
     }
 }

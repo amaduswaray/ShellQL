@@ -61,12 +61,22 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
                 let active = tab.tree.panes.get(&active_id);
 
                 let (mode_label, mode_color) = if let Some(pane) = active {
-                    match pane.mode {
-                        TableMode::Normal => (" NORMAL ", Color::Magenta),
-                        TableMode::VisualRow | TableMode::VisualColumn => {
+                    if pane.kind == crate::tui::state::PaneType::QueryEditor
+                        && pane.query_visual_anchor.is_some()
+                    {
+                        if pane.query_visual_line_mode {
+                            (" VISUAL LINE ", Color::Yellow)
+                        } else {
                             (" VISUAL ", Color::Yellow)
                         }
-                        TableMode::Insert => (" INSERT ", Color::Green),
+                    } else {
+                        match pane.mode {
+                            TableMode::Normal => (" NORMAL ", Color::Magenta),
+                            TableMode::VisualRow | TableMode::VisualColumn => {
+                                (" VISUAL ", Color::Yellow)
+                            }
+                            TableMode::Insert => (" INSERT ", Color::Green),
+                        }
                     }
                 } else {
                     (" NORMAL ", Color::Magenta)

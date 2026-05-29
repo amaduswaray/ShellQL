@@ -52,7 +52,8 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [ ] for border overflows and showing(add connection)
 - [ ] Fix deletion logic - dd should prompt a deletion confirm tab
 
-- [ ] Vim based query editor
+- [x] Vim based query editor
+  - [x] Remember visual mode
 - [ ] Tests for the new sql functions
 - [ ] Complete the command line commands
 - [ ] Proper vim commands

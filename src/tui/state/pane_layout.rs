@@ -212,8 +212,20 @@ pub struct Pane {
     pub autocomplete_matches: Vec<String>,
     /// Selected index in the autocomplete popup (None = closed).
     pub autocomplete_selected: Option<usize>,
-    /// Pending Normal-mode key for two-key combos (currently `gg`, `dd`).
+    /// Pending Normal-mode key for multi-key combos (operators/find/gg/etc).
     pub query_pending_key: Option<char>,
+    /// Count prefix (`3j`, `2dw`, `10G`).
+    pub query_pending_count: Option<usize>,
+    /// Last find action for `;` / `,` repeat (`f/F/t/T`, target char).
+    pub query_last_find: Option<(char, char)>,
+    /// Visual selection anchor for query editor (row, col).
+    pub query_visual_anchor: Option<(usize, usize)>,
+    /// True when query editor is in Visual Line mode (`V`).
+    pub query_visual_line_mode: bool,
+    /// Last yanked text in query editor.
+    pub query_yank_register: String,
+    /// Whether the yank register is linewise (`yy`, `Vy`, ...).
+    pub query_yank_linewise: bool,
     /// Query editor undo snapshots.
     pub query_undo_stack: Vec<QueryEditorSnapshot>,
     /// Query editor redo snapshots.
@@ -264,6 +276,12 @@ impl Pane {
             autocomplete_matches: Vec::new(),
             autocomplete_selected: None,
             query_pending_key: None,
+            query_pending_count: None,
+            query_last_find: None,
+            query_visual_anchor: None,
+            query_visual_line_mode: false,
+            query_yank_register: String::new(),
+            query_yank_linewise: false,
             query_undo_stack: Vec::new(),
             query_redo_stack: Vec::new(),
             bound_query_idx: None,
@@ -351,6 +369,12 @@ impl Pane {
         self.autocomplete_matches.clear();
         self.autocomplete_selected = None;
         self.query_pending_key = None;
+        self.query_pending_count = None;
+        self.query_last_find = None;
+        self.query_visual_anchor = None;
+        self.query_visual_line_mode = false;
+        self.query_yank_register.clear();
+        self.query_yank_linewise = false;
         self.query_undo_stack.clear();
         self.query_redo_stack.clear();
         self.push_history();
@@ -391,6 +415,10 @@ impl Pane {
         self.autocomplete_selected = None;
         self.autocomplete_idx = 0;
         self.query_pending_key = None;
+        self.query_pending_count = None;
+        self.query_last_find = None;
+        self.query_visual_anchor = None;
+        self.query_visual_line_mode = false;
         self.query_undo_stack.clear();
         self.query_redo_stack.clear();
         self.push_history();
@@ -494,6 +522,10 @@ impl Pane {
         };
         self.query_cursor = snapshot.cursor;
         self.query_pending_key = None;
+        self.query_pending_count = None;
+        self.query_last_find = None;
+        self.query_visual_anchor = None;
+        self.query_visual_line_mode = false;
         self.autocomplete_matches.clear();
         self.autocomplete_selected = None;
         true
@@ -518,6 +550,10 @@ impl Pane {
         };
         self.query_cursor = snapshot.cursor;
         self.query_pending_key = None;
+        self.query_pending_count = None;
+        self.query_last_find = None;
+        self.query_visual_anchor = None;
+        self.query_visual_line_mode = false;
         self.autocomplete_matches.clear();
         self.autocomplete_selected = None;
         true
