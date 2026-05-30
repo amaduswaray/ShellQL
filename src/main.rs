@@ -9,7 +9,10 @@ use shellql::{
 
 #[tokio::main]
 async fn main() -> color_eyre::eyre::Result<()> {
-    color_eyre::install()?;
+    color_eyre::config::HookBuilder::default()
+        // Keep backtrace environment hints in debug builds, hide them in release.
+        .display_env_section(cfg!(debug_assertions))
+        .install()?;
 
     match Cli::parse().command {
         Some(Commands::Connect {
