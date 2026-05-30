@@ -66,5 +66,8 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [x] commands like dG dgg, yG, etc
 
 - [x] Tests for the new sql functions
+- [x] editor completions
+- [ ] the / search match result comes next to the search string in stead of being right aligned
+- [ ] table list has name in the border like the rest, but to differentiate from schema, it also shows row count
 - [ ] Minor improvements for colors and such
 - [ ] Complete the command line commands

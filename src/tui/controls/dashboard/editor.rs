@@ -34,6 +34,13 @@ struct QueryVisualSelection {
     linewise: bool,
 }
 
+const SQL_KEYWORDS: &[&str] = &[
+    "select", "from", "where", "insert", "into", "update", "delete", "join", "left", "right",
+    "inner", "outer", "on", "group", "by", "order", "limit", "offset", "having", "as", "and", "or",
+    "not", "null", "is", "in", "exists", "distinct", "create", "table", "alter", "drop", "values",
+    "set", "union", "all", "case", "when", "then", "else", "end",
+];
+
 pub fn handle_query_editor(event: KeyEvent, state: &mut AppState, tables: &[String]) -> bool {
     let active_idx = state.active_tab;
     let is_query_editor = state
@@ -1072,7 +1079,7 @@ fn trigger_manual_autocomplete(pane: &mut Pane, tables: &[String]) {
     };
 
     if let Some(prefix) = get_table_prefix(line, col) {
-        set_autocomplete_matches(pane, tables, &prefix);
+        set_autocomplete_matches(pane, tables, &prefix, true);
         return;
     }
 
@@ -1080,7 +1087,7 @@ fn trigger_manual_autocomplete(pane: &mut Pane, tables: &[String]) {
     if prefix.is_empty() {
         close_autocomplete(pane);
     } else {
-        set_autocomplete_matches(pane, tables, &prefix);
+        set_autocomplete_matches(pane, tables, &prefix, false);
     }
 }
 
@@ -1092,19 +1099,39 @@ fn refresh_autocomplete(pane: &mut Pane, tables: &[String]) {
     };
 
     if let Some(prefix) = get_table_prefix(line, col) {
-        set_autocomplete_matches(pane, tables, &prefix);
-    } else {
+        set_autocomplete_matches(pane, tables, &prefix, true);
+        return;
+    }
+
+    let (_, prefix) = token_prefix(line, col);
+    if prefix.is_empty() {
         close_autocomplete(pane);
+    } else {
+        set_autocomplete_matches(pane, tables, &prefix, false);
     }
 }
 
-fn set_autocomplete_matches(pane: &mut Pane, tables: &[String], prefix: &str) {
+fn set_autocomplete_matches(pane: &mut Pane, tables: &[String], prefix: &str, table_only: bool) {
     let prefix_lc = prefix.to_lowercase();
-    let matches: Vec<String> = tables
+
+    let mut matches: Vec<String> = tables
         .iter()
         .filter(|t| t.to_lowercase().starts_with(&prefix_lc))
         .cloned()
         .collect();
+
+    if !table_only {
+        matches.extend(
+            SQL_KEYWORDS
+                .iter()
+                .filter(|kw| kw.starts_with(&prefix_lc))
+                .map(|kw| (*kw).to_string()),
+        );
+    }
+
+    // Deduplicate case-insensitively while preserving order.
+    let mut seen = std::collections::HashSet::new();
+    matches.retain(|m| seen.insert(m.to_lowercase()));
 
     if matches.is_empty() {
         close_autocomplete(pane);

@@ -7,10 +7,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Style},
     text::Span,
-    widgets::{
-        Block, BorderType, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
-        ScrollbarState,
-    },
+    widgets::{Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 use unicode_width::UnicodeWidthChar;
 
@@ -137,8 +134,8 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
                     .map(|m| m.len())
                     .max()
                     .unwrap_or(8);
-                let popup_w = (max_w + 4) as u16;
-                let popup_h = (visible_count + 2) as u16;
+                let popup_w = (max_w + if needs_scrollbar { 3 } else { 2 }) as u16;
+                let popup_h = visible_count as u16;
 
                 let popup = Rect {
                     x: cursor_x.min(inner.right().saturating_sub(popup_w)),
@@ -148,23 +145,26 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
                 };
 
                 frame.render_widget(Clear, popup);
-                let block = Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(Color::White))
-                    .style(Style::default().bg(Color::Reset));
-                let inner_popup = block.inner(popup);
-                frame.render_widget(block, popup);
 
-                // Compute scroll offset so selected item is always visible.
-                let mut offset = 0usize;
-                if selected >= offset + visible_count {
-                    offset = selected + 1 - visible_count;
-                }
-                if selected < offset {
-                    offset = selected;
-                }
+                let popup_style = Style::default().bg(Color::Rgb(44, 48, 62)).fg(Color::White);
+                frame.render_widget(Paragraph::new("").style(popup_style), popup);
 
+                let inner_popup = Rect {
+                    x: popup.x,
+                    y: popup.y,
+                    width: popup
+                        .width
+                        .saturating_sub(if needs_scrollbar { 1 } else { 0 }),
+                    height: popup.height,
+                };
+
+                // Keep selected entry visible and roughly centered.
+                let selected_idx = selected.min(total.saturating_sub(1));
+                let max_offset = total.saturating_sub(visible_count);
+                let mut offset = selected_idx.saturating_sub(visible_count / 2);
+                offset = offset.min(max_offset);
+
+                let line_w = inner_popup.width as usize;
                 let lines: Vec<ratatui::text::Line> = pane
                     .autocomplete_matches
                     .iter()
@@ -172,35 +172,37 @@ pub fn render(frame: &mut Frame, area: Rect, pane: &Pane, focused: bool) {
                     .skip(offset)
                     .take(visible_count)
                     .map(|(i, m)| {
-                        let is_selected = i == selected;
+                        let is_selected = i == selected_idx;
+                        let content_w = line_w.saturating_sub(1);
+                        let text: String = m.chars().take(content_w).collect();
+                        let padded = format!(" {:<width$}", text, width = content_w);
                         let style = if is_selected {
-                            Style::default().bg(Color::DarkGray).fg(Color::White).bold()
+                            Style::default()
+                                .bg(Color::Rgb(82, 90, 120))
+                                .fg(Color::White)
+                                .bold()
                         } else {
-                            Style::default().fg(Color::White)
+                            popup_style
                         };
-                        ratatui::text::Line::from(ratatui::text::Span::styled(
-                            format!(" {} ", m),
-                            style,
-                        ))
+                        ratatui::text::Line::from(ratatui::text::Span::styled(padded, style))
                     })
                     .collect();
-                frame.render_widget(Paragraph::new(lines), inner_popup);
+                frame.render_widget(Paragraph::new(lines).style(popup_style), inner_popup);
 
-                // Scrollbar embedded in the right border.
                 if needs_scrollbar {
                     let scrollbar_area = Rect {
                         x: popup.x + popup.width - 1,
-                        y: popup.y + 1,
+                        y: popup.y,
                         width: 1,
-                        height: popup.height.saturating_sub(2),
+                        height: popup.height,
                     };
                     let mut scrollbar_state = ScrollbarState::new(total)
-                        .position(offset)
-                        .viewport_content_length(visible_count);
+                        .position(selected_idx)
+                        .viewport_content_length(1);
                     let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
                         .begin_symbol(None)
                         .end_symbol(None)
-                        .track_symbol(Some("│"))
+                        .track_symbol(Some("▕"))
                         .thumb_symbol("█");
                     frame.render_stateful_widget(scrollbar, scrollbar_area, &mut scrollbar_state);
                 }
