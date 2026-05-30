@@ -240,6 +240,22 @@ pub fn cycle_query_results(state: &mut AppState) {
     }
 }
 
+pub fn cycle_query_results_prev(state: &mut AppState) {
+    let active_idx = state.active_tab;
+    let Some(tab) = state.tabs.get_mut(active_idx) else {
+        return;
+    };
+    if let Some(pane) = tab.tree.active_mut() {
+        if pane.kind == PaneType::QueryResults {
+            if let Some(idx) = pane.bound_query_idx {
+                let total = pane.query_result_count.max(1);
+                let prev = (idx + total - 1) % total;
+                pane.bound_query_idx = Some(prev);
+            }
+        }
+    }
+}
+
 pub fn undo_change(state: &mut AppState) {
     let active_idx = state.active_tab;
     let Some(tab) = state.tabs.get_mut(active_idx) else {

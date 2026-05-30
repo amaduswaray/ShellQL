@@ -115,8 +115,15 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
         KeyCode::Char('O') => {
             modes::stage_insert_row_above(state);
         }
+        KeyCode::BackTab => {
+            modes::cycle_query_results_prev(state);
+        }
         KeyCode::Tab => {
-            modes::cycle_query_results(state);
+            if event.modifiers.contains(KeyModifiers::SHIFT) {
+                modes::cycle_query_results_prev(state);
+            } else {
+                modes::cycle_query_results(state);
+            }
         }
         KeyCode::Char('u') => {
             modes::undo_change(state);
