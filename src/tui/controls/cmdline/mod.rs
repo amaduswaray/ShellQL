@@ -2,7 +2,6 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::tui::{
     AppMode, AppState, CommandLineMode, ConfirmAction, DASHBOARD_COMMANDS, HOME_COMMANDS,
-    compute_completions,
 };
 
 pub mod data;
@@ -11,6 +10,34 @@ pub mod pane;
 pub mod search;
 pub mod sql;
 pub mod tab;
+
+fn filtered_dashboard_commands(state: &AppState) -> Vec<(&'static str, &'static str)> {
+    let pane_kind = state
+        .active_tab()
+        .and_then(|tab| tab.tree.panes.get(&tab.tree.active_pane).map(|p| &p.kind));
+
+    DASHBOARD_COMMANDS
+        .iter()
+        .copied()
+        .filter(|(cmd, _)| {
+            let table_view_only = matches!(*cmd, "where" | "order" | "select" | "insert" | "reset");
+            if table_view_only {
+                return matches!(pane_kind, Some(crate::tui::state::PaneType::TableView));
+            }
+            true
+        })
+        .collect()
+}
+
+fn compute_matches(
+    input: &str,
+    list: &[(&'static str, &'static str)],
+) -> Vec<(&'static str, &'static str)> {
+    list.iter()
+        .filter(|(cmd, _)| cmd.starts_with(input))
+        .copied()
+        .collect()
+}
 
 pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
     match event.code {
@@ -44,12 +71,13 @@ pub fn handle_cmdline(event: KeyEvent, state: &mut AppState) {
         KeyCode::Tab => {
             if let CommandLineMode::Input = state.cmdline.mode {
                 if state.cmdline.completions.is_empty() {
-                    let list = match state.mode {
-                        AppMode::Home => HOME_COMMANDS,
-                        AppMode::Dashboard => DASHBOARD_COMMANDS,
+                    let matches = match state.mode {
+                        AppMode::Home => compute_matches(&state.cmdline.input, HOME_COMMANDS),
+                        AppMode::Dashboard => {
+                            let list = filtered_dashboard_commands(state);
+                            compute_matches(&state.cmdline.input, &list)
+                        }
                     };
-
-                    let matches = compute_completions(&state.cmdline.input, list);
                     state.cmdline.open_completions(matches);
                 } else {
                     state.cmdline.next_completion();
@@ -300,16 +328,12 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "reset" => data::cmd_reset(state),
         "full" => nav::cmd_fullscreen(state),
 
-        // Destructive actions
-        "d" | "delete" => nav::cmd_delete(state, args),
+        // Destructive actions (home only)
+        "d" | "delete" if state.mode == AppMode::Home => nav::cmd_delete(state, args),
 
         "back" => nav::cmd_back(state),
         "forward" => nav::cmd_forward(state),
 
-        "tabnew" => tab::cmd_tab_new(state, args),
-        "tabnext" => tab::cmd_tab_next(state),
-        "tabprev" | "tabprevious" => tab::cmd_tab_prev(state),
-        "tabclose" | "tabdelete" => tab::cmd_tab_delete(state),
         "tab" => tab::cmd_tab(state, args),
 
         "!" => nav::cmd_bang(state, args),

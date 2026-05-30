@@ -97,7 +97,7 @@ pub fn render(frame: &mut Frame, area: Rect, state: &AppState) {
                             crate::tui::state::PaneType::SchemaPicker => "schema",
                             crate::tui::state::PaneType::TableView => "table",
                             crate::tui::state::PaneType::SchemaView => "schema",
-                            crate::tui::state::PaneType::QueryEditor => "query",
+                            crate::tui::state::PaneType::QueryEditor => "editor",
                             crate::tui::state::PaneType::QueryResults => "results",
                         });
                         let is_active = i == state.active_tab;

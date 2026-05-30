@@ -49,16 +49,11 @@ pub fn render(
     let inner = block.inner(popup);
     frame.render_widget(block, popup);
 
-    // Compute scroll offset so selected item is always visible.
-    let mut offset = 0usize;
-    if let Some(sel) = selected {
-        if sel >= offset + visible_count {
-            offset = sel + 1 - visible_count;
-        }
-        if sel < offset {
-            offset = sel;
-        }
-    }
+    // Compute scroll offset around selected item.
+    let selected_idx = selected.unwrap_or(0).min(total.saturating_sub(1));
+    let max_offset = total.saturating_sub(visible_count);
+    let mut offset = selected_idx.saturating_sub(visible_count / 2);
+    offset = offset.min(max_offset);
 
     let lines: Vec<Line> = completions
         .iter()
@@ -104,8 +99,8 @@ pub fn render(
             height: popup.height.saturating_sub(2),
         };
         let mut scrollbar_state = ScrollbarState::new(total)
-            .position(offset)
-            .viewport_content_length(visible_count);
+            .position(selected_idx)
+            .viewport_content_length(1);
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
             .begin_symbol(None)
             .end_symbol(None)

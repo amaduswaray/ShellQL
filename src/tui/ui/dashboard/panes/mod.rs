@@ -84,7 +84,7 @@ fn make_title(pane: &Pane) -> String {
             }
         }
         PaneType::QueryEditor => {
-            format!(" {}: Query ", pane.display_id)
+            format!(" {}: Editor ", pane.display_id)
         }
         PaneType::QueryResults => {
             if let Some(idx) = pane.bound_query_idx {

@@ -49,7 +49,7 @@ impl std::fmt::Display for PaneType {
             PaneType::SchemaPicker => write!(f, "schemapicker"),
             PaneType::TableView => write!(f, "table"),
             PaneType::SchemaView => write!(f, "schema"),
-            PaneType::QueryEditor => write!(f, "query"),
+            PaneType::QueryEditor => write!(f, "editor"),
             PaneType::QueryResults => write!(f, "queryresults"),
         }
     }

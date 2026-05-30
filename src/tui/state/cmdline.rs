@@ -44,13 +44,7 @@ pub const DASHBOARD_COMMANDS: &[(&str, &str)] = &[
     ("back", "go back in pane history"),
     ("forward", "go forward in pane history"),
     ("disconnect", "disconnect and return home"),
-    ("d", "delete <connection name>"),
-    ("delete", "delete <connection name>"),
     ("tab", "tab subcommand / go to tab"),
-    ("tabnew", "new tab"),
-    ("tabnext", "next tab"),
-    ("tabprev", "previous tab"),
-    ("tabclose", "close current tab"),
 ];
 
 /// Return every entry in `list` whose name starts with `input`.
