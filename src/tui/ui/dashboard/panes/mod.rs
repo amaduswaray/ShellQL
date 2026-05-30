@@ -52,7 +52,7 @@ pub fn render_pane(
 
 fn make_title(pane: &Pane) -> String {
     match pane.kind {
-        PaneType::TableList => format!(" {} ", pane.display_id),
+        PaneType::TableList => format!(" {}: Tables ", pane.display_id),
         PaneType::SchemaPicker => format!(" {}: Schema ", pane.display_id),
         PaneType::TableView => {
             if let Some(ref table) = pane.bound_table {

@@ -64,7 +64,7 @@ fn sync_pane_scroll(tab: &mut crate::tui::state::Tab, _area: Rect) {
 
         match pane.kind {
             crate::tui::state::PaneType::TableList => {
-                let inner_h = pane_area.height.saturating_sub(2 + 3).max(1) as usize;
+                let inner_h = pane_area.height.saturating_sub(2).max(1) as usize;
                 pane.sync_nav_offset(inner_h);
             }
             crate::tui::state::PaneType::SchemaPicker => {
