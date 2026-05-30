@@ -53,6 +53,8 @@ async fn app(state: &mut AppState) -> color_eyre::Result<()> {
             continue;
         }
 
+        let mut handled_key = false;
+
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {
                 state.should_quit = true;
@@ -61,6 +63,7 @@ async fn app(state: &mut AppState) -> color_eyre::Result<()> {
                 if ready? {
                     if let Event::Key(key) = event::read()? {
                         handle_key_event(key, state).await?;
+                        handled_key = true;
                     }
                 }
             }
@@ -68,6 +71,11 @@ async fn app(state: &mut AppState) -> color_eyre::Result<()> {
 
         if state.should_quit {
             break;
+        }
+
+        if !handled_key {
+            crate::tui::controls::ops::maybe_schedule_live_table_refresh(state);
+            crate::tui::controls::ops::run_pending_tasks(state).await?;
         }
     }
     Ok(())

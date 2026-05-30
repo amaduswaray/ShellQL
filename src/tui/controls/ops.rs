@@ -1,4 +1,71 @@
-use crate::tui::state::AppState;
+use crate::tui::{state::AppState, state::pane_layout::PaneType};
+
+pub fn maybe_schedule_live_table_refresh(state: &mut AppState) {
+    if !state.live_table_refresh_enabled {
+        return;
+    }
+    if state.mode != crate::tui::state::AppMode::Dashboard {
+        return;
+    }
+    if state.pool.is_none()
+        || state.cmdline.is_active()
+        || state.overlay.is_some()
+        || state.form.is_some()
+    {
+        return;
+    }
+
+    let now = std::time::Instant::now();
+    if let Some(last) = state.last_live_table_refresh_at {
+        if now.duration_since(last) < state.live_table_refresh_interval {
+            return;
+        }
+    }
+
+    let pending = {
+        let Some(tab) = state.active_tab() else {
+            return;
+        };
+        if tab.pending_load.is_some()
+            || tab.pending_commit.is_some()
+            || tab.pending_query_exec.is_some()
+        {
+            return;
+        }
+
+        let active_id = tab.tree.active_pane;
+        let Some(pane) = tab.tree.panes.get(&active_id) else {
+            return;
+        };
+        if pane.kind != PaneType::TableView {
+            return;
+        }
+        if !pane.pending_updates.is_empty()
+            || !pane.pending_deletes.is_empty()
+            || !pane.pending_inserts.is_empty()
+        {
+            return;
+        }
+        let Some(table) = pane.bound_table.clone() else {
+            return;
+        };
+
+        crate::tui::state::tab::PendingQuery {
+            table,
+            filter: pane.filter.clone(),
+            sort_col: pane.sort_col.clone(),
+            sort_desc: pane.sort_desc,
+            selected_cols: pane.selected_cols.clone(),
+        }
+    };
+
+    if let Some(tab) = state.active_tab_mut() {
+        tab.pending_load = Some(pending);
+        // Avoid "Loading…" flicker for background refresh.
+        tab.loading = false;
+    }
+    state.last_live_table_refresh_at = Some(now);
+}
 
 pub async fn run_pending_tasks(state: &mut AppState) -> color_eyre::Result<()> {
     run_pending_load(state).await?;

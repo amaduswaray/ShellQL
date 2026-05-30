@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
 
 use crate::connection::{Database, DbPool, list_connections};
 
@@ -40,6 +43,11 @@ pub struct AppState {
 
     /// Set by the connection picker; handled in the event loop with a spinner.
     pub pending_connection: Option<Database>,
+
+    /// Live-refresh TableView panes from the database.
+    pub live_table_refresh_enabled: bool,
+    pub live_table_refresh_interval: Duration,
+    pub last_live_table_refresh_at: Option<Instant>,
 }
 
 impl AppState {
@@ -60,6 +68,9 @@ impl AppState {
             tabs: Vec::new(),
             active_tab: 0,
             pending_connection: None,
+            live_table_refresh_enabled: true,
+            live_table_refresh_interval: Duration::from_millis(1000),
+            last_live_table_refresh_at: None,
         }
     }
 
