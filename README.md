@@ -58,7 +58,7 @@ Connect to your favourite provider and handle tables and schemas in your db
 - [x] for border overflows and showing(add connection)
 - [x] Proper vim commands
   - [x] o and O for newline over and under, to add a new row
-  - [ ] navigate text in the cmdline with arrows
+  - [x] navigate text in the cmdline with arrows
 
 - [x] Vim based query editor
   - [x] Remember visual mode
@@ -66,4 +66,5 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [x] commands like dG dgg, yG, etc
 
 - [ ] Tests for the new sql functions
+- [ ] Minor improvements for colors and such
 - [ ] Complete the command line commands

@@ -31,7 +31,7 @@ pub async fn list_tables(pool: &DbPool) -> color_eyre::eyre::Result<Vec<String>>
         }
         DbPool::Mysql(my) => {
             let rows: Vec<(String,)> = sqlx::query_as(
-                "SELECT table_name
+                "SELECT CAST(table_name AS CHAR)
                  FROM information_schema.tables
                  WHERE table_schema = DATABASE()
                    AND table_type = 'BASE TABLE'
@@ -107,11 +107,11 @@ pub async fn table_schema(pool: &DbPool, table: &str) -> color_eyre::eyre::Resul
 
         DbPool::Mysql(my) => {
             let rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
-                "SELECT column_name,
-                        data_type,
-                        is_nullable,
-                        column_key,
-                        column_default
+                "SELECT CAST(column_name AS CHAR),
+                        CAST(data_type AS CHAR),
+                        CAST(is_nullable AS CHAR),
+                        CAST(column_key AS CHAR),
+                        CAST(column_default AS CHAR)
                  FROM information_schema.columns
                  WHERE table_schema = DATABASE()
                    AND table_name   = ?

@@ -280,11 +280,6 @@ pub async fn query_rows(
     limit: u32,
     offset: u32,
 ) -> color_eyre::eyre::Result<(Vec<String>, Vec<Vec<String>>)> {
-    let order_by = sort_col.map(|col| {
-        let dir = if sort_desc { "DESC" } else { "ASC" };
-        format!("ORDER BY \"{}\" {dir}", col)
-    });
-
     match pool {
         DbPool::Postgres(pg) => {
             let cols: Vec<String> = if let Some(cols) = selected_cols {
@@ -316,8 +311,9 @@ pub async fn query_rows(
             if let Some(f) = filter {
                 query.push_str(&format!(" WHERE {f}"));
             }
-            if let Some(o) = &order_by {
-                query.push_str(&format!(" {o}"));
+            if let Some(col) = sort_col {
+                let dir = if sort_desc { "DESC" } else { "ASC" };
+                query.push_str(&format!(" ORDER BY \"{col}\" {dir}"));
             }
             query.push_str(&format!(" LIMIT {limit} OFFSET {offset}"));
 
@@ -370,8 +366,9 @@ pub async fn query_rows(
             if let Some(f) = filter {
                 query.push_str(&format!(" WHERE {f}"));
             }
-            if let Some(o) = &order_by {
-                query.push_str(&format!(" {o}"));
+            if let Some(col) = sort_col {
+                let dir = if sort_desc { "DESC" } else { "ASC" };
+                query.push_str(&format!(" ORDER BY `{col}` {dir}"));
             }
             query.push_str(&format!(" LIMIT {limit} OFFSET {offset}"));
 
@@ -414,8 +411,9 @@ pub async fn query_rows(
             if let Some(f) = filter {
                 query.push_str(&format!(" WHERE {f}"));
             }
-            if let Some(o) = &order_by {
-                query.push_str(&format!(" {o}"));
+            if let Some(col) = sort_col {
+                let dir = if sort_desc { "DESC" } else { "ASC" };
+                query.push_str(&format!(" ORDER BY \"{col}\" {dir}"));
             }
             query.push_str(&format!(" LIMIT {limit} OFFSET {offset}"));
 

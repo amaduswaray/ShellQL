@@ -4,8 +4,8 @@ use shellql::connection::connect_db;
 use shellql::connection::models::ConnectionSource;
 use shellql::connection::models::DatabaseString;
 use shellql::connection::{
-    count_rows, delete_rows, filter_rows, insert_row, list_tables, table_rows, table_schema,
-    update_cell,
+    count_rows, delete_rows, filter_rows, insert_row, list_tables, query_rows, table_rows,
+    table_schema, update_cell,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -46,6 +46,7 @@ async fn sqlite_pool() -> shellql::connection::models::DbPool {
 // ── list_tables ───────────────────────────────────────────────────────────────
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_list_tables_postgres() {
     let pool = pg_pool().await;
     let tables = list_tables(&pool).await.expect("list_tables should work");
@@ -56,6 +57,7 @@ async fn test_list_tables_postgres() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_list_tables_mysql() {
     let pool = mysql_pool().await;
     let tables = list_tables(&pool).await.expect("list_tables should work");
@@ -66,6 +68,7 @@ async fn test_list_tables_mysql() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_list_tables_sqlite() {
     let pool = sqlite_pool().await;
     let tables = list_tables(&pool).await.expect("list_tables should work");
@@ -78,6 +81,7 @@ async fn test_list_tables_sqlite() {
 // ── table_schema ──────────────────────────────────────────────────────────────
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_table_schema_postgres() {
     let pool = pg_pool().await;
     let schema = table_schema(&pool, "employees")
@@ -93,6 +97,7 @@ async fn test_table_schema_postgres() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_table_schema_mysql() {
     let pool = mysql_pool().await;
     let schema = table_schema(&pool, "employees")
@@ -106,6 +111,7 @@ async fn test_table_schema_mysql() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_table_schema_sqlite() {
     let pool = sqlite_pool().await;
     let schema = table_schema(&pool, "employees")
@@ -121,6 +127,7 @@ async fn test_table_schema_sqlite() {
 // ── table_rows (with offset + limit) ──────────────────────────────────────────
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_table_rows_paginated_postgres() {
     let pool = pg_pool().await;
     let (cols, rows) = table_rows(&pool, "employees", 10, 0)
@@ -138,6 +145,7 @@ async fn test_table_rows_paginated_postgres() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_table_rows_paginated_mysql() {
     let pool = mysql_pool().await;
     let (cols, rows) = table_rows(&pool, "employees", 10, 0)
@@ -148,6 +156,7 @@ async fn test_table_rows_paginated_mysql() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_table_rows_paginated_sqlite() {
     let pool = sqlite_pool().await;
     let (cols, rows) = table_rows(&pool, "employees", 10, 0)
@@ -160,6 +169,7 @@ async fn test_table_rows_paginated_sqlite() {
 // ── count_rows ────────────────────────────────────────────────────────────────
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_count_rows_postgres() {
     let pool = pg_pool().await;
     let count = count_rows(&pool, "employees")
@@ -169,6 +179,7 @@ async fn test_count_rows_postgres() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_count_rows_mysql() {
     let pool = mysql_pool().await;
     let count = count_rows(&pool, "employees")
@@ -178,6 +189,7 @@ async fn test_count_rows_mysql() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_count_rows_sqlite() {
     let pool = sqlite_pool().await;
     let count = count_rows(&pool, "employees")
@@ -189,6 +201,7 @@ async fn test_count_rows_sqlite() {
 // ── filter_rows ───────────────────────────────────────────────────────────────
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_filter_rows_postgres() {
     let pool = pg_pool().await;
     let (cols, rows) = filter_rows(&pool, "employees", "first_name", "Georgi", 10, 0)
@@ -200,18 +213,20 @@ async fn test_filter_rows_postgres() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_filter_rows_mysql() {
     let pool = mysql_pool().await;
-    let (cols, rows) = filter_rows(&pool, "employees", "first_name", "Georgi", 10, 0)
+    let (_cols, rows) = filter_rows(&pool, "employees", "first_name", "Georgi", 10, 0)
         .await
         .expect("filter_rows should work");
     assert!(!rows.is_empty());
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_filter_rows_sqlite() {
     let pool = sqlite_pool().await;
-    let (cols, rows) = filter_rows(&pool, "employees", "first_name", "Georgi", 10, 0)
+    let (_cols, rows) = filter_rows(&pool, "employees", "first_name", "Georgi", 10, 0)
         .await
         .expect("filter_rows should work");
     assert!(!rows.is_empty());
@@ -220,6 +235,7 @@ async fn test_filter_rows_sqlite() {
 // ── update_cell ───────────────────────────────────────────────────────────────
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_update_cell_postgres() {
     let pool = pg_pool().await;
     let affected = update_cell(
@@ -234,10 +250,22 @@ async fn test_update_cell_postgres() {
     .expect("update_cell should work");
     assert_eq!(affected, 1);
 
-    // Verify
-    let (_, rows) = table_rows(&pool, "employees", 1, 0).await.unwrap();
-    let email_idx = rows[0].len() - 1; // email is last column
-    assert_eq!(rows[0][email_idx], "updated@example.com");
+    // Verify updated row by PK (table_rows order is not deterministic).
+    let (headers, rows) = query_rows(
+        &pool,
+        "employees",
+        Some("emp_no = 10001"),
+        None,
+        false,
+        Some(&["email".to_string()]),
+        10,
+        0,
+    )
+    .await
+    .unwrap();
+    assert_eq!(headers, vec!["email".to_string()]);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0][0], "updated@example.com");
 
     // Restore
     update_cell(
@@ -253,6 +281,7 @@ async fn test_update_cell_postgres() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_update_cell_mysql() {
     let pool = mysql_pool().await;
     let affected = update_cell(
@@ -281,6 +310,7 @@ async fn test_update_cell_mysql() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_update_cell_sqlite() {
     let pool = sqlite_pool().await;
     let affected = update_cell(
@@ -311,6 +341,7 @@ async fn test_update_cell_sqlite() {
 // ── insert_row ────────────────────────────────────────────────────────────────
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_insert_row_postgres() {
     let pool = pg_pool().await;
     let cols = vec![
@@ -343,6 +374,7 @@ async fn test_insert_row_postgres() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_insert_row_mysql() {
     let pool = mysql_pool().await;
     let cols = vec![
@@ -375,6 +407,7 @@ async fn test_insert_row_mysql() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_insert_row_sqlite() {
     let pool = sqlite_pool().await;
     let cols = vec![
@@ -409,6 +442,7 @@ async fn test_insert_row_sqlite() {
 // ── delete_rows ───────────────────────────────────────────────────────────────
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_delete_rows_postgres() {
     let pool = pg_pool().await;
 
@@ -436,11 +470,24 @@ async fn test_delete_rows_postgres() {
         .expect("delete_rows should work");
     assert_eq!(affected, 1);
 
-    let count = count_rows(&pool, "employees").await.unwrap();
-    assert_eq!(count, 100); // back to original count
+    // Verify target row is gone regardless of baseline table size.
+    let (_headers, rows) = query_rows(
+        &pool,
+        "employees",
+        Some("emp_no = 88888"),
+        None,
+        false,
+        None,
+        10,
+        0,
+    )
+    .await
+    .unwrap();
+    assert!(rows.is_empty(), "deleted row should not exist");
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_delete_rows_mysql() {
     let pool = mysql_pool().await;
 
@@ -467,11 +514,24 @@ async fn test_delete_rows_mysql() {
         .expect("delete_rows should work");
     assert_eq!(affected, 1);
 
-    let count = count_rows(&pool, "employees").await.unwrap();
-    assert_eq!(count, 100);
+    // Verify target row is gone regardless of baseline table size.
+    let (_headers, rows) = query_rows(
+        &pool,
+        "employees",
+        Some("emp_no = 88888"),
+        None,
+        false,
+        None,
+        10,
+        0,
+    )
+    .await
+    .unwrap();
+    assert!(rows.is_empty(), "deleted row should not exist");
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_delete_rows_sqlite() {
     let pool = sqlite_pool().await;
 
