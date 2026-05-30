@@ -273,16 +273,17 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "connect" => nav::cmd_connect(state),
 
         // Pane management
-        "vnew" => pane::cmd_vnew(state, args),
-        "hnew" => pane::cmd_hnew(state, args),
-        "new" => pane::cmd_vnew(state, args), // alias for vnew
+        "new" => pane::cmd_new(state, args),
+        "split" => pane::cmd_hnew(state, args),
+        "vsplit" => pane::cmd_vnew(state, args),
+        "hsplit" => pane::cmd_hnew(state, args),
 
-        "show" => pane::cmd_show(state, args),
+        "table" => pane::cmd_table(state, args),
         "tables" => pane::cmd_tables(state, args),
         "noh" => pane::cmd_noh(state),
         "schema" => pane::cmd_schema(state, args),
-        "sql" | "query" => pane::cmd_sql(state, args),
-        "queryresults" => pane::cmd_query_results(state, args),
+        "editor" => pane::cmd_editor(state, args),
+        "results" => pane::cmd_results(state, args),
 
         "disconnect" => nav::cmd_disconnect(state),
 
@@ -293,6 +294,7 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "where" => data::cmd_where(state, args),
         "order" => data::cmd_order(state, args),
         "select" => data::cmd_select(state, args),
+        "insert" => data::cmd_insert(state, args),
 
         "resize" => nav::cmd_resize(state, args),
         "reset" => data::cmd_reset(state),
@@ -304,11 +306,11 @@ fn execute_command(cmd: &str, state: &mut AppState) {
         "back" => nav::cmd_back(state),
         "forward" => nav::cmd_forward(state),
 
-        "tnew" => tab::cmd_tab_new(state, args),
-        "tnext" => tab::cmd_tab_next(state),
-        "tprev" => tab::cmd_tab_prev(state),
-        "tdelete" => tab::cmd_tab_delete(state),
-        "t" => tab::cmd_tab_goto(state, args),
+        "tabnew" => tab::cmd_tab_new(state, args),
+        "tabnext" => tab::cmd_tab_next(state),
+        "tabprev" | "tabprevious" => tab::cmd_tab_prev(state),
+        "tabclose" | "tabdelete" => tab::cmd_tab_delete(state),
+        "tab" => tab::cmd_tab(state, args),
 
         "!" => nav::cmd_bang(state, args),
 

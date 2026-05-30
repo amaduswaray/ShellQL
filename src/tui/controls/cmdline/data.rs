@@ -305,6 +305,51 @@ pub fn cmd_reset(state: &mut AppState) {
     state.cmdline.set_loading("Reset cleared");
 }
 
+/// Stage a new row insert in TableView. Defaults to below the cursor.
+/// Usage: :insert [above|below]
+pub fn cmd_insert(state: &mut AppState, args: &[&str]) {
+    let place_above = match args.first().copied() {
+        None => false,
+        Some(arg)
+            if arg.eq_ignore_ascii_case("below")
+                || arg.eq_ignore_ascii_case("after")
+                || arg.eq_ignore_ascii_case("down") =>
+        {
+            false
+        }
+        Some(arg)
+            if arg.eq_ignore_ascii_case("above")
+                || arg.eq_ignore_ascii_case("before")
+                || arg.eq_ignore_ascii_case("up") =>
+        {
+            true
+        }
+        Some(_) => {
+            state.cmdline.set_error("usage: :insert [above|below]");
+            return;
+        }
+    };
+
+    let Some(tab) = state.active_tab_mut() else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+    let Some(pane) = tab.tree.active_mut() else {
+        state.cmdline.set_error("not in dashboard");
+        return;
+    };
+    if pane.kind != crate::tui::state::PaneType::TableView {
+        state.cmdline.set_error(":insert only works in table view");
+        return;
+    }
+
+    if place_above {
+        crate::tui::controls::dashboard::modes::stage_insert_row_above(state);
+    } else {
+        crate::tui::controls::dashboard::modes::stage_insert_row_below(state);
+    }
+}
+
 pub fn cmd_write(state: &mut AppState, _args: &[&str]) {
     let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");

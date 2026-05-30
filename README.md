@@ -65,6 +65,6 @@ Connect to your favourite provider and handle tables and schemas in your db
   - [x] Cursor edit
   - [x] commands like dG dgg, yG, etc
 
-- [ ] Tests for the new sql functions
+- [x] Tests for the new sql functions
 - [ ] Minor improvements for colors and such
 - [ ] Complete the command line commands

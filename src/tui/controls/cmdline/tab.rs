@@ -69,12 +69,12 @@ pub fn cmd_tab_goto(state: &mut AppState, args: &[&str]) {
         Some(s) => match s.parse::<usize>() {
             Ok(v) => v,
             Err(_) => {
-                state.cmdline.set_error("usage: :t <id>");
+                state.cmdline.set_error("usage: :tab <id>");
                 return;
             }
         },
         None => {
-            state.cmdline.set_error("usage: :t <id>");
+            state.cmdline.set_error("usage: :tab <id>");
             return;
         }
     };
@@ -83,4 +83,35 @@ pub fn cmd_tab_goto(state: &mut AppState, args: &[&str]) {
         return;
     }
     state.active_tab = id;
+}
+
+/// Unified tab command:
+/// :tab new|next|prev|close|<id>
+pub fn cmd_tab(state: &mut AppState, args: &[&str]) {
+    let Some(first) = args.first().copied() else {
+        state
+            .cmdline
+            .set_error("usage: :tab <new|next|prev|close|id>");
+        return;
+    };
+
+    if first.parse::<usize>().is_ok() {
+        let arg = [first];
+        cmd_tab_goto(state, &arg);
+        return;
+    }
+
+    match first {
+        s if s.eq_ignore_ascii_case("new") => cmd_tab_new(state, &[]),
+        s if s.eq_ignore_ascii_case("next") => cmd_tab_next(state),
+        s if s.eq_ignore_ascii_case("prev") || s.eq_ignore_ascii_case("previous") => {
+            cmd_tab_prev(state)
+        }
+        s if s.eq_ignore_ascii_case("close") || s.eq_ignore_ascii_case("delete") => {
+            cmd_tab_delete(state)
+        }
+        _ => state
+            .cmdline
+            .set_error("usage: :tab <new|next|prev|close|id>"),
+    }
 }

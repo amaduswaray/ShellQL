@@ -4,13 +4,29 @@ pub fn parse_pane_type(arg: Option<&&str>) -> crate::tui::state::PaneType {
     match arg {
         Some(s) if s.eq_ignore_ascii_case("table") => crate::tui::state::PaneType::TableView,
         Some(s) if s.eq_ignore_ascii_case("schema") => crate::tui::state::PaneType::SchemaView,
-        Some(s) if s.eq_ignore_ascii_case("sql") || s.eq_ignore_ascii_case("query") => {
-            crate::tui::state::PaneType::QueryEditor
-        }
-        Some(s) if s.eq_ignore_ascii_case("queryresults") => {
+        Some(s) if s.eq_ignore_ascii_case("editor") => crate::tui::state::PaneType::QueryEditor,
+        Some(s) if s.eq_ignore_ascii_case("result") || s.eq_ignore_ascii_case("results") => {
             crate::tui::state::PaneType::QueryResults
         }
         _ => crate::tui::state::PaneType::TableList,
+    }
+}
+
+/// Unified create command.
+/// Usage: :new tab | :new pane [table|schema|editor|results] [table_name]
+pub fn cmd_new(state: &mut AppState, args: &[&str]) {
+    match args.first().copied() {
+        Some(kind) if kind.eq_ignore_ascii_case("tab") => {
+            super::tab::cmd_tab_new(state, &[]);
+        }
+        Some(kind) if kind.eq_ignore_ascii_case("pane") => {
+            cmd_vnew(state, &args[1..]);
+        }
+        _ => {
+            state
+                .cmdline
+                .set_error("usage: :new <tab|pane> [pane-view]");
+        }
     }
 }
 
@@ -21,7 +37,7 @@ pub fn cmd_vnew(state: &mut AppState, args: &[&str]) {
     if kind == crate::tui::state::PaneType::QueryResults {
         state
             .cmdline
-            .set_error("cannot create empty query results pane; use :queryResults or Ctrl+Enter");
+            .set_error("cannot create empty results pane; use :results or Ctrl+Enter");
         return;
     }
 
@@ -96,7 +112,7 @@ pub fn cmd_hnew(state: &mut AppState, args: &[&str]) {
     if kind == crate::tui::state::PaneType::QueryResults {
         state
             .cmdline
-            .set_error("cannot create empty query results pane; use :queryResults or Ctrl+Enter");
+            .set_error("cannot create empty results pane; use :results or Ctrl+Enter");
         return;
     }
 
@@ -164,7 +180,7 @@ pub fn cmd_hnew(state: &mut AppState, args: &[&str]) {
     }
 }
 
-pub fn cmd_show(state: &mut AppState, args: &[&str]) {
+pub fn cmd_table(state: &mut AppState, args: &[&str]) {
     let table_name = args.first().map(|s| s.to_string());
     let cache_has = table_name
         .as_ref()
@@ -191,7 +207,7 @@ pub fn cmd_show(state: &mut AppState, args: &[&str]) {
                 tab.error = None;
             }
         } else {
-            state.cmdline.set_error(":show requires a table name");
+            state.cmdline.set_error(":table requires a table name");
         }
     }
 }
@@ -253,7 +269,7 @@ pub fn cmd_schema(state: &mut AppState, args: &[&str]) {
     }
 }
 
-pub fn cmd_sql(state: &mut AppState, _args: &[&str]) {
+pub fn cmd_editor(state: &mut AppState, _args: &[&str]) {
     let Some(tab) = state.active_tab_mut() else {
         state.cmdline.set_error("not in dashboard");
         return;
@@ -264,7 +280,7 @@ pub fn cmd_sql(state: &mut AppState, _args: &[&str]) {
     }
 }
 
-pub fn cmd_query_results(state: &mut AppState, _args: &[&str]) {
+pub fn cmd_results(state: &mut AppState, _args: &[&str]) {
     let query_results_empty = state
         .active_tab()
         .map_or(true, |tab| tab.query_results.is_empty());
