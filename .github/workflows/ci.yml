@@ -10,7 +10,7 @@ env:
 
 jobs:
   quality:
-    name: Format + Check + Build
+    name: Format + Check
     runs-on: ubuntu-latest
 
     steps:
@@ -31,8 +31,6 @@ jobs:
       - name: cargo check
         run: cargo check --all-targets --locked
 
-      - name: cargo build (release)
-        run: cargo build --release --locked
 
   tests:
     name: Unit + fast integration tests
