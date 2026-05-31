@@ -1,7 +1,9 @@
 [package]
 name = "shellql"
-version = "0.1.0"
+version = "0.1.1-beta"
 edition = "2024"
+description = "A Vim- and tmux-inspired terminal database manager for developers"
+license = "MIT"
 
 [[bin]]
 name = "shql"
@@ -32,3 +34,7 @@ uuid = { version = "1.23.1", features = ["v4"] }
 
 [dev-dependencies]
 serial_test = "3"
+
+[profile.release]
+strip = true
+opt-level = 3
