@@ -247,6 +247,8 @@ git push origin v0.1.2-beta
 Pushing a `v*` tag triggers the release workflow and publishes platform binaries to GitHub Releases.
 Tags containing `-beta` are automatically marked as **pre-releases**.
 
+You can also run the **Release** workflow manually from GitHub Actions via **Run workflow** and provide a tag (for example `v0.1.2-beta`).
+
 ---
 
 ## Contributing

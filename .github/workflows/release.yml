@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.1.2-beta)'
+        required: true
+        type: string
 
 jobs:
   build:
@@ -76,6 +82,9 @@ jobs:
     permissions:
       contents: write
 
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
     steps:
       - name: Download all binaries
         uses: actions/download-artifact@v4
@@ -86,6 +95,8 @@ jobs:
       - name: Create release and upload binaries
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-beta') }}
+          prerelease: ${{ contains(env.RELEASE_TAG, '-beta') }}
           files: binaries/*
