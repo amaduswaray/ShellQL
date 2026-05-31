@@ -2,7 +2,7 @@
 
 This document is the detailed usage reference for ShellQL.
 
-- Project overview: [README.md](./README.md)
+- Project overview: [README.md](../README.md)
 - Status: **beta**
 
 ---
@@ -107,6 +107,8 @@ shql db delete --name dev
 - `o` / `O` — stage insert row below/above
 - `u` — undo staged change
 - `:w` — commit staged changes
+- `Tab` — next result set (Results view)
+- `Shift+Tab` — previous result set (Results view)
 
 ### Misc
 - `K` — cell peek
@@ -144,7 +146,20 @@ Popup behavior:
 
 ---
 
-## 8) Command line commands (`:`)
+## 8) Results view (single + multi-select)
+
+When a query contains multiple statements (for example multiple `SELECT`s separated by `;`), ShellQL stores each statement output as a separate result set.
+
+In the Results view:
+- `Tab` moves to the next result set
+- `Shift+Tab` moves to the previous result set
+- the pane title shows your position as `Result n/m`
+
+If your SQL has only one statement, it behaves like a normal single result table.
+
+---
+
+## 9) Command line commands (`:`)
 
 ### Home commands
 - `:add`
@@ -197,7 +212,7 @@ Notes:
 
 ---
 
-## 9) TableView workflow
+## 10) TableView workflow
 
 TableView is the most powerful operational view and supports staged changes.
 
@@ -214,7 +229,7 @@ Commit-time checks include required-value validation for inserts.
 
 ---
 
-## 10) Search behavior
+## 11) Search behavior
 
 - `/` and `?` show live match counts as `[n/m]`
 - count is aligned right in the cmdline search bar
@@ -223,7 +238,7 @@ Commit-time checks include required-value validation for inserts.
 
 ---
 
-## 11) Beta notes
+## 12) Beta notes
 
 ShellQL is moving quickly toward production readiness.
 
@@ -235,7 +250,7 @@ Planned project hardening (outside this doc):
 
 ---
 
-## 12) Troubleshooting
+## 13) Troubleshooting
 
 If something looks off:
 
@@ -246,7 +261,7 @@ If something looks off:
 
 ---
 
-## 13) Project tone
+## 14) Project tone
 
 ShellQL intentionally prioritizes keyboard fluency and composable workflows over hand-holding.
 

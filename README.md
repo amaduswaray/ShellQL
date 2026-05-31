@@ -54,7 +54,7 @@ This makes it easy to inspect data, write SQL, and validate outcomes side-by-sid
 - Context-aware autocomplete (commands + editor SQL/table completion)
 - Table view workflows: browse, filter, sort, edit, delete, staged inserts
 - Schema exploration per table
-- Query execution + results view
+- Query execution + multi-result view
 - Multi-tab, multi-pane workspace
 
 ---
@@ -141,6 +141,7 @@ shql connect --interactive
 - `o` / `O` — stage insert row below/above
 - `u` — undo staged change
 - `:w` — commit staged changes
+- `Tab` / `Shift+Tab` — next/previous result set (Results view)
 
 ### Query editor (Vim-inspired)
 - Normal/Insert/Visual behavior
@@ -182,7 +183,7 @@ Other:
 - `:resize <direction> <amount>`
 - `:noh`
 
-> Full docs: see **[documentation.md](./documentation.md)**
+> Full docs: see **[Docs/documentation.md](./Docs/documentation.md)**
 
 ---
 
@@ -211,7 +212,15 @@ Respect to the maintainers and communities behind these projects.
 
 For a more complete guide (views, workflows, keybindings, commands), see:
 
-- **[documentation.md](./documentation.md)**
+- **[Docs/documentation.md](./Docs/documentation.md)**
+
+---
+
+## Contributing
+
+Contributions are welcome.
+
+- See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for setup, checks, and PR guidelines.
 
 ---
 
