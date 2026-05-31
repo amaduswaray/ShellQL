@@ -246,6 +246,7 @@ Release/tag convention for the beta line:
 - `v0.1.x-beta` (Git tag)
 - `0.1.x-beta` (`Cargo.toml`)
 - increment `x` for each beta release
+- helper script: `./scripts/bump-beta.sh`
 
 Planned project hardening (outside this doc):
 - issue tracker structuring

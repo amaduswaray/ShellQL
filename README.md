@@ -235,9 +235,10 @@ Release flow:
 git checkout main
 git pull
 
-# bump Cargo.toml version first, commit it
-# e.g. version = "0.1.2-beta"
+# bump patch beta version automatically (0.1.x-beta -> 0.1.(x+1)-beta)
+./scripts/bump-beta.sh
 
+# then tag + push
 git tag -a v0.1.2-beta -m "Release v0.1.2-beta"
 git push origin main
 git push origin v0.1.2-beta
