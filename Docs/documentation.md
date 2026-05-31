@@ -242,10 +242,13 @@ Commit-time checks include required-value validation for inserts.
 
 ShellQL is moving quickly toward production readiness.
 
+Release/tag convention for the beta line:
+- `v0.1.x-beta` (Git tag)
+- `0.1.x-beta` (`Cargo.toml`)
+- increment `x` for each beta release
+
 Planned project hardening (outside this doc):
-- CI/workflows
 - issue tracker structuring
-- contribution guide
 - packaging polish and release pipelines
 
 ---

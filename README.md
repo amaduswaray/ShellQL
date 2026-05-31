@@ -216,6 +216,38 @@ For a more complete guide (views, workflows, keybindings, commands), see:
 
 ---
 
+## Versioning & releases
+
+ShellQL release tags follow GitHub-recommended `v` prefixes.
+
+Current beta track:
+- **`v0.1.x-beta`**
+- Increase `x` for each new beta release (`v0.1.0-beta`, `v0.1.1-beta`, `v0.1.2-beta`, ...)
+
+Version sync rule:
+- `Cargo.toml` version should match the tag without the `v` prefix.
+  - Example: tag `v0.1.2-beta` ↔ `version = "0.1.2-beta"`
+
+Release flow:
+
+```bash
+# after merging to main
+git checkout main
+git pull
+
+# bump Cargo.toml version first, commit it
+# e.g. version = "0.1.2-beta"
+
+git tag -a v0.1.2-beta -m "Release v0.1.2-beta"
+git push origin main
+git push origin v0.1.2-beta
+```
+
+Pushing a `v*` tag triggers the release workflow and publishes platform binaries to GitHub Releases.
+Tags containing `-beta` are automatically marked as **pre-releases**.
+
+---
+
 ## Contributing
 
 Contributions are welcome.
@@ -226,4 +258,4 @@ Contributions are welcome.
 
 ## License
 
-MIT (planned for open-source release)
+MIT
