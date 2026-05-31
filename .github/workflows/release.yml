@@ -2,19 +2,121 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v0.1.2-beta)'
-        required: true
+        description: 'Existing release tag to build (e.g. v0.1.2-beta). Leave empty to use ref tag.'
+        required: false
         type: string
 
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
+  prepare:
+    name: Prepare release tag
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    outputs:
+      release_tag: ${{ steps.prepare.outputs.release_tag }}
+      should_release: ${{ steps.prepare.outputs.should_release }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        if: github.event_name == 'push' && github.ref_type == 'branch'
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        if: github.event_name == 'push' && github.ref_type == 'branch'
+        uses: Swatinem/rust-cache@v2
+
+      - name: Resolve tag (tag push / manual / auto-bump on main)
+        id: prepare
+        env:
+          MANUAL_TAG: ${{ github.event.inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # 1) Tag push path: use pushed tag directly.
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "release_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 2) Manual dispatch path: use provided tag.
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            if [[ -z "${MANUAL_TAG}" ]]; then
+              echo "No manual tag provided; skipping release."
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [[ ! "${MANUAL_TAG}" =~ ^v ]]; then
+              echo "Manual tag must start with 'v' (got: ${MANUAL_TAG})" >&2
+              exit 1
+            fi
+            echo "release_tag=${MANUAL_TAG}" >> "$GITHUB_OUTPUT"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 3) Push to main path: auto-bump beta patch, commit, tag, push.
+          ./scripts/bump-beta.sh
+
+          VERSION="$(awk '
+            $0=="[package]" { in_pkg=1; next }
+            /^\[/ && $0!="[package]" { in_pkg=0 }
+            in_pkg && $1=="version" {
+              gsub(/"/, "", $3)
+              print $3
+              exit
+            }
+          ' Cargo.toml)"
+
+          if [[ -z "${VERSION}" ]]; then
+            echo "Could not read version from Cargo.toml" >&2
+            exit 1
+          fi
+
+          TAG="v${VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if ! git diff --quiet -- Cargo.toml Cargo.lock; then
+            git add Cargo.toml Cargo.lock
+            git commit -m "chore(release): bump version to ${VERSION}"
+            git push origin HEAD:main
+          fi
+
+          if git rev-parse "${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists; skipping tag creation."
+          else
+            git tag -a "${TAG}" -m "Release ${TAG}"
+            git push origin "${TAG}"
+          fi
+
+          echo "release_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build — ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
 
     strategy:
       fail-fast: false
@@ -41,8 +143,10 @@ jobs:
             asset_name: shql-windows-x86_64.exe
 
     steps:
-      - name: Checkout code
+      - name: Checkout code at release tag
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.release_tag }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -77,13 +181,8 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: build
-
-    permissions:
-      contents: write
-
-    env:
-      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    needs: [prepare, build]
+    if: needs.prepare.outputs.should_release == 'true'
 
     steps:
       - name: Download all binaries
@@ -95,8 +194,7 @@ jobs:
       - name: Create release and upload binaries
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
-          target_commitish: ${{ github.sha }}
+          tag_name: ${{ needs.prepare.outputs.release_tag }}
           generate_release_notes: true
-          prerelease: ${{ contains(env.RELEASE_TAG, '-beta') }}
+          prerelease: ${{ contains(needs.prepare.outputs.release_tag, '-beta') }}
           files: binaries/*

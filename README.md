@@ -230,24 +230,23 @@ Version sync rule:
 
 Release flow:
 
+- **Merges/pushes to `main` automatically create a new beta release.**
+  - The workflow bumps `0.1.x-beta` → `0.1.(x+1)-beta`
+  - Commits `Cargo.toml` + `Cargo.lock`
+  - Creates and pushes tag `v0.1.(x+1)-beta`
+  - Builds binaries and publishes a GitHub pre-release
+
+Manual options are still available:
+
 ```bash
-# after merging to main
-git checkout main
-git pull
-
-# bump patch beta version automatically (0.1.x-beta -> 0.1.(x+1)-beta)
-./scripts/bump-beta.sh
-
-# then tag + push
+# trigger release by pushing a tag yourself
 git tag -a v0.1.2-beta -m "Release v0.1.2-beta"
-git push origin main
 git push origin v0.1.2-beta
 ```
 
-Pushing a `v*` tag triggers the release workflow and publishes platform binaries to GitHub Releases.
-Tags containing `-beta` are automatically marked as **pre-releases**.
+Or use **Actions → Release → Run workflow** and pass a tag.
 
-You can also run the **Release** workflow manually from GitHub Actions via **Run workflow** and provide a tag (for example `v0.1.2-beta`).
+Tags containing `-beta` are automatically marked as **pre-releases**.
 
 ---
 
