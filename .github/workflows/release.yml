@@ -132,11 +132,6 @@ jobs:
             binary_name: shql
             asset_name: shql-macos-arm64
 
-          - os: macos-13
-            target: x86_64-apple-darwin
-            binary_name: shql
-            asset_name: shql-macos-x86_64
-
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary_name: shql.exe
