@@ -1,6 +1,6 @@
 [package]
 name = "shellql"
-version = "0.1.5-beta"
+version = "0.1.6-beta"
 edition = "2024"
 description = "A Vim- and tmux-inspired terminal database manager for developers"
 license = "MIT"
