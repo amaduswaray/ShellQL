@@ -105,19 +105,14 @@ jobs:
           set -euo pipefail
 
           VERSION="${{ steps.version.outputs.version }}"
-          EXISTS="$(python3 - "$VERSION" <<'PY'
-import json,sys,urllib.request
-version = sys.argv[1]
-url = "https://crates.io/api/v1/crates/shellql/versions?page=1&per_page=100"
-try:
-    data = json.load(urllib.request.urlopen(url, timeout=20))
-    versions = [v.get('num') for v in data.get('versions', [])]
-    print('true' if version in versions else 'false')
-except Exception:
-    # If API lookup fails, do not silently skip publish.
-    print('false')
-PY
-)"
+          API_URL="https://crates.io/api/v1/crates/shellql/versions?page=1&per_page=100"
+
+          # Keep this check very simple to avoid YAML/heredoc parsing edge cases.
+          if curl -fsSL "$API_URL" | grep -q "\"num\":\"$VERSION\""; then
+            EXISTS="true"
+          else
+            EXISTS="false"
+          fi
 
           echo "exists=$EXISTS" >> "$GITHUB_OUTPUT"
           if [[ "$EXISTS" == "true" ]]; then

@@ -70,20 +70,10 @@ brew install shellql
 
 > Homebrew setup details: **[docs/homebrew.md](./docs/homebrew.md)**
 
-### Other package managers (placeholders)
-
-```bash
-# apt (placeholder)
-sudo apt install shellql
-
-# Nix (placeholder)
-nix profile install <flake-or-package>#shellql
-```
 
 ### Cargo
 
 ```bash
-# placeholder package install (to be finalized during release publish)
 cargo install shellql
 ```
 
@@ -189,7 +179,7 @@ Other:
 - `:resize <direction> <amount>`
 - `:noh`
 
-> Full docs: see **[docs/documentation.md](./docs/documentation.md)**
+> Full docs: see [docs/documentation.md](./docs/documentation.md)
 
 ---
 
@@ -218,8 +208,8 @@ Respect to the maintainers and communities behind these projects.
 
 For a more complete guide (views, workflows, keybindings, commands), see:
 
-- **[docs/documentation.md](./docs/documentation.md)**
-- **[docs/homebrew.md](./docs/homebrew.md)**
+- [docs/documentation.md](./docs/documentation.md)
+- [docs/homebrew.md](./docs/homebrew.md)
 
 ---
 
