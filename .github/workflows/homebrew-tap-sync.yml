@@ -2,7 +2,8 @@ name: Homebrew Tap Sync
 
 on:
   release:
-    types: [published]
+    # Include prereleases created by the release workflow.
+    types: [published, prereleased]
   workflow_dispatch:
     inputs:
       tag:

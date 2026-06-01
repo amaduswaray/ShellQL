@@ -1,0 +1,129 @@
+name: Publish to crates.io
+
+on:
+  release:
+    # Release workflow creates beta prereleases; include both prereleased and published.
+    types: [published, prereleased]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v0.1.4-beta). Optional when run from release event."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG_EVENT: ${{ github.event.release.tag_name }}
+      RELEASE_TAG_INPUT: ${{ github.event.inputs.tag }}
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+    steps:
+      - name: Resolve release tag
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${RELEASE_TAG_EVENT:-}"
+          if [[ -z "$TAG" ]]; then
+            TAG="${RELEASE_TAG_INPUT:-}"
+          fi
+
+          if [[ -z "$TAG" ]]; then
+            echo "No release tag provided. Use release event or pass workflow input 'tag'." >&2
+            exit 1
+          fi
+          if [[ ! "$TAG" =~ ^v ]]; then
+            echo "Tag must start with 'v' (got: $TAG)" >&2
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Validate token availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${CARGO_REGISTRY_TOKEN}" ]]; then
+            echo "Missing secret: CARGO_REGISTRY_TOKEN" >&2
+            echo "Add a crates.io API token as a repository secret named CARGO_REGISTRY_TOKEN." >&2
+            exit 1
+          fi
+
+      - name: Checkout source at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.vars.outputs.tag }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Validate Cargo.toml version matches tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(awk '
+            $0=="[package]" { in_pkg=1; next }
+            /^\[/ && $0!="[package]" { in_pkg=0 }
+            in_pkg && $1=="version" {
+              gsub(/"/, "", $3)
+              print $3
+              exit
+            }
+          ' Cargo.toml)"
+
+          if [[ -z "$VERSION" ]]; then
+            echo "Could not read package version from Cargo.toml" >&2
+            exit 1
+          fi
+
+          EXPECTED_TAG="v${VERSION}"
+          if [[ "$EXPECTED_TAG" != "${{ steps.vars.outputs.tag }}" ]]; then
+            echo "Tag/version mismatch: tag=${{ steps.vars.outputs.tag }} Cargo.toml=${VERSION}" >&2
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Skip if version already exists on crates.io
+        id: exists
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.version.outputs.version }}"
+          EXISTS="$(python3 - "$VERSION" <<'PY'
+import json,sys,urllib.request
+version = sys.argv[1]
+url = "https://crates.io/api/v1/crates/shellql/versions?page=1&per_page=100"
+try:
+    data = json.load(urllib.request.urlopen(url, timeout=20))
+    versions = [v.get('num') for v in data.get('versions', [])]
+    print('true' if version in versions else 'false')
+except Exception:
+    # If API lookup fails, do not silently skip publish.
+    print('false')
+PY
+)"
+
+          echo "exists=$EXISTS" >> "$GITHUB_OUTPUT"
+          if [[ "$EXISTS" == "true" ]]; then
+            echo "Version $VERSION already on crates.io; skipping publish."
+          fi
+
+      - name: Publish crate
+        if: steps.exists.outputs.exists != 'true'
+        run: cargo publish --locked
