@@ -38,9 +38,9 @@ It runs when:
 
 What it does:
 - reads release tag (for example `v0.1.2-beta`)
-- downloads source tarball from that tag
-- computes `sha256`
-- regenerates `Formula/shellql.rb`
+- downloads release binaries from that tag (`shql-linux-x86_64`, `shql-macos-arm64`)
+- computes platform `sha256` values
+- regenerates `Formula/shellql.rb` to install prebuilt binaries
 - commits/pushes it to your tap repo
 
 ### Required secret
@@ -69,4 +69,5 @@ You can run **Actions → Homebrew Tap Sync → Run workflow** and pass:
 ## Notes
 
 - This is ideal for beta (`v0.1.x-beta`) and avoids `homebrew/core` restrictions.
+- Because the formula installs **prebuilt binaries**, users avoid heavy build dependencies (`rust`, `llvm`, etc.) during `brew install`.
 - If you later target `homebrew/core`, you’ll need to meet stricter acceptance criteria.

@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to sync (e.g. v0.1.2-beta). Optional when run from a release event.'
+        description: "Release tag to sync (e.g. v0.1.2-beta). Optional on release event."
         required: false
         type: string
       tap_repo:
-        description: 'Tap repository in owner/repo form'
+        description: "Tap repository in owner/repo form"
         required: false
-        default: 'amaduswaray/homebrew-tap'
+        default: "amaduswaray/homebrew-tap"
         type: string
 
 permissions:
@@ -57,12 +57,13 @@ jobs:
           fi
 
           VERSION="${TAG#v}"
-          SOURCE_URL="https://github.com/amaduswaray/ShellQL/archive/refs/tags/${TAG}.tar.gz"
+          BASE_URL="https://github.com/amaduswaray/ShellQL/releases/download/${TAG}"
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tap_repo=$TAP_REPO" >> "$GITHUB_OUTPUT"
-          echo "source_url=$SOURCE_URL" >> "$GITHUB_OUTPUT"
+          echo "linux_url=${BASE_URL}/shql-linux-x86_64" >> "$GITHUB_OUTPUT"
+          echo "macos_arm_url=${BASE_URL}/shql-macos-arm64" >> "$GITHUB_OUTPUT"
 
       - name: Validate token availability
         shell: bash
@@ -74,31 +75,55 @@ jobs:
             exit 1
           fi
 
-      - name: Download release source and compute sha256
+      - name: Download release binaries and compute sha256
         id: sha
         shell: bash
         run: |
           set -euo pipefail
-          curl -sSLf "${{ steps.vars.outputs.source_url }}" -o source.tar.gz
-          SHA256="$(sha256sum source.tar.gz | awk '{print $1}')"
-          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
 
-      - name: Generate formula
+          curl -sSLf "${{ steps.vars.outputs.linux_url }}" -o shql-linux-x86_64
+          curl -sSLf "${{ steps.vars.outputs.macos_arm_url }}" -o shql-macos-arm64
+
+          LINUX_SHA256="$(sha256sum shql-linux-x86_64 | awk '{print $1}')"
+          MACOS_ARM_SHA256="$(sha256sum shql-macos-arm64 | awk '{print $1}')"
+
+          echo "linux_sha256=$LINUX_SHA256" >> "$GITHUB_OUTPUT"
+          echo "macos_arm_sha256=$MACOS_ARM_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Generate formula (prebuilt binaries; no Rust toolchain dependency)
         shell: bash
         run: |
           set -euo pipefail
+
           cat > shellql.rb <<EOF
           class Shellql < Formula
             desc "Vim- and tmux-inspired terminal database manager for developers"
             homepage "https://github.com/amaduswaray/ShellQL"
-            url "${{ steps.vars.outputs.source_url }}"
-            sha256 "${{ steps.sha.outputs.sha256 }}"
+            version "${{ steps.vars.outputs.version }}"
             license "MIT"
 
-            depends_on "rust" => :build
+            on_macos do
+              on_arm do
+                url "${{ steps.vars.outputs.macos_arm_url }}"
+                sha256 "${{ steps.sha.outputs.macos_arm_sha256 }}"
+              end
+            end
+
+            on_linux do
+              on_intel do
+                url "${{ steps.vars.outputs.linux_url }}"
+                sha256 "${{ steps.sha.outputs.linux_sha256 }}"
+              end
+            end
 
             def install
-              system "cargo", "install", *std_cargo_args(path: ".")
+              if OS.mac? && Hardware::CPU.arm?
+                bin.install "shql-macos-arm64" => "shql"
+              elsif OS.linux? && Hardware::CPU.intel?
+                bin.install "shql-linux-x86_64" => "shql"
+              else
+                odie "Unsupported platform for shellql"
+              end
             end
 
             test do
