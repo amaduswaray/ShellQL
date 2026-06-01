@@ -1,0 +1,134 @@
+name: Homebrew Tap Sync
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to sync (e.g. v0.1.2-beta). Optional when run from a release event.'
+        required: false
+        type: string
+      tap_repo:
+        description: 'Tap repository in owner/repo form'
+        required: false
+        default: 'amaduswaray/homebrew-tap'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG_EVENT: ${{ github.event.release.tag_name }}
+      RELEASE_TAG_INPUT: ${{ github.event.inputs.tag }}
+      TAP_REPO_INPUT: ${{ github.event.inputs.tap_repo }}
+      DEFAULT_TAP_REPO: amaduswaray/homebrew-tap
+      TAP_PUSH_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+    steps:
+      - name: Resolve release tag and tap repo
+        id: vars
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${RELEASE_TAG_EVENT:-}"
+          if [[ -z "$TAG" ]]; then
+            TAG="${RELEASE_TAG_INPUT:-}"
+          fi
+
+          if [[ -z "$TAG" ]]; then
+            echo "No release tag provided. Use release event or pass workflow input 'tag'." >&2
+            exit 1
+          fi
+
+          if [[ ! "$TAG" =~ ^v ]]; then
+            echo "Tag must start with 'v' (got: $TAG)" >&2
+            exit 1
+          fi
+
+          TAP_REPO="${TAP_REPO_INPUT:-$DEFAULT_TAP_REPO}"
+          if [[ -z "$TAP_REPO" ]]; then
+            echo "Tap repo cannot be empty" >&2
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          SOURCE_URL="https://github.com/amaduswaray/ShellQL/archive/refs/tags/${TAG}.tar.gz"
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tap_repo=$TAP_REPO" >> "$GITHUB_OUTPUT"
+          echo "source_url=$SOURCE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Validate token availability
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${TAP_PUSH_TOKEN}" ]]; then
+            echo "Missing secret: HOMEBREW_TAP_GITHUB_TOKEN" >&2
+            echo "Create a PAT with access to the tap repo and add it as this repository secret." >&2
+            exit 1
+          fi
+
+      - name: Download release source and compute sha256
+        id: sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sSLf "${{ steps.vars.outputs.source_url }}" -o source.tar.gz
+          SHA256="$(sha256sum source.tar.gz | awk '{print $1}')"
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Generate formula
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > shellql.rb <<EOF
+          class Shellql < Formula
+            desc "Vim- and tmux-inspired terminal database manager for developers"
+            homepage "https://github.com/amaduswaray/ShellQL"
+            url "${{ steps.vars.outputs.source_url }}"
+            sha256 "${{ steps.sha.outputs.sha256 }}"
+            license "MIT"
+
+            depends_on "rust" => :build
+
+            def install
+              system "cargo", "install", *std_cargo_args(path: ".")
+            end
+
+            test do
+              assert_match "ShellQL", shell_output("#{bin}/shql --help")
+            end
+          end
+          EOF
+
+      - name: Clone tap repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${TAP_PUSH_TOKEN}@github.com/${{ steps.vars.outputs.tap_repo }}.git" tap-repo
+
+      - name: Update formula in tap repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tap-repo/Formula
+          cp shellql.rb tap-repo/Formula/shellql.rb
+
+          cd tap-repo
+          if git diff --quiet -- Formula/shellql.rb; then
+            echo "No formula changes detected; nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add Formula/shellql.rb
+          git commit -m "shellql ${{ steps.vars.outputs.version }}"
+          git push

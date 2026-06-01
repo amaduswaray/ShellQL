@@ -61,12 +61,18 @@ This makes it easy to inspect data, write SQL, and validate outcomes side-by-sid
 
 ## Installation
 
-### Package managers (placeholders)
+### Homebrew (custom tap)
 
 ```bash
-# Homebrew (placeholder)
-brew install <tap>/shellql
+brew tap amaduswaray/tap
+brew install shellql
+```
 
+> Homebrew setup details: **[docs/homebrew.md](./docs/homebrew.md)**
+
+### Other package managers (placeholders)
+
+```bash
 # apt (placeholder)
 sudo apt install shellql
 
@@ -84,7 +90,7 @@ cargo install shellql
 ### Build from source
 
 ```bash
-git clone https://github.com/<your-org>/shellql.git
+git clone https://github.com/amaduswaray/ShellQL.git
 cd shellql
 cargo build --release
 ./target/release/shql
@@ -183,7 +189,7 @@ Other:
 - `:resize <direction> <amount>`
 - `:noh`
 
-> Full docs: see **[Docs/documentation.md](./Docs/documentation.md)**
+> Full docs: see **[docs/documentation.md](./docs/documentation.md)**
 
 ---
 
@@ -212,7 +218,8 @@ Respect to the maintainers and communities behind these projects.
 
 For a more complete guide (views, workflows, keybindings, commands), see:
 
-- **[Docs/documentation.md](./Docs/documentation.md)**
+- **[docs/documentation.md](./docs/documentation.md)**
+- **[docs/homebrew.md](./docs/homebrew.md)**
 
 ---
 
