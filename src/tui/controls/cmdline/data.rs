@@ -109,21 +109,12 @@ pub fn cmd_order(state: &mut AppState, args: &[&str]) {
         }
     };
 
-    let (sort_col, sort_desc) = if args.is_empty() {
-        (None, false)
-    } else {
-        let joined = args.join(" ");
-        let parts: Vec<&str> = joined.split_whitespace().collect();
-        let desc = parts.len() > 1
-            && parts
-                .last()
-                .map_or(false, |s| s.eq_ignore_ascii_case("desc"));
-        let col = if desc {
-            parts[..parts.len() - 1].join(" ")
-        } else {
-            joined
-        };
-        (Some(col), desc)
+    let (sort_col, sort_desc) = match parse_order_args(args) {
+        Ok(parsed) => parsed,
+        Err(msg) => {
+            state.cmdline.set_error(msg);
+            return;
+        }
     };
 
     let Some(tab) = state.active_tab_mut() else {
@@ -155,6 +146,40 @@ pub fn cmd_order(state: &mut AppState, args: &[&str]) {
     if args.is_empty() {
         state.cmdline.set_loading("Sort cleared");
     }
+}
+
+fn parse_order_args(args: &[&str]) -> Result<(Option<String>, bool), &'static str> {
+    if args.is_empty() {
+        return Ok((None, false));
+    }
+
+    let mut tokens: Vec<&str> = args.to_vec();
+    if tokens
+        .first()
+        .map_or(false, |t| t.eq_ignore_ascii_case("by"))
+    {
+        tokens.remove(0);
+    }
+
+    if tokens.is_empty() {
+        return Err("usage: :order [by] <column> [asc|desc]");
+    }
+
+    let mut sort_desc = false;
+    if let Some(last) = tokens.last() {
+        if last.eq_ignore_ascii_case("desc") {
+            sort_desc = true;
+            tokens.pop();
+        } else if last.eq_ignore_ascii_case("asc") {
+            tokens.pop();
+        }
+    }
+
+    if tokens.is_empty() {
+        return Err("usage: :order [by] <column> [asc|desc]");
+    }
+
+    Ok((Some(tokens.join(" ")), sort_desc))
 }
 
 pub fn cmd_select(state: &mut AppState, args: &[&str]) {
@@ -576,4 +601,27 @@ fn is_required_insert_column(col: &crate::connection::ColumnInfo) -> bool {
         return false;
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_order_args;
+
+    #[test]
+    fn parse_order_accepts_by_prefix() {
+        let parsed = parse_order_args(&["by", "created_at", "desc"]).unwrap();
+        assert_eq!(parsed, (Some("created_at".to_string()), true));
+    }
+
+    #[test]
+    fn parse_order_accepts_plain_column() {
+        let parsed = parse_order_args(&["id"]).unwrap();
+        assert_eq!(parsed, (Some("id".to_string()), false));
+    }
+
+    #[test]
+    fn parse_order_rejects_missing_column() {
+        let err = parse_order_args(&["by"]).unwrap_err();
+        assert_eq!(err, "usage: :order [by] <column> [asc|desc]");
+    }
 }

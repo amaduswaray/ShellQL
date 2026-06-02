@@ -10,6 +10,19 @@ pub mod navigation;
 pub mod search;
 
 pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
+    let tables = state.tables.clone();
+
+    // Any keypress dismisses transient cmdline messages when idle.
+    if !state.cmdline.is_active() {
+        state.cmdline.loading = None;
+        state.cmdline.error = None;
+    }
+
+    // ── QueryEditor vim mode (Normal/Insert) ─────────────────────────────────
+    if editor::handle_query_editor(event, state, &tables) {
+        return;
+    }
+
     // ── Tab switching (Shift+H / Shift+L) ────────────────────────────────────
     match event.code {
         KeyCode::Char('H') => {
@@ -25,19 +38,6 @@ pub fn handle_dashboard(event: KeyEvent, state: &mut AppState) {
             return;
         }
         _ => {}
-    }
-
-    let tables = state.tables.clone();
-
-    // Any keypress dismisses transient cmdline messages when idle.
-    if !state.cmdline.is_active() {
-        state.cmdline.loading = None;
-        state.cmdline.error = None;
-    }
-
-    // ── QueryEditor vim mode (Normal/Insert) ─────────────────────────────────
-    if editor::handle_query_editor(event, state, &tables) {
-        return;
     }
 
     // Ctrl+hjkl / Ctrl+Arrows — pane navigation
