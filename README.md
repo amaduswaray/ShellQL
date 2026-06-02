@@ -68,7 +68,7 @@ brew tap amaduswaray/tap
 brew install shellql
 ```
 
-> Homebrew setup details: **[docs/homebrew.md](./docs/homebrew.md)**
+> Homebrew setup details: [docs/homebrew.md](./docs/homebrew.md)
 
 
 ### Cargo
@@ -111,6 +111,42 @@ shql db delete --name dev
 # Interactive connect flow
 shql connect --interactive
 ```
+
+---
+
+## Demos
+
+> Recorded terminal demos from `docs/demos/`.
+
+### 1) ShellQL overview
+![ShellQL overview demo](docs/demos/shellql.gif)
+
+### 2) Add connection flow
+![Add connection demo](docs/demos/Add%20connection.gif)
+
+### 3) Pane workflows (split + navigate)
+![Panes demo](docs/demos/Panes.gif)
+
+### 4) Tab workflows
+![Tabs demo](docs/demos/Tabs.gif)
+
+### 5) Column search
+![Column search demo](docs/demos/Column%20search.gif)
+
+### 6) Filter rows with `:where`
+![Where sort demo](docs/demos/Where%20sort.gif)
+
+### 7) Sort rows with `:order`
+![Order by demo](docs/demos/Order%20by.gif)
+
+### 8) Column projection with `:select`
+![Select projection demo](docs/demos/Select%20projection.gif)
+
+### 9) Query editor: multiple SELECTs
+![Multiple selects demo](docs/demos/Multiple%20Selects.gif)
+
+### 10) Cmdline SQL execution (`:!`)
+![Cmdline SQL demo](docs/demos/CMDLine%20SQL.gif)
 
 ---
 
@@ -165,7 +201,7 @@ View switching:
 
 Data actions (TableView only):
 - `:where <expr>`
-- `:order <col> [desc]`
+- `:order [by] <col> [asc|desc]`
 - `:select <cols>`
 - `:insert [above|below]`
 - `:reset`
@@ -251,7 +287,7 @@ Tags containing `-beta` are automatically marked as **pre-releases**.
 
 Contributions are welcome.
 
-- See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for setup, checks, and PR guidelines.
+- See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, checks, and PR guidelines.
 
 ---
 
