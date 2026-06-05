@@ -7,69 +7,93 @@
 
 ---
 
-## Beta status
+##  Quick Start
 
-ShellQL is currently in **beta**.
+Get up and running in minutes:
 
-It is already usable for daily development workflows, but features and keybindings are still evolving. Expect frequent updates, UX refinements, and expansion of database support.
+### Install
 
----
+```bash
+cargo install shellql
+```
 
-## What ShellQL is
+### Launch ShellQL
 
-ShellQL is a keyboard-first terminal app for working with databases without leaving your shell.
+```bash
+shql
+```
 
-It focuses on:
-- fast navigation
-- modal editing
-- composable layouts (tabs + panes + views)
-- practical data operations (filter, sort, edit, delete, insert, query)
+### Connect to a database
 
-ShellQL is intentionally **not beginner-first**. The payoff for learning the keybindings is high: once the workflow clicks, you can move very quickly.
+```bash
+shql connect --interactive
+```
 
----
+### Run a sample query
 
-## Philosophy: tabs, panes, and views
-
-ShellQL is designed like a dashboard you build yourself:
-
-- **Tabs**: separate work contexts (e.g. staging vs prod, or schema work vs query work)
-- **Panes**: split your current tab into focused working areas
-- **Views**: choose what each pane does (`tables`, `table`, `schema`, `editor`, `results`)
-
-A common setup:
-- left pane: table list
-- top-right pane: table view
-- bottom-right pane: SQL editor/results
-
-This makes it easy to inspect data, write SQL, and validate outcomes side-by-side.
+```sql
+SELECT * FROM users;
+```
 
 ---
 
-## Core capabilities
+##  Getting Started
 
-- Connection management in TUI and CLI
-- Supported engines: **Postgres, MySQL, SQLite**
-- Vim-like SQL editor (normal/insert/visual, operators, motions, yank/paste)
-- Context-aware autocomplete (commands + editor SQL/table completion)
-- Table view workflows: browse, filter, sort, edit, delete, staged inserts
-- Schema exploration per table
-- Query execution + multi-result view
-- Multi-tab, multi-pane workspace
+ShellQL is a keyboard-first terminal application for working with databases directly from your shell.
+
+It is designed for developers who want speed, efficiency, and full keyboard control without relying on heavy GUI tools.
 
 ---
 
-## Installation
+##  Beta Status
 
-### Homebrew (custom tap)
+ShellQL is currently in beta.
+
+It is already usable for daily workflows, but features, UX improvements, and keybindings are actively evolving.
+
+---
+
+##  Core Concepts
+
+### Tabs
+- Development
+- Staging
+- Production
+- Schema exploration
+
+### Panes
+Each tab can be split into multiple panes for parallel workflows.
+
+### Views
+- Tables
+- Table data
+- Schema
+- SQL editor
+- Query results
+
+---
+
+##  Features
+
+- Connection management (TUI + CLI)
+- PostgreSQL, MySQL, SQLite support
+- Vim-like SQL editor
+- Context-aware autocomplete
+- Table workflows (filter, sort, edit, delete, insert)
+- Schema exploration
+- Multi-pane & multi-tab workspace
+- Query execution with live results
+
+---
+
+##  Installation Options
+
+### Homebrew
 
 ```bash
 brew tap amaduswaray/tap
 brew install shellql
 ```
-
-> Homebrew setup details: [docs/homebrew.md](./docs/homebrew.md)
-
 
 ### Cargo
 
@@ -77,7 +101,7 @@ brew install shellql
 cargo install shellql
 ```
 
-### Build from source
+### Build from Source
 
 ```bash
 git clone https://github.com/amaduswaray/ShellQL.git
@@ -88,209 +112,116 @@ cargo build --release
 
 ---
 
-## Quick start
+## Usage
 
-Launch TUI:
+### Launch TUI
 
 ```bash
 shql
 ```
 
-CLI examples:
+### CLI Commands
 
 ```bash
-# Add a saved connection
 shql db add --name dev --engine postgres --url 'postgres://user:pass@localhost:5432/mydb'
-
-# List saved connections
 shql db list
-
-# Delete a saved connection
 shql db delete --name dev
-
-# Interactive connect flow
 shql connect --interactive
 ```
 
 ---
 
-## Demos
+##  Demos
 
-> Recorded terminal demos from `docs/demos/`.
+ShellQL in action:
 
-### 1) ShellQL overview
-![ShellQL overview demo](docs/demos/shellql.gif)
-
-### 2) Add connection flow
-![Add connection demo](docs/demos/Add%20connection.gif)
-
-### 3) Pane workflows (split + navigate)
-![Panes demo](docs/demos/Panes.gif)
-
-### 4) Tab workflows
-![Tabs demo](docs/demos/Tabs.gif)
-
-### 5) Column search
-![Column search demo](docs/demos/Column%20search.gif)
-
-### 6) Filter rows with `:where`
-![Where sort demo](docs/demos/Where%20sort.gif)
-
-### 7) Sort rows with `:order`
-![Order by demo](docs/demos/Order%20by.gif)
-
-### 8) Column projection with `:select`
-![Select projection demo](docs/demos/Select%20projection.gif)
-
-### 9) Query editor: multiple SELECTs
-![Multiple selects demo](docs/demos/Multiple%20Selects.gif)
-
-### 10) Cmdline SQL execution (`:!`)
-![Cmdline SQL demo](docs/demos/CMDLine%20SQL.gif)
+- Overview of UI
+- Adding a connection
+- Pane workflows
+- Tab navigation
+- Column search
+- Filtering and sorting
+- Column projection
+- Multiple queries
+- SQL execution
 
 ---
 
-## Keybindings (quick guide)
+##  Keybindings
 
-### Home
-- `j / k` or `↓ / ↑` — move
-- `Enter` — connect
-- `a` — add connection
-- `d` — delete connection (with confirm)
-- `:` — open command line
-- `?` — help
-- `q` — quit
+### Navigation
+- j/k move
+- h/l navigate
+- Ctrl+h/j/k/l pane focus
 
-### Dashboard
-- `h j k l` or arrows — navigate
-- `Ctrl+h/j/k/l` — move pane focus
-- `:` — command line
-- `/` and `?` — search forward/backward
-- `n` / `N` — next/prev match
-- `i` — edit cell (TableView) / insert mode (Editor)
-- `v` / `V` / `Ctrl+v` — visual selections
-- `dd` — stage row delete (TableView)
-- `o` / `O` — stage insert row below/above
-- `u` — undo staged change
-- `:w` — commit staged changes
-- `Tab` / `Shift+Tab` — next/previous result set (Results view)
+### Actions
+- Enter select
+- : command line
+- / search
+- q quit
 
-### Query editor (Vim-inspired)
-- Normal/Insert/Visual behavior
-- Motions, operators, text objects, yank/delete/change
-- Examples: `dd`, `dw`, `dG`, `dgg`, `yy`, `yG`, `ygg`, `p`, `P`
-- SQL and table-name autocomplete while typing
+### Table
+- i edit
+- dd delete
+- o/O insert
+- u undo
+- :w commit
+
+### Editor
+- Vim-style motions supported
+- SQL autocomplete enabled
 
 ---
 
-## Cmdline commands (quick reference)
-
-General navigation/layout:
-- `:new tab`
-- `:new pane [tables|table|schema|editor|results]`
-- `:split`, `:vsplit`, `:hsplit`
-- `:tab <id|next|prev|close>`
-- `:q`, `:close`, `:full`
-
-View switching:
-- `:tables`
-- `:table <name>`
-- `:schema [table]`
-- `:editor`
-- `:results`
-
-Data actions (TableView only):
-- `:where <expr>`
-- `:order [by] <col> [asc|desc]`
-- `:select <cols>`
-- `:insert [above|below]`
-- `:reset`
-- `:w`
-
-Other:
-- `:! <sql>`
-- `:connect`
-- `:disconnect`
-- `:back`, `:forward`
-- `:resize <direction> <amount>`
-- `:noh`
-
-> Full docs: see [docs/documentation.md](./docs/documentation.md)
-
----
-
-## Use cases
-
-- Quickly inspect rows in a production-like environment from SSH sessions
-- Triaging data issues while coding (no context switch to heavy GUI tools)
-- Running one-off SQL updates with immediate side-by-side validation
-- Keyboard-only data workflows for Vim/tmux users
-
----
-
-## Inspiration
-
-ShellQL draws inspiration from terminal-native tools and SQL TUIs, including:
-
-- **sqlit**
-- **lazydb / lazysql** style workflows
-- the broader **Vim + tmux** ecosystem
-
-Respect to the maintainers and communities behind these projects.
-
----
-
-## Documentation
-
-For a more complete guide (views, workflows, keybindings, commands), see:
-
-- [docs/documentation.md](./docs/documentation.md)
-- [docs/homebrew.md](./docs/homebrew.md)
-
----
-
-## Versioning & releases
-
-ShellQL release tags follow GitHub-recommended `v` prefixes.
-
-Current beta track:
-- **`v0.1.x-beta`**
-- Increase `x` for each new beta release (`v0.1.0-beta`, `v0.1.1-beta`, `v0.1.2-beta`, ...)
-
-Version sync rule:
-- `Cargo.toml` version should match the tag without the `v` prefix.
-  - Example: tag `v0.1.2-beta` ↔ `version = "0.1.2-beta"`
-
-Release flow:
-
-- **Merges/pushes to `main` automatically create a new beta release.**
-  - The workflow bumps `0.1.x-beta` → `0.1.(x+1)-beta`
-  - Commits `Cargo.toml` + `Cargo.lock`
-  - Creates and pushes tag `v0.1.(x+1)-beta`
-  - Builds binaries and publishes a GitHub pre-release
-
-Manual options are still available:
+##  Development Setup
 
 ```bash
-# trigger release by pushing a tag yourself
-git tag -a v0.1.2-beta -m "Release v0.1.2-beta"
-git push origin v0.1.2-beta
+git clone https://github.com/amaduswaray/ShellQL.git
+cd shellql
+cargo build
+cargo run
 ```
 
-Or use **Actions → Release → Run workflow** and pass a tag.
+---
 
-Tags containing `-beta` are automatically marked as **pre-releases**.
+##  Contributing
+
+1. Fork repo
+2. Create branch
+
+```bash
+git checkout -b feature-name
+```
+
+3. Make changes
+4. Test locally
+5. Commit
+
+```bash
+git commit -m "Describe change"
+```
+
+6. Push
+
+```bash
+git push origin feature-name
+```
+
+7. Open PR
 
 ---
 
-## Contributing
-
-Contributions are welcome.
-
-- See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, checks, and PR guidelines.
+##  Docs
+- [Documentation](./docs/documentation.md)
+- [Homebrew Guide](./docs/homebrew.md)
+- [Contributing Guide](./CONTRIBUTING.md)
 
 ---
 
-## License
+##  Versioning
+- v0.1.x-beta
 
+---
+
+##  License
 MIT
